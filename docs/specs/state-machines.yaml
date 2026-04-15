@@ -1,0 +1,139 @@
+version: 0.1.0
+state_machines:
+  Call:
+    initial: New
+    states:
+      New:
+        transitions:
+          start_intake: In Progress
+      In Progress:
+        transitions:
+          complete_information: Information Complete
+          cancel_call: Cancelled
+      Information Complete:
+        transitions:
+          convert_to_incident: Converted to Incident
+      Converted to Incident:
+        transitions:
+          close_call: Closed
+      Cancelled:
+        transitions:
+          close_call: Closed
+    guards:
+      complete_information:
+        requires_fields: [received_at, call_source, incident_description, address_or_best_known_location, initial_priority]
+  Incident:
+    initial: New
+    states:
+      New:
+        transitions:
+          queue_for_dispatch: Awaiting Dispatch
+      Awaiting Dispatch:
+        transitions:
+          assign_resource: Assigned
+          cancel_incident: Cancelled
+      Assigned:
+        transitions:
+          acknowledge_assignment: Crew Acknowledged
+          stand_down: Stood Down
+      Crew Acknowledged:
+        transitions:
+          depart_to_scene: En Route
+          stand_down: Stood Down
+      En Route:
+        transitions:
+          arrive_scene: On Scene
+          stand_down: Stood Down
+      On Scene:
+        transitions:
+          begin_treatment: Treating On Scene
+          begin_transport: Transporting
+          stand_down: Stood Down
+      Treating On Scene:
+        transitions:
+          begin_transport: Transporting
+          complete_non_transport_handover: Handover Complete
+      Transporting:
+        transitions:
+          arrive_destination: At Destination
+      At Destination:
+        transitions:
+          complete_handover: Handover Complete
+      Handover Complete:
+        transitions:
+          close_incident: Closed
+      Cancelled: { transitions: {} }
+      Stood Down: { transitions: {} }
+      Closed: { transitions: {} }
+  Assignment:
+    initial: Proposed
+    states:
+      Proposed:
+        transitions:
+          confirm_assignment: Assigned
+      Assigned:
+        transitions:
+          accept_assignment: Accepted
+          cancel_assignment: Cancelled
+      Accepted:
+        transitions:
+          mobilise_unit: Mobilised
+          stand_down_unit: Stood Down
+      Mobilised:
+        transitions:
+          activate_assignment: Active
+          stand_down_unit: Stood Down
+      Active:
+        transitions:
+          complete_assignment: Completed
+          reassign_assignment: Reassigned
+      Reassigned:
+        transitions:
+          confirm_assignment: Assigned
+      Cancelled: { transitions: {} }
+      Stood Down: { transitions: {} }
+      Completed: { transitions: {} }
+  Vehicle:
+    initial: Available
+    states:
+      Available:
+        transitions:
+          reserve_vehicle: Reserved
+          mark_out_of_service: Out of Service
+          lose_tracking: Offline/Unknown
+      Reserved:
+        transitions:
+          assign_vehicle: Assigned
+          release_vehicle: Available
+      Assigned:
+        transitions:
+          depart_to_scene: En Route
+      En Route:
+        transitions:
+          arrive_scene: On Scene
+      On Scene:
+        transitions:
+          begin_transport: Transporting
+          return_without_transport: Returning to Base
+      Transporting:
+        transitions:
+          arrive_destination: At Destination
+      At Destination:
+        transitions:
+          begin_return_to_base: Returning to Base
+      Returning to Base:
+        transitions:
+          start_restocking: Restocking
+          become_available: Available
+      Restocking:
+        transitions:
+          complete_restocking: Available
+      Out of Service:
+        transitions:
+          send_to_maintenance: Maintenance
+      Maintenance:
+        transitions:
+          return_to_service: Available
+      Offline/Unknown:
+        transitions:
+          restore_tracking: Available

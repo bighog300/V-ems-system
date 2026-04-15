@@ -1,0 +1,247 @@
+openapi: 3.1.0
+info:
+  title: Ambulance Platform Internal API
+  version: 0.1.0
+  summary: Internal orchestration API for ambulance operations, dispatch, patient linking, clinical encounter orchestration, and stock usage.
+servers:
+  - url: https://api.example.internal
+    description: Production
+security:
+  - bearerAuth: []
+tags:
+  - name: Incidents
+  - name: Assignments
+  - name: Patients
+  - name: Encounters
+  - name: Stock
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IncidentId:
+      name: incidentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^INC-[0-9]{6}$'
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^ASN-[0-9]{6}$'
+    EncounterId:
+      name: encounterId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable, correlation_id]
+          properties:
+            code:
+              type: string
+              enum: [INVALID_PAYLOAD, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, DUPLICATE_PATIENT_SUSPECTED, DOWNSTREAM_TIMEOUT, DOWNSTREAM_UNAVAILABLE, INVALID_STATUS_TRANSITION, STOCK_THRESHOLD_BREACH]
+            message:
+              type: string
+            retryable:
+              type: boolean
+            correlation_id:
+              type: string
+              format: uuid
+    CreateIncidentRequest:
+      type: object
+      required: [call, incident]
+      properties:
+        call:
+          type: object
+          required: [call_source, received_at]
+          properties:
+            caller_name: { type: string }
+            caller_phone: { type: string }
+            callback_number: { type: string }
+            call_source: { type: string, enum: [phone, radio, walk_in, transfer, other] }
+            received_at: { type: string, format: date-time }
+        incident:
+          type: object
+          required: [category, priority, description, address, patient_count]
+          properties:
+            category: { type: string, enum: [medical_emergency, trauma, cardiac, respiratory, maternity, psychiatric, standby, other] }
+            priority: { type: string, enum: [critical, high, medium, low] }
+            description: { type: string }
+            address: { type: string }
+            latitude: { type: number }
+            longitude: { type: number }
+            patient_count: { type: integer, minimum: 0 }
+    IncidentResponse:
+      type: object
+      required: [incident_id, call_id, status, created_at, correlation_id]
+      properties:
+        incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+        call_id: { type: string, pattern: '^CALL-[0-9]{6}$' }
+        status: { type: string, enum: [New, Awaiting Dispatch, Assigned, Crew Acknowledged, En Route, On Scene, Treating On Scene, Transporting, At Destination, Handover Complete, Closed, Cancelled, Stood Down] }
+        created_at: { type: string, format: date-time }
+        correlation_id: { type: string, format: uuid }
+    CreateAssignmentRequest:
+      type: object
+      required: [vehicle_id, crew_ids, reason]
+      properties:
+        vehicle_id: { type: string, pattern: '^AMB-[0-9]{3,}$' }
+        crew_ids:
+          type: array
+          items: { type: string, pattern: '^STAFF-[0-9]{3,}$' }
+        reason: { type: string }
+    AssignmentResponse:
+      type: object
+      required: [assignment_id, incident_id, status, vehicle_status]
+      properties:
+        assignment_id: { type: string, pattern: '^ASN-[0-9]{6}$' }
+        incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+        status: { type: string, enum: [Proposed, Assigned, Accepted, Mobilised, Active, Completed, Reassigned, Cancelled, Stood Down] }
+        vehicle_status: { type: string, enum: [Available, Reserved, Assigned, En Route, On Scene, Transporting, At Destination, Returning to Base, Restocking, Out of Service, Maintenance, Offline/Unknown] }
+    PatientSearchRequest:
+      type: object
+      properties:
+        first_name: { type: string }
+        last_name: { type: string }
+        dob: { type: string, format: date }
+        sex: { type: string, enum: [male, female, other, unknown] }
+        phone: { type: string }
+    PatientSearchResponse:
+      type: object
+      required: [match_status, match_confidence, candidates]
+      properties:
+        match_status: { type: string, enum: [matched_existing, no_match, ambiguous] }
+        match_confidence: { type: number, minimum: 0, maximum: 1 }
+        patient_id: { type: string, nullable: true }
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [patient_id, display_name]
+            properties:
+              patient_id: { type: string }
+              display_name: { type: string }
+    CreateEncounterRequest:
+      type: object
+      required: [patient_id, care_started_at, crew_ids, presenting_complaint]
+      properties:
+        patient_id: { type: string }
+        care_started_at: { type: string, format: date-time }
+        crew_ids:
+          type: array
+          items: { type: string }
+        presenting_complaint: { type: string }
+    EncounterResponse:
+      type: object
+      required: [encounter_id, status, linked_incident_id]
+      properties:
+        encounter_id: { type: string }
+        status: { type: string, enum: [Not Started, Open, Assessment In Progress, Treatment In Progress, Ready for Handover, Handover Completed, Closed, Cancelled] }
+        linked_incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+    StockUsageRequest:
+      type: object
+      required: [incident_id, vehicle_id, item_id, quantity_used, usage_source]
+      properties:
+        incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+        vehicle_id: { type: string, pattern: '^AMB-[0-9]{3,}$' }
+        item_id: { type: string, pattern: '^ITEM-[0-9]{3,}$' }
+        quantity_used: { type: number, exclusiveMinimum: 0 }
+        usage_source: { type: string, enum: [manual, clinical_event] }
+paths:
+  /api/incidents:
+    post:
+      tags: [Incidents]
+      summary: Create incident from call intake data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIncidentRequest'
+      responses:
+        '201':
+          description: Incident created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+  /api/incidents/{incidentId}:
+    get:
+      tags: [Incidents]
+      summary: Get unified incident detail.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident detail.
+    patch:
+      tags: [Incidents]
+      summary: Update operational incident fields.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+  /api/incidents/{incidentId}/assignments:
+    post:
+      tags: [Assignments]
+      summary: Create assignment for an incident.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+  /api/assignments/{assignmentId}:
+    patch:
+      tags: [Assignments]
+      summary: Update assignment status.
+      parameters:
+        - $ref: '#/components/parameters/AssignmentId'
+  /api/patients/search:
+    post:
+      tags: [Patients]
+      summary: Search patient in OpenEMR.
+  /api/patients:
+    post:
+      tags: [Patients]
+      summary: Create patient in OpenEMR.
+  /api/incidents/{incidentId}/patient-link:
+    post:
+      tags: [Patients]
+      summary: Link an OpenEMR patient to an incident.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+  /api/incidents/{incidentId}/encounters:
+    post:
+      tags: [Encounters]
+      summary: Create clinical encounter linked to an incident.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+  /api/encounters/{encounterId}/observations:
+    post:
+      tags: [Encounters]
+      summary: Add observation set to encounter.
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+  /api/encounters/{encounterId}/interventions:
+    post:
+      tags: [Encounters]
+      summary: Add intervention to encounter.
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+  /api/encounters/{encounterId}/handover:
+    post:
+      tags: [Encounters]
+      summary: Complete handover/disposition.
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+  /api/stock/usage:
+    post:
+      tags: [Stock]
+      summary: Record stock usage against vehicle and incident.

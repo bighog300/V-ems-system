@@ -1,0 +1,169 @@
+version: 0.1.0
+model: ambulance_platform_canonical_data_model
+entities:
+  Call:
+    table: calls
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      call_code: { type: string, pattern: '^CALL-[0-9]{6}$', unique: true, required: true }
+      caller_name: { type: string, maxLength: 200 }
+      caller_phone: { type: string, maxLength: 50 }
+      callback_number: { type: string, maxLength: 50 }
+      call_source: { type: enum, values: [phone, radio, walk_in, transfer, other], required: true }
+      received_at: { type: datetime, required: true }
+      status: { type: enum, values: [New, In Progress, Information Complete, Converted to Incident, Cancelled, Closed], required: true }
+  Incident:
+    table: incidents
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      incident_code: { type: string, pattern: '^INC-[0-9]{6}$', unique: true, required: true }
+      call_id: { type: uuid, references: calls.id, required: true }
+      category: { type: enum, values: [medical_emergency, trauma, cardiac, respiratory, maternity, psychiatric, standby, other], required: true }
+      priority: { type: enum, values: [critical, high, medium, low], required: true }
+      description: { type: text, required: true }
+      address: { type: string, maxLength: 500, required: true }
+      latitude: { type: decimal, precision: 10, scale: 7 }
+      longitude: { type: decimal, precision: 10, scale: 7 }
+      patient_count: { type: integer, minimum: 0, required: true }
+      status: { type: enum, values: [New, Awaiting Dispatch, Assigned, Crew Acknowledged, En Route, On Scene, Treating On Scene, Transporting, At Destination, Handover Complete, Closed, Cancelled, Stood Down], required: true }
+      openemr_patient_id: { type: string }
+      openemr_encounter_id: { type: string }
+  Assignment:
+    table: assignments
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      assignment_code: { type: string, pattern: '^ASN-[0-9]{6}$', unique: true, required: true }
+      incident_id: { type: uuid, references: incidents.id, required: true }
+      vehicle_id: { type: uuid, references: vehicles.id, required: true }
+      status: { type: enum, values: [Proposed, Assigned, Accepted, Mobilised, Active, Completed, Reassigned, Cancelled, Stood Down], required: true }
+      reason: { type: string, maxLength: 500, required: true }
+  Vehicle:
+    table: vehicles
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      vehicle_code: { type: string, pattern: '^AMB-[0-9]{3,}$', unique: true, required: true }
+      registration_number: { type: string, unique: true, required: true }
+      base_station: { type: string, maxLength: 100, required: true }
+      status: { type: enum, values: [Available, Reserved, Assigned, En Route, On Scene, Transporting, At Destination, Returning to Base, Restocking, Out of Service, Maintenance, Offline/Unknown], required: true }
+  Staff:
+    table: staff
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      staff_code: { type: string, pattern: '^STAFF-[0-9]{3,}$', unique: true, required: true }
+      first_name: { type: string, maxLength: 100, required: true }
+      last_name: { type: string, maxLength: 100, required: true }
+      role: { type: enum, values: [call_handler, dispatcher, emt, paramedic, nurse, doctor, supervisor, logistics_officer, fleet_manager, operations_manager, clinical_reviewer, system_admin], required: true }
+      availability_status: { type: enum, values: [Off Duty, On Duty Available, On Duty Assigned, En Route, On Scene, Treating, Transporting, Handover, Restocking, On Break, Unavailable], required: true }
+  PatientLink:
+    table: patient_links
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      incident_id: { type: uuid, references: incidents.id, required: true }
+      temporary_label: { type: string, maxLength: 200 }
+      openemr_patient_id: { type: string }
+      verification_status: { type: enum, values: [unknown, provisional, matched_existing, created_new, verified, duplicate_suspected], required: true }
+  EncounterLink:
+    table: encounter_links
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      incident_id: { type: uuid, references: incidents.id, required: true }
+      openemr_encounter_id: { type: string, required: true }
+      encounter_status: { type: enum, values: [Not Started, Open, Assessment In Progress, Treatment In Progress, Ready for Handover, Handover Completed, Closed, Cancelled], required: true }
+  StockItem:
+    table: stock_items
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      item_code: { type: string, pattern: '^ITEM-[0-9]{3,}$', unique: true, required: true }
+      name: { type: string, maxLength: 200, required: true }
+      category: { type: enum, values: [consumable, medication, ppe, airway, trauma, monitoring, other], required: true }
+      threshold_quantity: { type: decimal, precision: 10, scale: 2, required: true }
+  VehicleStock:
+    table: vehicle_stocks
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      vehicle_id: { type: uuid, references: vehicles.id, required: true }
+      stock_item_id: { type: uuid, references: stock_items.id, required: true }
+      quantity_on_hand: { type: decimal, precision: 10, scale: 2, required: true }
+      replenishment_status: { type: enum, values: [In Stock, Low Stock, Replenishment Requested, Picked, Delivered, Verified, Backordered], required: true }
+  StockUsage:
+    table: stock_usages
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      usage_code: { type: string, pattern: '^SU-[0-9]{6,}$', unique: true, required: true }
+      incident_id: { type: uuid, references: incidents.id, required: true }
+      vehicle_id: { type: uuid, references: vehicles.id, required: true }
+      stock_item_id: { type: uuid, references: stock_items.id, required: true }
+      quantity_used: { type: decimal, precision: 10, scale: 2, required: true }
+      usage_source: { type: enum, values: [manual, clinical_event], required: true }
+  ReadinessCheck:
+    table: readiness_checks
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      vehicle_id: { type: uuid, references: vehicles.id, required: true }
+      checked_by_staff_id: { type: uuid, references: staff.id, required: true }
+      checked_at: { type: datetime, required: true }
+      ready_flag: { type: boolean, required: true }
+      status: { type: enum, values: [Pending Check, Ready, Ready with Notes, Not Ready], required: true }
+  MaintenanceTicket:
+    table: maintenance_tickets
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      vehicle_id: { type: uuid, references: vehicles.id, required: true }
+      severity: { type: enum, values: [low, medium, high, critical], required: true }
+      description: { type: text, required: true }
+      status: { type: enum, values: [Reported, Assessed, Scheduled, In Repair, Awaiting Parts, Completed, Returned to Service], required: true }
+  SyncEvent:
+    table: sync_events
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      event_type: { type: string, required: true }
+      source_system: { type: enum, values: [custom_app, vtiger, openemr], required: true }
+      target_system: { type: enum, values: [custom_app, vtiger, openemr], required: true }
+      correlation_id: { type: uuid, required: true }
+      payload_json: { type: json, required: true }
+      status: { type: enum, values: [pending, processing, succeeded, failed, dead_lettered], required: true }
+  AuditLog:
+    table: audit_logs
+    primary_key: id
+    fields:
+      id: { type: uuid, required: true }
+      entity_type: { type: string, required: true }
+      entity_id: { type: string, required: true }
+      action: { type: string, required: true }
+      before_json: { type: json }
+      after_json: { type: json }
+      actor_type: { type: enum, values: [user, system, integration_service], required: true }
+relationships:
+  - from: Incident.call_id
+    to: Call.id
+    cardinality: many_to_one
+  - from: Assignment.incident_id
+    to: Incident.id
+    cardinality: many_to_one
+  - from: Assignment.vehicle_id
+    to: Vehicle.id
+    cardinality: many_to_one
+  - from: PatientLink.incident_id
+    to: Incident.id
+    cardinality: one_to_one
+  - from: EncounterLink.incident_id
+    to: Incident.id
+    cardinality: one_to_one
+constraints:
+  - name: incident_closure_requires_final_state
+    rule: Incident.status may be set to Closed only when no Assignment for that incident is in [Assigned, Accepted, Mobilised, Active] and final disposition summary exists.
+  - name: vehicle_assignment_block_when_unavailable
+    rule: Vehicle.status in [Out of Service, Maintenance, Offline/Unknown, Restocking] blocks new Assignment creation.

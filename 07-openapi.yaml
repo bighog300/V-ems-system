@@ -1,0 +1,6 @@
+# OpenAPI spec (full version from canvas)
+openapi: 3.1.0
+info:
+  title: Ambulance Platform API
+  version: 0.1.0
+paths: {}

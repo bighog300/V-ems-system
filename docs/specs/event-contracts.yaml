@@ -1,0 +1,82 @@
+version: 0.1.0
+messaging:
+  transport_recommendation:
+    type: queue_plus_pubsub
+    command_queue: ambulance.commands
+    event_topics:
+      - ambulance.incidents
+      - ambulance.assignments
+      - ambulance.patients
+      - ambulance.encounters
+      - ambulance.stock
+      - ambulance.system
+  delivery_semantics:
+    default: at_least_once
+    idempotency_required: true
+  retry_policy:
+    strategy: exponential_backoff
+    initial_delay_seconds: 5
+    max_delay_seconds: 300
+    max_attempts: 8
+schemas:
+  base_event:
+    type: object
+    required: [event_id, correlation_id, event_type, occurred_at, source_system, payload]
+events:
+  IncidentCreated:
+    topic: ambulance.incidents
+    producers: [custom_app, vtiger_adapter]
+    consumers: [orchestration, dispatcher_ui, audit_service]
+  IncidentUpdated:
+    topic: ambulance.incidents
+    producers: [custom_app, vtiger_adapter]
+    consumers: [dispatcher_ui, supervisor_dashboard, audit_service]
+  AssignmentCreated:
+    topic: ambulance.assignments
+    producers: [custom_app, vtiger_adapter]
+    consumers: [crew_mobile, dispatcher_ui, audit_service]
+  PatientMatchRequested:
+    topic: ambulance.patients
+    producers: [custom_app]
+    consumers: [openemr_adapter]
+  PatientMatched:
+    topic: ambulance.patients
+    producers: [openemr_adapter]
+    consumers: [orchestration, vtiger_adapter, audit_service]
+  EncounterCreated:
+    topic: ambulance.encounters
+    producers: [openemr_adapter]
+    consumers: [orchestration, vtiger_adapter, audit_service]
+  HandoverCompleted:
+    topic: ambulance.encounters
+    producers: [openemr_adapter, custom_app]
+    consumers: [orchestration, vtiger_adapter, supervisor_dashboard, audit_service]
+  StockUsageRecorded:
+    topic: ambulance.stock
+    producers: [custom_app, vtiger_adapter]
+    consumers: [logistics_dashboard, replenishment_service, audit_service]
+  SyncFailed:
+    topic: ambulance.system
+    producers: [sync_worker, vtiger_adapter, openemr_adapter]
+    consumers: [ops_alerting, retry_queue_manager, audit_service]
+commands:
+  CreateIncident:
+    queue: ambulance.commands
+    handler: orchestration
+    response_event: IncidentCreated
+  CreateAssignment:
+    queue: ambulance.commands
+    handler: orchestration
+    response_event: AssignmentCreated
+  SearchOrCreatePatient:
+    queue: ambulance.commands
+    handler: openemr_adapter
+    response_event: PatientMatched|PatientCreated
+  CreateEncounter:
+    queue: ambulance.commands
+    handler: openemr_adapter
+    response_event: EncounterCreated
+  RecordStockUsage:
+    queue: ambulance.commands
+    handler: vtiger_adapter
+    response_event: StockUsageRecorded

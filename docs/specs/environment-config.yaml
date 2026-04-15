@@ -1,0 +1,61 @@
+version: 0.1.0
+environments:
+  development:
+    app_env: development
+    log_level: debug
+    debug_mode: true
+  staging:
+    app_env: staging
+    log_level: info
+    debug_mode: false
+  production:
+    app_env: production
+    log_level: warn
+    debug_mode: false
+services:
+  api_gateway:
+    required_env:
+      PORT: { type: integer, default: 8080 }
+      APP_ENV: { type: string, allowed: [development, staging, production] }
+      LOG_LEVEL: { type: string, allowed: [debug, info, warn, error] }
+      JWT_ISSUER: { type: string }
+      JWT_AUDIENCE: { type: string }
+      JWT_PUBLIC_KEY: { type: secret_string }
+      DATABASE_URL: { type: secret_string }
+      REDIS_URL: { type: secret_string }
+  orchestration:
+    required_env:
+      PORT: { type: integer, default: 8081 }
+      DATABASE_URL: { type: secret_string }
+      REDIS_URL: { type: secret_string }
+      EVENT_BUS_URL: { type: secret_string }
+  vtiger_adapter:
+    required_env:
+      VTIGER_BASE_URL: { type: secret_string }
+      VTIGER_USERNAME: { type: secret_string }
+      VTIGER_ACCESS_KEY: { type: secret_string }
+  openemr_adapter:
+    required_env:
+      OPENEMR_BASE_URL: { type: secret_string }
+      OPENEMR_CLIENT_ID: { type: secret_string }
+      OPENEMR_CLIENT_SECRET: { type: secret_string }
+      OPENEMR_TOKEN_URL: { type: secret_string }
+feature_flags:
+  ENABLE_OFFLINE_CREW_MODE: { type: boolean, default: false }
+  ENABLE_AUTO_STOCK_DEDUCTION: { type: boolean, default: false }
+  ENABLE_GPS_TRACKING: { type: boolean, default: false }
+  ENABLE_DUPLICATE_PATIENT_MATCH_REVIEW: { type: boolean, default: true }
+logging:
+  required_fields:
+    - timestamp
+    - service_name
+    - level
+    - correlation_id
+    - request_id
+    - actor_id
+    - incident_id
+  redact_fields:
+    - patient_name
+    - patient_phone
+    - patient_address
+    - clinical_notes
