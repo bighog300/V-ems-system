@@ -51,14 +51,20 @@ test("observation orchestration creates observation and emits event metadata", a
     presenting_complaint: "Chest pain"
   }, { correlationId: "corr-obs-3" });
 
-  const created = await orchestration.createObservationForEncounter("ENC-100", { pulse_bpm: 92 }, { correlationId: "corr-obs-4" });
+  const created = await orchestration.createObservationForEncounter("ENC-100", {
+    recorded_at: "2026-04-16T10:20:00Z",
+    source: "manual",
+    vital_signs: { heart_rate_bpm: 92 }
+  }, { correlationId: "corr-obs-4" });
 
   assert.deepEqual(created, { observation_id: "OBS-100", encounter_id: "ENC-100", status: "recorded" });
   assert.deepEqual(calls, [{
     encounter_id: "ENC-100",
     incident_id: incident.incident_id,
     patient_id: "OE-100",
-    payload: { pulse_bpm: 92 }
+    recorded_at: "2026-04-16T10:20:00Z",
+    source: "manual",
+    vital_signs: { heart_rate_bpm: 92 }
   }]);
 
   const events = orchestration.listOutboxEvents();
@@ -75,7 +81,10 @@ test("observation orchestration rejects missing encounter", async () => {
   });
 
   await assert.rejects(
-    () => orchestration.createObservationForEncounter("ENC-404", { pulse_bpm: 92 }, { correlationId: "corr-obs-5" }),
+    () => orchestration.createObservationForEncounter("ENC-404", {
+      recorded_at: "2026-04-16T10:20:00Z",
+      vital_signs: { heart_rate_bpm: 92 }
+    }, { correlationId: "corr-obs-5" }),
     /not found/
   );
 });

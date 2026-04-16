@@ -339,7 +339,14 @@ test("observation create success path", async () => {
 
     const created = await jsonFetch(base, "/api/encounters/ENC-500/observations", {
       method: "POST",
-      body: JSON.stringify({ systolic_bp: 120, diastolic_bp: 80 })
+      body: JSON.stringify({
+        recorded_at: "2026-04-16T12:05:00Z",
+        source: "manual",
+        vital_signs: {
+          systolic_bp_mmhg: 120,
+          diastolic_bp_mmhg: 80
+        }
+      })
     });
 
     assert.equal(created.status, 201);
@@ -349,9 +356,11 @@ test("observation create success path", async () => {
       encounter_id: "ENC-500",
       incident_id: incidentId,
       patient_id: "OE-500",
-      payload: {
-        systolic_bp: 120,
-        diastolic_bp: 80
+      recorded_at: "2026-04-16T12:05:00Z",
+      source: "manual",
+      vital_signs: {
+        systolic_bp_mmhg: 120,
+        diastolic_bp_mmhg: 80
       }
     });
   } finally {
@@ -364,7 +373,10 @@ test("observation create rejected if encounter does not exist", async () => {
   try {
     const missing = await jsonFetch(base, "/api/encounters/ENC-999/observations", {
       method: "POST",
-      body: JSON.stringify({ temperature_c: 37.1 })
+      body: JSON.stringify({
+        recorded_at: "2026-04-16T12:05:00Z",
+        vital_signs: { temperature_c: 37.1 }
+      })
     });
     assert.equal(missing.status, 404);
     assert.equal(missing.body.error.code, "NOT_FOUND");
@@ -378,7 +390,10 @@ test("observation payload validation failures", async () => {
   try {
     const badEncounterId = await jsonFetch(base, "/api/encounters/bad-id/observations", {
       method: "POST",
-      body: JSON.stringify({ temperature_c: 37.1 })
+      body: JSON.stringify({
+        recorded_at: "2026-04-16T12:05:00Z",
+        vital_signs: { temperature_c: 37.1 }
+      })
     });
     assert.equal(badEncounterId.status, 400);
     assert.equal(badEncounterId.body.error.code, "INVALID_PAYLOAD");
@@ -389,6 +404,23 @@ test("observation payload validation failures", async () => {
     });
     assert.equal(emptyPayload.status, 400);
     assert.equal(emptyPayload.body.error.code, "INVALID_PAYLOAD");
+
+    const invalidFieldType = await jsonFetch(base, "/api/encounters/ENC-123/observations", {
+      method: "POST",
+      body: JSON.stringify({
+        recorded_at: "2026-04-16T12:05:00Z",
+        vital_signs: { temperature_c: "37.1" }
+      })
+    });
+    assert.equal(invalidFieldType.status, 400);
+    assert.equal(invalidFieldType.body.error.code, "INVALID_PAYLOAD");
+
+    const missingRequiredField = await jsonFetch(base, "/api/encounters/ENC-123/observations", {
+      method: "POST",
+      body: JSON.stringify({ vital_signs: { heart_rate_bpm: 92 } })
+    });
+    assert.equal(missingRequiredField.status, 400);
+    assert.equal(missingRequiredField.body.error.code, "INVALID_PAYLOAD");
   } finally {
     server.close();
   }

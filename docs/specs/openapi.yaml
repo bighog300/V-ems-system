@@ -162,8 +162,32 @@ components:
         care_started_at: { type: string, format: date-time }
     CreateObservationRequest:
       type: object
-      minProperties: 1
-      additionalProperties: true
+      required: [recorded_at, vital_signs]
+      additionalProperties: false
+      properties:
+        recorded_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [manual, monitor]
+          default: manual
+        notes:
+          type: string
+          maxLength: 500
+        vital_signs:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            heart_rate_bpm: { type: integer, minimum: 0, maximum: 300 }
+            respiratory_rate_bpm: { type: integer, minimum: 0, maximum: 120 }
+            systolic_bp_mmhg: { type: integer, minimum: 40, maximum: 300 }
+            diastolic_bp_mmhg: { type: integer, minimum: 20, maximum: 200 }
+            spo2_pct: { type: number, minimum: 0, maximum: 100 }
+            temperature_c: { type: number, minimum: 25, maximum: 45 }
+            gcs: { type: integer, minimum: 3, maximum: 15 }
+            pain_score: { type: integer, minimum: 0, maximum: 10 }
     ObservationResponse:
       type: object
       required: [observation_id, encounter_id, status]
