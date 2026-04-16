@@ -306,7 +306,12 @@ export class OrchestrationService {
     const record = this.encounterLinks.findByIncidentId(incidentId);
     if (!record) throw new ApiError("NOT_FOUND", `Encounter for incident ${incidentId} not found`, 404);
     return {
+      incident_id: record.incident_id,
+      openemr_encounter_id: record.openemr_encounter_id,
       encounter_id: record.openemr_encounter_id,
+      openemr_patient_id: record.openemr_patient_id,
+      encounter_status: record.encounter_status,
+      care_started_at: record.care_started_at,
       status: record.encounter_status,
       linked_incident_id: record.incident_id
     };
