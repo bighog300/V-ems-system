@@ -302,3 +302,40 @@ test("readiness diagnostics use safe defaults when optional env values are unset
     delete process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY;
   }
 });
+
+test("internal metrics endpoint exposes request counters and latency summary in development", async () => {
+  delete process.env.APP_ENV;
+  delete process.env.INTERNAL_METRICS_ENABLED;
+  const { server, base } = await startServer();
+
+  try {
+    await jsonFetch(base, "/api/incidents", { method: "GET" });
+    await jsonFetch(base, "/api/does-not-exist", { method: "GET" });
+
+    const report = await jsonFetch(base, "/api/support/metrics", { method: "GET" });
+    assert.equal(report.status, 200);
+    assert.equal(report.body.api_gateway.request_count, 2);
+    assert.equal(report.body.api_gateway.request_failures, 1);
+    assert.equal(report.body.api_gateway.latency_ms.count, 2);
+    assert.equal(typeof report.body.api_gateway.latency_ms.avg, "number");
+    assert.equal(report.body.api_gateway.by_route["GET /api/incidents"].request_count, 1);
+    assert.equal(report.body.api_gateway.by_route["GET /api/does-not-exist"].request_failures, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test("metrics endpoint remains disabled by default in production", async () => {
+  process.env.APP_ENV = "production";
+  delete process.env.INTERNAL_METRICS_ENABLED;
+  const { server, base } = await startServer();
+
+  try {
+    const response = await jsonFetch(base, "/api/support/metrics", { method: "GET" });
+    assert.equal(response.status, 404);
+    assert.equal(response.body.error.code, "NOT_FOUND");
+  } finally {
+    server.close();
+    delete process.env.APP_ENV;
+  }
+});

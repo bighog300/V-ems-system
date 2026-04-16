@@ -5,12 +5,23 @@ function classifyError(error) {
   return "DOWNSTREAM_UNAVAILABLE";
 }
 
+function createSyncWorkerMetrics() {
+  return {
+    started_at: new Date().toISOString(),
+    processed_intents: 0,
+    succeeded_intents: 0,
+    failed_intents: 0,
+    dead_lettered_intents: 0
+  };
+}
+
 export class SyncWorker {
   constructor(options = {}) {
     this.syncIntents = options.syncIntents;
     this.vtiger = options.vtiger;
     this.openemr = options.openemr;
     this.maxAttempts = options.maxAttempts ?? 3;
+    this.metrics = options.metrics ?? createSyncWorkerMetrics();
   }
 
   async processPending(limit = 100) {
@@ -37,7 +48,8 @@ export class SyncWorker {
       startedAt,
       finishedAt: new Date().toISOString(),
       fetchedCount: results.length,
-      statusCounts
+      statusCounts,
+      metrics: this.getMetrics()
     };
   }
 
@@ -48,6 +60,7 @@ export class SyncWorker {
   }
 
   async processIntent(intent) {
+    this.metrics.processed_intents += 1;
     const adapter = this.resolveAdapter(intent);
     const methodName = intent.intent_type ?? intent.operation;
 
@@ -58,6 +71,7 @@ export class SyncWorker {
     try {
       await adapter[methodName](intent.payload);
       this.syncIntents.markSucceeded(intent.intent_id, new Date().toISOString());
+      this.metrics.succeeded_intents += 1;
       return { intent_id: intent.intent_id, status: "succeeded" };
     } catch (error) {
       return this.handleFailure(intent, error);
@@ -81,6 +95,15 @@ export class SyncWorker {
       dead_lettered_at: deadLettered ? new Date().toISOString() : null
     });
 
+    this.metrics.failed_intents += 1;
+    if (deadLettered) this.metrics.dead_lettered_intents += 1;
+
     return { intent_id: intent.intent_id, status: deadLettered ? "dead_lettered" : "pending" };
+  }
+
+  getMetrics() {
+    return {
+      ...this.metrics
+    };
   }
 }

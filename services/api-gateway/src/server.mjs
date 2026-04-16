@@ -107,6 +107,47 @@ function readinessReport(orchestration, diagnostics) {
   };
 }
 
+function createApiMetricsCollector() {
+  return {
+    started_at: new Date().toISOString(),
+    request_count: 0,
+    request_failures: 0,
+    latency_ms: {
+      count: 0,
+      total: 0,
+      min: null,
+      max: null,
+      avg: 0
+    },
+    by_route: {}
+  };
+}
+
+function routeMetricKey(method, pathname) {
+  return `${method} ${pathname}`;
+}
+
+function recordRequestMetrics(metrics, { method, pathname, durationMs, failed }) {
+  metrics.request_count += 1;
+  if (failed) metrics.request_failures += 1;
+
+  metrics.latency_ms.count += 1;
+  metrics.latency_ms.total += durationMs;
+  metrics.latency_ms.min = metrics.latency_ms.min === null ? durationMs : Math.min(metrics.latency_ms.min, durationMs);
+  metrics.latency_ms.max = metrics.latency_ms.max === null ? durationMs : Math.max(metrics.latency_ms.max, durationMs);
+  metrics.latency_ms.avg = Number((metrics.latency_ms.total / metrics.latency_ms.count).toFixed(2));
+
+  const routeKey = routeMetricKey(method, pathname);
+  if (!metrics.by_route[routeKey]) {
+    metrics.by_route[routeKey] = {
+      request_count: 0,
+      request_failures: 0
+    };
+  }
+  metrics.by_route[routeKey].request_count += 1;
+  if (failed) metrics.by_route[routeKey].request_failures += 1;
+}
+
 async function parseJson(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -343,12 +384,15 @@ export function createApp(orchestration = new OrchestrationService()) {
     readinessMode: process.env.READINESS_MODE ?? process.env.SMOKE_MODE ?? null,
     lastValidation
   };
+  const metrics = createApiMetricsCollector();
+  const metricsExposureEnabled = appEnv !== "production" || process.env.INTERNAL_METRICS_ENABLED === "true";
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const method = req.method ?? "GET";
     const context = buildRequestContext(req);
     const idempotencyKey = req.headers["idempotency-key"];
+    let requestFailed = false;
 
     logger.info("request_received", {
       correlation_id: context.correlationId,
@@ -373,6 +417,7 @@ export function createApp(orchestration = new OrchestrationService()) {
         path: url.pathname
       });
       if (!rbac.allowed) {
+        requestFailed = true;
         return okJson(res, 403, errorEnvelope("FORBIDDEN", "Role is not authorized for this action", false, context, {
           required_roles: rbac.requiredRoles
         }), context);
@@ -384,6 +429,17 @@ export function createApp(orchestration = new OrchestrationService()) {
 
       if (method === "GET" && url.pathname === "/api/support/readiness") {
         return okJson(res, 200, readinessReport(orchestration, diagnostics), context);
+      }
+
+      if (method === "GET" && url.pathname === "/api/support/metrics") {
+        if (!metricsExposureEnabled) {
+          requestFailed = true;
+          return okJson(res, 404, errorEnvelope("NOT_FOUND", "Route not found", false, context), context);
+        }
+        return okJson(res, 200, {
+          generated_at: new Date().toISOString(),
+          api_gateway: metrics
+        }, context);
       }
 
       if (method === "GET" && url.pathname === "/api/incidents") {
@@ -513,8 +569,10 @@ export function createApp(orchestration = new OrchestrationService()) {
         return okJson(res, 200, assignment, context);
       }
 
+      requestFailed = true;
       return okJson(res, 404, errorEnvelope("NOT_FOUND", "Route not found", false, context), context);
     } catch (error) {
+      requestFailed = true;
       if (error instanceof ApiError) {
         logger.warn("request_failed", {
           correlation_id: context.correlationId,
@@ -541,6 +599,12 @@ export function createApp(orchestration = new OrchestrationService()) {
       });
       return okJson(res, 500, errorEnvelope("DOWNSTREAM_UNAVAILABLE", "Unexpected server error", true, context), context);
     } finally {
+      recordRequestMetrics(metrics, {
+        method,
+        pathname: url.pathname,
+        durationMs: Date.now() - context.startedAt,
+        failed: requestFailed
+      });
       logger.info("request_completed", {
         correlation_id: context.correlationId,
         request_id: context.requestId,

@@ -228,3 +228,65 @@ test("worker does not reprocess already completed intents", async () => {
   const [intent] = syncIntents.listAll();
   assert.equal(intent.status, "succeeded");
 });
+
+test("worker metrics track processed, succeeded, failed, and dead-lettered intents", async () => {
+  const syncIntents = createIntentRepository();
+  appendIntent(syncIntents, {
+    target_system: "vtiger",
+    intent_type: "createIncidentMirror",
+    payload: { incident_id: "INC-200001" }
+  });
+  appendIntent(syncIntents, {
+    target_system: "vtiger",
+    intent_type: "updateIncidentMirror",
+    payload: { incident_id: "INC-200002" }
+  });
+  appendIntent(syncIntents, {
+    target_system: "openemr",
+    intent_type: "createEncounter",
+    operation: "createEncounter",
+    entity_type: "encounter",
+    payload: { encounter_id: "ENC-200003" }
+  });
+
+  const worker = new SyncWorker({
+    syncIntents,
+    maxAttempts: 1,
+    vtiger: {
+      async createIncidentMirror() {},
+      async updateIncidentMirror() {
+        throw new Error("retry exhaustion");
+      }
+    },
+    openemr: {}
+  });
+
+  await worker.processPending();
+  const metrics = worker.getMetrics();
+  assert.equal(metrics.processed_intents, 3);
+  assert.equal(metrics.succeeded_intents, 1);
+  assert.equal(metrics.failed_intents, 2);
+  assert.equal(metrics.dead_lettered_intents, 2);
+});
+
+test("processCycle returns a metrics snapshot", async () => {
+  const syncIntents = createIntentRepository();
+  appendIntent(syncIntents, {
+    target_system: "vtiger",
+    intent_type: "createIncidentMirror",
+    payload: { incident_id: "INC-300001" }
+  });
+
+  const worker = new SyncWorker({
+    syncIntents,
+    vtiger: {
+      async createIncidentMirror() {}
+    },
+    openemr: {}
+  });
+
+  const cycle = await worker.processCycle(10);
+  assert.equal(cycle.fetchedCount, 1);
+  assert.equal(cycle.metrics.processed_intents, 1);
+  assert.equal(cycle.metrics.succeeded_intents, 1);
+});
