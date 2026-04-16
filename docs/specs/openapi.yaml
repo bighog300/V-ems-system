@@ -93,6 +93,10 @@ components:
         status: { type: string, enum: [New, Awaiting Dispatch, Assigned, Crew Acknowledged, En Route, On Scene, Treating On Scene, Transporting, At Destination, Handover Complete, Closed, Cancelled, Stood Down] }
         created_at: { type: string, format: date-time }
         correlation_id: { type: string, format: uuid }
+        closure_ready:
+          type: boolean
+          readOnly: true
+          description: Present when an encounter-linked workflow exists for the incident.
     CreateAssignmentRequest:
       type: object
       required: [vehicle_id, crew_ids, reason]
@@ -290,11 +294,40 @@ paths:
       responses:
         '200':
           description: Incident detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     patch:
       tags: [Incidents]
       summary: Update operational incident fields.
       parameters:
         - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Incident updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Invalid status transition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/incidents/{incidentId}/assignments:
     post:
       tags: [Assignments]
