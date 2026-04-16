@@ -42,4 +42,10 @@ export class AssignmentRepository {
   findActiveByIncident(incidentId) {
     return this.db.queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} AND status IN ('Assigned', 'Accepted', 'Mobilised', 'Active');`).map(mapAssignment);
   }
+
+  findByIncidentId(incidentId) {
+    return this.db
+      .queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} ORDER BY created_at DESC;`)
+      .map(mapAssignment);
+  }
 }

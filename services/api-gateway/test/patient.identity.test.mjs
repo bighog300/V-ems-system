@@ -121,6 +121,42 @@ test("patient link persistence stores provisional and verified states on inciden
   }
 });
 
+test("patient link read by incident returns persisted status summary", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+  try {
+    const incidentResponse = await createDefaultIncident(base);
+    const incidentId = incidentResponse.body.incident_id;
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-777" })
+    });
+
+    const readResponse = await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`);
+    assert.equal(readResponse.status, 200);
+    assert.equal(readResponse.body.incident_id, incidentId);
+    assert.equal(readResponse.body.verification_status, "verified");
+    assert.equal(readResponse.body.openemr_patient_id, "OE-777");
+  } finally {
+    server.close();
+  }
+});
+
+test("patient link read by incident returns 404 when no link is persisted", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+  try {
+    const incidentResponse = await createDefaultIncident(base);
+    const incidentId = incidentResponse.body.incident_id;
+
+    const readResponse = await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`);
+    assert.equal(readResponse.status, 404);
+    assert.equal(readResponse.body.error.code, "NOT_FOUND");
+    assert.match(readResponse.body.error.message, new RegExp(`Patient link for incident ${incidentId} not found`));
+  } finally {
+    server.close();
+  }
+});
+
 test("ambiguous match does not auto-link patient without explicit selection", async () => {
   const { server, base, orchestration } = await startServerWithOpenemrTransport(async (request) => {
     if (request.method === "searchPatient") {
@@ -150,7 +186,7 @@ test("ambiguous match does not auto-link patient without explicit selection", as
     assert.equal(search.body.match_status, "ambiguous");
     assert.equal(search.body.patient_id, null);
     assert.equal(search.body.candidates.length, 2);
-    assert.equal(orchestration.getPatientLink(incidentId), undefined);
+    assert.equal(orchestration.patientLinks.findByIncidentId(incidentId), undefined);
   } finally {
     server.close();
   }

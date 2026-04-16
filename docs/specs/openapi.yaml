@@ -115,6 +115,28 @@ components:
         incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
         status: { type: string, enum: [Proposed, Assigned, Accepted, Mobilised, Active, Completed, Reassigned, Cancelled, Stood Down] }
         vehicle_status: { type: string, enum: [Available, Reserved, Assigned, En Route, On Scene, Transporting, At Destination, Returning to Base, Restocking, Out of Service, Maintenance, Offline/Unknown] }
+    AssignmentIncidentSummary:
+      type: object
+      required: [assignment_id, status, vehicle_status, vehicle_id, crew_ids, reason, updated_at]
+      properties:
+        assignment_id: { type: string, pattern: '^ASN-[0-9]{6}$' }
+        status: { type: string, enum: [Proposed, Assigned, Accepted, Mobilised, Active, Completed, Reassigned, Cancelled, Stood Down] }
+        vehicle_status: { type: string, enum: [Available, Reserved, Assigned, En Route, On Scene, Transporting, At Destination, Returning to Base, Restocking, Out of Service, Maintenance, Offline/Unknown] }
+        vehicle_id: { type: string, pattern: '^AMB-[0-9]{3,}$' }
+        crew_ids:
+          type: array
+          items: { type: string, pattern: '^STAFF-[0-9]{3,}$' }
+        reason: { type: string }
+        updated_at: { type: string, format: date-time }
+    AssignmentListResponse:
+      type: object
+      required: [incident_id, assignments]
+      properties:
+        incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+        assignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssignmentIncidentSummary'
     PatientSearchRequest:
       type: object
       properties:
@@ -138,6 +160,15 @@ components:
             properties:
               patient_id: { type: string }
               display_name: { type: string }
+    PatientLinkReadResponse:
+      type: object
+      required: [incident_id, verification_status, updated_at]
+      properties:
+        incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+        verification_status: { type: string, enum: [unknown, provisional, matched_existing, created_new, verified, duplicate_suspected] }
+        openemr_patient_id: { type: string, nullable: true }
+        temporary_label: { type: string, nullable: true }
+        updated_at: { type: string, format: date-time }
     CreateEncounterRequest:
       type: object
       required: [patient_id, care_started_at, crew_ids, presenting_complaint]
@@ -330,6 +361,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/incidents/{incidentId}/assignments:
+    get:
+      tags: [Assignments]
+      summary: Get persisted assignment summaries for an incident.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Persisted assignment summaries for the incident.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssignmentListResponse'
+        '404':
+          description: Incident or assignments not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Assignments]
       summary: Create assignment for an incident.
@@ -350,6 +399,24 @@ paths:
       tags: [Patients]
       summary: Create patient in OpenEMR.
   /api/incidents/{incidentId}/patient-link:
+    get:
+      tags: [Patients]
+      summary: Get persisted patient-link status for an incident.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Persisted patient-link status for the incident.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatientLinkReadResponse'
+        '404':
+          description: Incident or patient-link not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Patients]
       summary: Link an OpenEMR patient to an incident.
