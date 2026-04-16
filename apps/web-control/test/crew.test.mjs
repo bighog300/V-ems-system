@@ -68,6 +68,9 @@ test("renderCrewIncidentDetailHtml renders create encounter form when patient is
   assert.match(html, /name="care_started_at"/);
   assert.match(html, /name="crew_ids"/);
   assert.match(html, /name="presenting_complaint"/);
+  assert.match(html, /Care Timeline \/ Progression/);
+  assert.match(html, /Next Step Guidance/);
+  assert.match(html, /Create encounter to start care progression/);
 });
 
 test("renderCrewIncidentDetailHtml blocks create encounter when patient link is missing", () => {
@@ -145,6 +148,8 @@ test("renderCrewIncidentDetailHtml renders handover form when encounter exists a
   assert.match(html, /name="receiving_clinician"/);
   assert.match(html, /name="disposition"/);
   assert.match(html, /name="handover_status"/);
+  assert.match(html, /Record handover now/);
+  assert.match(html, /Suggested next action:<\/strong> Submit Record Handover/);
 });
 
 test("renderCrewIncidentDetailHtml shows blocked observation state when encounter is missing", () => {
@@ -213,7 +218,29 @@ test("renderCrewIncidentDetailHtml shows existing handover summary without dupli
 
   assert.match(html, /Handover already recorded: Handover Completed \/ transport_to_facility/);
   assert.match(html, /<dt>Closure Ready<\/dt><dd>true<\/dd>/);
+  assert.match(html, /Workflow complete for crew/);
   assert.doesNotMatch(html, /id="recordHandoverForm"/);
+});
+
+test("renderCrewIncidentDetailHtml applies datetime defaults from now option", () => {
+  const html = renderCrewIncidentDetailHtml(
+    {
+      incidentId: "INC-000128",
+      priority: "high",
+      status: "On Scene",
+      locationSummary: "12 Field Street",
+      closureReady: false,
+      assignmentSummary: { summary: "ASN-006 • Active • AMB-105" },
+      patientLinkSummary: { summary: "Linked patient OE-5", openemrPatientId: "OE-5" },
+      encounterSummary: { available: true, encounter_id: "ENC-12", encounter_status: "Open" },
+      handoverSummary: { available: false, detail: "No handover payload available from GET /api/encounters/{encounterId}/handover." }
+    },
+    { now: new Date("2026-04-16T10:45:00.000Z") }
+  );
+
+  assert.match(html, /name="recorded_at" type="datetime-local" value="2026-04-16T10:45"/);
+  assert.match(html, /name="performed_at" type="datetime-local" value="2026-04-16T10:45"/);
+  assert.match(html, /name="handover_time" type="datetime-local" value="2026-04-16T10:45"/);
 });
 
 test("buildCreateEncounterPayload validates and normalizes required fields", () => {

@@ -166,6 +166,54 @@ dt {
   max-width: 520px;
 }
 
+.workflow-stage-group {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.workflow-stage-group h4 {
+  margin: 0 0 0.5rem;
+}
+
+.workflow-stage-group .panel {
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.care-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.timeline-item {
+  border-left: 4px solid #d1d5db;
+  padding: 0.5rem 0.75rem;
+  background: #ffffff;
+}
+
+.timeline-item p {
+  margin: 0.1rem 0;
+}
+
+.timeline-item-done {
+  border-left-color: #16a34a;
+  background: #f0fdf4;
+}
+
+.timeline-item-current {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+
+.timeline-item-upcoming {
+  border-left-color: #9ca3af;
+  background: #f9fafb;
+}
+
 .success-note {
   color: #166534;
   font-weight: 600;
