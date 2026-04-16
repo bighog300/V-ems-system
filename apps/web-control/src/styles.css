@@ -9,7 +9,7 @@ body {
 }
 
 main {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 1rem;
 }
@@ -24,7 +24,7 @@ main {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 0.75rem;
   align-items: end;
 }
@@ -34,7 +34,8 @@ label {
   gap: 0.3rem;
 }
 
-input, button {
+input,
+button {
   padding: 0.5rem;
 }
 
@@ -50,4 +51,33 @@ dt {
 
 .hint {
   margin-top: 0;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 0.75rem;
+}
+
+.board-card {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0.75rem;
+}
+
+.board-card h3 {
+  margin: 0;
+}
+
+.board-card header p {
+  margin-bottom: 0.75rem;
+}
+
+.board-card.priority-critical {
+  border-left: 6px solid #b91c1c;
+}
+
+.board-card dl {
+  grid-template-columns: 140px 1fr;
 }

@@ -1,12 +1,18 @@
-import { loadIncidentOperationalData } from "./api.mjs";
+import { loadDispatcherBoardData, loadIncidentOperationalData } from "./api.mjs";
+import { buildDispatcherBoardItems, renderDispatcherBoardHtml } from "./board.mjs";
 import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "./summary.mjs";
 
 function readConfig() {
   const apiBaseInput = document.querySelector("#apiBaseUrl");
   const incidentInput = document.querySelector("#incidentId");
+  const boardIncidentIdsInput = document.querySelector("#boardIncidentIds");
   return {
     apiBaseUrl: apiBaseInput.value.trim().replace(/\/$/, ""),
-    incidentId: incidentInput.value.trim()
+    incidentId: incidentInput.value.trim(),
+    boardIncidentIds: boardIncidentIdsInput.value
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
   };
 }
 
@@ -44,4 +50,36 @@ async function renderIncidentDetail() {
   }
 }
 
+async function renderDispatcherBoard() {
+  const output = document.querySelector("#boardOutput");
+  const status = document.querySelector("#status");
+  status.textContent = "Loading dispatcher board...";
+
+  try {
+    const config = readConfig();
+    if (!config.apiBaseUrl) {
+      throw new Error("API Base URL is required.");
+    }
+    const boardData = await loadDispatcherBoardData(config);
+    const items = buildDispatcherBoardItems(boardData.items);
+    output.innerHTML = renderDispatcherBoardHtml(items, { discoveryGap: boardData.discoveryGap });
+    status.textContent = "Loaded.";
+  } catch (error) {
+    output.innerHTML = "";
+    status.textContent = error.message;
+  }
+}
+
+function hydrateInputsFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const incidentId = params.get("incidentId");
+  if (incidentId) {
+    const incidentInput = document.querySelector("#incidentId");
+    incidentInput.value = incidentId;
+  }
+}
+
 document.querySelector("#loadIncident").addEventListener("click", renderIncidentDetail);
+document.querySelector("#loadBoard").addEventListener("click", renderDispatcherBoard);
+
+hydrateInputsFromQuery();

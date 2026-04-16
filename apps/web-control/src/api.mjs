@@ -36,3 +36,35 @@ export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetc
     handover
   };
 }
+
+export async function loadDispatcherBoardData({ apiBaseUrl, incidentIds, fetchImpl = fetch }) {
+  const uniqueIncidentIds = [...new Set(incidentIds.map((id) => id.trim()).filter(Boolean))];
+  const records = [];
+
+  for (const incidentId of uniqueIncidentIds) {
+    const incidentResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}`);
+    if (incidentResult.notFound) {
+      records.push({
+        incident: {
+          incident_id: incidentId,
+          priority: "Unavailable",
+          status: "Not found",
+          address: "Incident ID not found"
+        },
+        assignmentSummary: null
+      });
+      continue;
+    }
+
+    const assignmentResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/assignments`);
+    records.push({
+      incident: incidentResult.data,
+      assignmentSummary: assignmentResult.notFound ? null : assignmentResult.data
+    });
+  }
+
+  return {
+    items: records,
+    discoveryGap: "Board list discovery is currently manual because no incident-list GET endpoint is available yet."
+  };
+}
