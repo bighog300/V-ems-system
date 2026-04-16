@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ApiError,
+  createEncounterIntervention,
   createEncounterObservation,
   createIncidentEncounter,
   loadCrewJobListData,
@@ -229,6 +230,75 @@ test("createEncounterObservation surfaces structured backend errors", async () =
       assert.equal(error.status, 400);
       assert.equal(error.code, "INVALID_PAYLOAD");
       assert.equal(error.correlationId, "22222222-2222-2222-2222-222222222222");
+      return true;
+    }
+  );
+});
+
+test("createEncounterIntervention submits to POST /api/encounters/{encounterId}/interventions", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      status: 201,
+      async json() {
+        return { intervention_id: "INT-100", encounter_id: "ENC-123", status: "recorded" };
+      }
+    };
+  };
+
+  const payload = {
+    performed_at: "2026-04-16T10:15:00Z",
+    type: "medication",
+    name: "Aspirin",
+    route: "oral"
+  };
+
+  const result = await createEncounterIntervention({
+    apiBaseUrl: "http://127.0.0.1:8080",
+    encounterId: "ENC-123",
+    payload,
+    fetchImpl
+  });
+
+  assert.equal(result.intervention_id, "INT-100");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://127.0.0.1:8080/api/encounters/ENC-123/interventions");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), payload);
+});
+
+test("createEncounterIntervention surfaces structured backend errors", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
+    async json() {
+      return {
+        error: {
+          code: "INVALID_PAYLOAD",
+          message: "type is invalid",
+          retryable: false,
+          correlation_id: "33333333-3333-3333-3333-333333333333",
+          details: { field: "type" }
+        }
+      };
+    }
+  });
+
+  await assert.rejects(
+    createEncounterIntervention({
+      apiBaseUrl: "http://127.0.0.1:8080",
+      encounterId: "ENC-123",
+      payload: { name: "Aspirin" },
+      fetchImpl
+    }),
+    (error) => {
+      assert.equal(error instanceof ApiError, true);
+      assert.equal(error.status, 400);
+      assert.equal(error.code, "INVALID_PAYLOAD");
+      assert.equal(error.correlationId, "33333333-3333-3333-3333-333333333333");
+      assert.deepEqual(error.details, { field: "type" });
       return true;
     }
   );

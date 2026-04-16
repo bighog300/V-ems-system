@@ -83,6 +83,10 @@ export async function createEncounterObservation({ apiBaseUrl, encounterId, payl
   return postJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterId}/observations`, payload);
 }
 
+export async function createEncounterIntervention({ apiBaseUrl, encounterId, payload, fetchImpl = fetch }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterId}/interventions`, payload);
+}
+
 export async function loadDispatcherBoardData({ apiBaseUrl, fetchImpl = fetch }) {
   const boardList = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents`);
   return {

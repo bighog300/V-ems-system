@@ -147,6 +147,65 @@ function renderObservationPanel(summary) {
   `;
 }
 
+function renderInterventionPanel(summary) {
+  if (!summary.encounterSummary.available) {
+    return `
+      <section class="panel">
+        <h3>Record Intervention</h3>
+        <p class="error-note">Intervention entry is unavailable because no encounter is linked yet.</p>
+        <p class="hint">Create an encounter first, then return here to record interventions.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="panel">
+      <h3>Record Intervention</h3>
+      <form id="recordInterventionForm" class="encounter-form">
+        <label>
+          performed_at
+          <input name="performed_at" type="datetime-local" required />
+        </label>
+        <label>
+          type
+          <select name="type" required>
+            <option value="">Select type</option>
+            <option value="medication">medication</option>
+            <option value="procedure">procedure</option>
+            <option value="airway">airway</option>
+            <option value="oxygen_therapy">oxygen_therapy</option>
+            <option value="immobilization">immobilization</option>
+            <option value="other">other</option>
+          </select>
+        </label>
+        <label>
+          name
+          <input name="name" required />
+        </label>
+        <label>
+          dose (optional)
+          <input name="dose" />
+        </label>
+        <label>
+          route (optional)
+          <input name="route" />
+        </label>
+        <label>
+          response (optional)
+          <textarea name="response" rows="3"></textarea>
+        </label>
+        <label>
+          stock_item_id (optional)
+          <input name="stock_item_id" placeholder="ITEM-001" />
+        </label>
+        <p class="hint">Stock item linkage is optional and does not mutate inventory from this screen.</p>
+        <button type="submit">Record intervention</button>
+        <p id="recordInterventionFeedback" aria-live="polite" class="hint"></p>
+      </form>
+    </section>
+  `;
+}
+
 function normalizeIntegerField(formDataLike, key) {
   const raw = String(formDataLike.get(key) ?? "").trim();
   if (!raw) return { raw, value: null };
@@ -175,6 +234,8 @@ const mentalStatusToGcs = {
   pain: 8,
   unresponsive: 3
 };
+
+const interventionTypes = new Set(["medication", "procedure", "airway", "oxygen_therapy", "immobilization", "other"]);
 
 export function buildCreateEncounterPayload(formDataLike) {
   const patientId = String(formDataLike.get("patient_id") ?? "").trim();
@@ -262,6 +323,40 @@ export function buildCreateObservationPayload(formDataLike, { nowMs = Date.now()
   return { payload, validationErrors };
 }
 
+export function buildCreateInterventionPayload(formDataLike) {
+  const performedAtRaw = String(formDataLike.get("performed_at") ?? "").trim();
+  const type = String(formDataLike.get("type") ?? "").trim();
+  const name = String(formDataLike.get("name") ?? "").trim();
+  const dose = String(formDataLike.get("dose") ?? "").trim();
+  const route = String(formDataLike.get("route") ?? "").trim();
+  const response = String(formDataLike.get("response") ?? "").trim();
+  const stockItemId = String(formDataLike.get("stock_item_id") ?? "").trim();
+
+  const performedAtDate = performedAtRaw ? new Date(performedAtRaw) : null;
+  const performedAtIso = performedAtDate && !Number.isNaN(performedAtDate.valueOf()) ? performedAtDate.toISOString() : "";
+
+  const payload = {
+    performed_at: performedAtIso,
+    type,
+    name
+  };
+
+  if (dose) payload.dose = dose;
+  if (route) payload.route = route;
+  if (response) payload.response = response;
+  if (stockItemId) payload.stock_item_id = stockItemId;
+
+  const validationErrors = [
+    !performedAtRaw ? "performed_at is required." : null,
+    performedAtRaw && !performedAtIso ? "performed_at must be a valid datetime." : null,
+    !type ? "type is required." : null,
+    type && !interventionTypes.has(type) ? "type is invalid." : null,
+    !name ? "name is required." : null
+  ].filter(Boolean);
+
+  return { payload, validationErrors };
+}
+
 export function buildCrewJobListItems(boardData) {
   return boardData.map((incidentSummary) => ({
     incidentId: asText(incidentSummary.incident_id),
@@ -324,13 +419,13 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
     </section>
     ${renderEncounterCreatePanel(summary)}
     ${renderObservationPanel(summary)}
+    ${renderInterventionPanel(summary)}
     ${
       includeActionPlaceholders
         ? `<section class="panel">
       <h3>Crew Clinical Actions (Pending)</h3>
       <ul class="crew-action-list">
         ${renderAction("Patient search/create/link", "POST /api/patients/search | POST /api/patients | POST /api/incidents/{incidentId}/patient-link")}
-        ${renderAction("Record intervention", `POST /api/encounters/${encounterId ?? "{encounterId}"}/interventions`, encounterActionsEnabled)}
         ${renderAction("Record handover", `POST /api/encounters/${encounterId ?? "{encounterId}"}/handover`, encounterActionsEnabled)}
       </ul>
     </section>`
