@@ -67,7 +67,11 @@ function evaluateRbac({ method, pathname, role, enforceRbac }) {
   return { enforced: enforceRbac, requiresRole: true, allowed: !enforceRbac || allowed, requiredRoles: policy.roles, roleMatched: allowed };
 }
 
-function readinessReport(orchestration, enforceRbac) {
+function envFlagEnabled(...values) {
+  return values.some((value) => value === "true");
+}
+
+function readinessReport(orchestration, diagnostics) {
   const incidents = orchestration.listIncidentsForBoard();
   const byStatus = incidents.reduce((acc, incident) => {
     acc[incident.status] = (acc[incident.status] ?? 0) + 1;
@@ -79,7 +83,22 @@ function readinessReport(orchestration, enforceRbac) {
     production_readiness: {
       structured_logging: true,
       correlation_headers: true,
-      rbac_enforced: enforceRbac
+      rbac_enforced: diagnostics.rbacEnforced
+    },
+    diagnostics: {
+      environment: {
+        app_env: diagnostics.appEnv,
+        profile: diagnostics.profile
+      },
+      controls: {
+        rbac_enforced: diagnostics.rbacEnforced,
+        upstream_connectivity_validation_enabled: diagnostics.upstreamConnectivityValidationEnabled
+      },
+      modes: {
+        smoke_include_upstream_connectivity: diagnostics.smokeIncludeUpstreamConnectivity,
+        readiness_mode: diagnostics.readinessMode
+      },
+      last_validation: diagnostics.lastValidation
     },
     incident_snapshot: {
       total: incidents.length,
@@ -302,6 +321,28 @@ function validateCreateHandover(payload) {
 
 export function createApp(orchestration = new OrchestrationService()) {
   const enforceRbac = process.env.RBAC_ENFORCE === "true";
+  const appEnv = process.env.APP_ENV ?? "development";
+  const profile = process.env.APP_PROFILE ?? process.env.NODE_ENV ?? "default";
+  const smokeIncludeUpstreamConnectivity = process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY === "true";
+  const upstreamConnectivityValidationEnabled = envFlagEnabled(
+    process.env.UPSTREAM_CONNECTIVITY_CHECKS_ENABLED,
+    process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY
+  );
+  const lastValidation = process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT
+    ? {
+      at: process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT,
+      result: process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT ?? "unknown"
+    }
+    : null;
+  const diagnostics = {
+    appEnv,
+    profile,
+    rbacEnforced: enforceRbac,
+    upstreamConnectivityValidationEnabled,
+    smokeIncludeUpstreamConnectivity,
+    readinessMode: process.env.READINESS_MODE ?? process.env.SMOKE_MODE ?? null,
+    lastValidation
+  };
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -342,7 +383,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (method === "GET" && url.pathname === "/health") return okJson(res, 200, { status: "ok" }, context);
 
       if (method === "GET" && url.pathname === "/api/support/readiness") {
-        return okJson(res, 200, readinessReport(orchestration, enforceRbac), context);
+        return okJson(res, 200, readinessReport(orchestration, diagnostics), context);
       }
 
       if (method === "GET" && url.pathname === "/api/incidents") {
