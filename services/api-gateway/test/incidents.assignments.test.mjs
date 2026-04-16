@@ -176,3 +176,85 @@ test("outbox event creation", async () => {
     server.close();
   }
 });
+
+
+test("incident create writes sync intent for Vtiger", async () => {
+  const { server, base, orchestration } = await startServer();
+  try {
+    const created = await createDefaultIncident(base);
+    assert.equal(created.status, 201);
+
+    const intents = orchestration.listSyncIntents();
+    const incidentCreateIntent = intents.find((intent) => intent.operation === "createIncidentMirror");
+    assert.ok(incidentCreateIntent);
+    assert.equal(incidentCreateIntent.entity_type, "incident");
+    assert.equal(incidentCreateIntent.target_system, "vtiger");
+    assert.equal(incidentCreateIntent.payload.incident_id, created.body.incident_id);
+  } finally {
+    server.close();
+  }
+});
+
+test("incident update writes sync intent", async () => {
+  const { server, base, orchestration } = await startServer();
+  try {
+    const created = await createDefaultIncident(base);
+    await jsonFetch(base, `/api/incidents/${created.body.incident_id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "queue_for_dispatch" })
+    });
+
+    const intents = orchestration.listSyncIntents();
+    const incidentUpdateIntent = intents.find((intent) => intent.operation === "updateIncidentMirror");
+    assert.ok(incidentUpdateIntent);
+    assert.equal(incidentUpdateIntent.entity_type, "incident");
+    assert.equal(incidentUpdateIntent.payload.incident_id, created.body.incident_id);
+    assert.equal(incidentUpdateIntent.payload.status, "Awaiting Dispatch");
+  } finally {
+    server.close();
+  }
+});
+
+test("assignment create writes sync intent", async () => {
+  const { server, base, orchestration } = await startServer();
+  try {
+    const created = await createDefaultIncident(base);
+    const assignment = await jsonFetch(base, `/api/incidents/${created.body.incident_id}/assignments`, {
+      method: "POST",
+      body: JSON.stringify({ vehicle_id: "AMB-301", crew_ids: ["STAFF-001"], reason: "Dispatch" })
+    });
+    assert.equal(assignment.status, 201);
+
+    const intents = orchestration.listSyncIntents();
+    const assignmentCreateIntent = intents.find((intent) => intent.operation === "createAssignmentMirror");
+    assert.ok(assignmentCreateIntent);
+    assert.equal(assignmentCreateIntent.entity_type, "assignment");
+    assert.equal(assignmentCreateIntent.payload.assignment_id, assignment.body.assignment_id);
+  } finally {
+    server.close();
+  }
+});
+
+test("assignment update writes sync intent", async () => {
+  const { server, base, orchestration } = await startServer();
+  try {
+    const created = await createDefaultIncident(base);
+    const assignment = await jsonFetch(base, `/api/incidents/${created.body.incident_id}/assignments`, {
+      method: "POST",
+      body: JSON.stringify({ vehicle_id: "AMB-302", crew_ids: ["STAFF-002"], reason: "Dispatch" })
+    });
+    await jsonFetch(base, `/api/assignments/${assignment.body.assignment_id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "confirm_assignment" })
+    });
+
+    const intents = orchestration.listSyncIntents();
+    const assignmentUpdateIntent = intents.find((intent) => intent.operation === "updateAssignmentMirror");
+    assert.ok(assignmentUpdateIntent);
+    assert.equal(assignmentUpdateIntent.entity_type, "assignment");
+    assert.equal(assignmentUpdateIntent.payload.assignment_id, assignment.body.assignment_id);
+    assert.equal(assignmentUpdateIntent.payload.status, "Assigned");
+  } finally {
+    server.close();
+  }
+});

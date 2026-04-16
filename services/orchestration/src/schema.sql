@@ -53,3 +53,13 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
   created_at TEXT NOT NULL,
   PRIMARY KEY (scope, idempotency_key)
 );
+
+CREATE TABLE IF NOT EXISTS sync_intents (
+  intent_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  target_system TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  correlation_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  payload_json TEXT NOT NULL
+);
