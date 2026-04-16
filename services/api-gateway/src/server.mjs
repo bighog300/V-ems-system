@@ -164,6 +164,35 @@ function validateCreateObservation(payload) {
   }
 }
 
+function validateCreateIntervention(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new ApiError("INVALID_PAYLOAD", "Intervention payload is required", 400);
+  }
+
+  const allowedFields = new Set(["performed_at", "type", "name", "dose", "route", "response", "stock_item_id"]);
+  const unknownFields = Object.keys(payload).filter((field) => !allowedFields.has(field));
+  if (unknownFields.length > 0) {
+    throw new ApiError("INVALID_PAYLOAD", `Unknown intervention fields: ${unknownFields.join(", ")}`, 400);
+  }
+
+  if (!payload.performed_at || typeof payload.performed_at !== "string" || Number.isNaN(Date.parse(payload.performed_at))) {
+    throw new ApiError("INVALID_PAYLOAD", "performed_at is required and must be an ISO-8601 datetime", 400);
+  }
+  const interventionTypes = ["medication", "procedure", "airway", "oxygen_therapy", "immobilization", "other"];
+  if (!interventionTypes.includes(payload.type)) {
+    throw new ApiError("INVALID_PAYLOAD", "type must be one of: medication, procedure, airway, oxygen_therapy, immobilization, other", 400);
+  }
+  if (!payload.name || typeof payload.name !== "string") {
+    throw new ApiError("INVALID_PAYLOAD", "name is required", 400);
+  }
+
+  for (const optionalField of ["dose", "route", "response", "stock_item_id"]) {
+    if (payload[optionalField] !== undefined && typeof payload[optionalField] !== "string") {
+      throw new ApiError("INVALID_PAYLOAD", `${optionalField} must be a string`, 400);
+    }
+  }
+}
+
 export function createApp(orchestration = new OrchestrationService()) {
   const server = createServer(async (req, res) => {
     try {
@@ -248,6 +277,16 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateCreateObservation(payload);
         const observation = await orchestration.createObservationForEncounter(encounterId, payload, { correlationId });
         return okJson(res, 201, observation);
+      }
+
+      const interventionCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/interventions$/);
+      if (interventionCreateMatch && method === "POST") {
+        const encounterId = interventionCreateMatch[1];
+        validateEncounterId(encounterId);
+        const payload = await parseJson(req);
+        validateCreateIntervention(payload);
+        const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId });
+        return okJson(res, 201, intervention);
       }
 
       const assignmentPatchMatch = url.pathname.match(/^\/api\/assignments\/(ASN-[0-9]{6})$/);

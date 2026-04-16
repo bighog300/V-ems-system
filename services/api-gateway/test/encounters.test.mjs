@@ -26,7 +26,8 @@ async function startServerWithOpenemrTransport(transport, dbPath = createDbPath(
       searchPatient: (payload) => transport({ method: "searchPatient", payload }),
       createPatient: (payload) => transport({ method: "createPatient", payload }),
       createEncounter: (payload) => transport({ method: "createEncounter", payload }),
-      createObservation: (payload) => transport({ method: "createObservation", payload })
+      createObservation: (payload) => transport({ method: "createObservation", payload }),
+      createIntervention: (payload) => transport({ method: "createIntervention", payload })
     }
   });
 
@@ -268,6 +269,120 @@ test("encounter fetch returns persisted linkage metadata", async () => {
       encounter_status: "Ready for Handover",
       care_started_at: "2026-04-16T12:00:00Z"
     });
+  } finally {
+    server.close();
+  }
+});
+
+test("intervention create success path", async () => {
+  const calls = [];
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    calls.push(request);
+    if (request.method === "createEncounter") return { encounter_id: "ENC-500", status: "Open" };
+    if (request.method === "createIntervention") return { intervention_id: "INT-500", encounter_id: "ENC-500", status: "recorded" };
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-500" })
+    });
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-500",
+        care_started_at: "2026-04-16T10:15:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+
+    const created = await jsonFetch(base, "/api/encounters/ENC-500/interventions", {
+      method: "POST",
+      body: JSON.stringify({
+        performed_at: "2026-04-16T10:20:00Z",
+        type: "medication",
+        name: "Aspirin",
+        dose: "300mg",
+        route: "oral",
+        response: "pain reduced",
+        stock_item_id: "ITEM-001"
+      })
+    });
+
+    assert.equal(created.status, 201);
+    assert.deepEqual(created.body, { intervention_id: "INT-500", encounter_id: "ENC-500", status: "recorded" });
+    assert.deepEqual(calls.at(-1), {
+      method: "createIntervention",
+      payload: {
+        encounter_id: "ENC-500",
+        incident_id: incidentId,
+        patient_id: "OE-500",
+        performed_at: "2026-04-16T10:20:00Z",
+        type: "medication",
+        name: "Aspirin",
+        dose: "300mg",
+        route: "oral",
+        response: "pain reduced",
+        stock_item_id: "ITEM-001"
+      }
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test("intervention create rejected if encounter does not exist", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+
+  try {
+    const rejected = await jsonFetch(base, "/api/encounters/ENC-404/interventions", {
+      method: "POST",
+      body: JSON.stringify({
+        performed_at: "2026-04-16T10:20:00Z",
+        type: "medication",
+        name: "Aspirin"
+      })
+    });
+
+    assert.equal(rejected.status, 404);
+    assert.equal(rejected.body.error.code, "NOT_FOUND");
+  } finally {
+    server.close();
+  }
+});
+
+test("intervention payload validation failures return structured envelope", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+
+  try {
+    const invalidType = await jsonFetch(base, "/api/encounters/ENC-100/interventions", {
+      method: "POST",
+      body: JSON.stringify({
+        performed_at: "2026-04-16T10:20:00Z",
+        type: "bad-type",
+        name: "Aspirin"
+      })
+    });
+    assert.equal(invalidType.status, 400);
+    assert.equal(invalidType.body.error.code, "INVALID_PAYLOAD");
+
+    const unknownField = await jsonFetch(base, "/api/encounters/ENC-100/interventions", {
+      method: "POST",
+      body: JSON.stringify({
+        performed_at: "2026-04-16T10:20:00Z",
+        type: "medication",
+        name: "Aspirin",
+        extra: true
+      })
+    });
+    assert.equal(unknownField.status, 400);
+    assert.equal(unknownField.body.error.code, "INVALID_PAYLOAD");
   } finally {
     server.close();
   }

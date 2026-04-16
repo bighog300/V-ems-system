@@ -42,6 +42,21 @@ export class OpenEmrPayloadMapper {
     };
   }
 
+  mapInterventionCreateRequest(intervention) {
+    return {
+      encounter_id: intervention.encounter_id,
+      incident_id: intervention.incident_id,
+      patient_id: intervention.patient_id,
+      performed_at: intervention.performed_at,
+      type: intervention.type,
+      name: intervention.name,
+      dose: intervention.dose,
+      route: intervention.route,
+      response: intervention.response,
+      stock_item_id: intervention.stock_item_id
+    };
+  }
+
   mapPatientSearchResponse(response) {
     return {
       match_status: response.match_status,
@@ -68,6 +83,14 @@ export class OpenEmrPayloadMapper {
   mapObservationCreateResponse(response) {
     return {
       observation_id: response.observation_id,
+      encounter_id: response.encounter_id,
+      status: response.status
+    };
+  }
+
+  mapInterventionCreateResponse(response) {
+    return {
+      intervention_id: response.intervention_id,
       encounter_id: response.encounter_id,
       status: response.status
     };
