@@ -16,6 +16,21 @@
           API Base URL
           <input id="apiBaseUrl" value="http://127.0.0.1:8080" />
         </label>
+        <label>
+          Actor ID
+          <input id="actorId" value="STAFF-001" />
+        </label>
+        <label>
+          Actor Role
+          <select id="actorRole">
+            <option value="dispatcher">dispatcher</option>
+            <option value="field_crew">field_crew</option>
+            <option value="field_crew_lead">field_crew_lead</option>
+            <option value="clinical_reviewer">clinical_reviewer</option>
+            <option value="supervisor">supervisor</option>
+            <option value="sys_admin">sys_admin</option>
+          </select>
+        </label>
         <button id="loadDispatcherBoard">Load Dispatcher Board</button>
         <button id="loadBoard">Load Crew Job List</button>
       </section>
