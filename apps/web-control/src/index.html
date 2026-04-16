@@ -3,20 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>V-EMS Web Control - Dispatcher Board</title>
+    <title>V-EMS Web Control - Crew Mobile Slice</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <main>
-      <h1>Web Control - Dispatcher Board & Incident Detail</h1>
-      <p class="hint">Operational read view prioritizing incident visibility, priority clarity, and detail drill-in.</p>
+      <h1>Web Control - Crew Job List & Incident Detail</h1>
+      <p class="hint">First crew-facing UI slice for operational field visibility and clinical action entry points.</p>
 
       <section class="panel controls">
         <label>
           API Base URL
           <input id="apiBaseUrl" value="http://127.0.0.1:8080" />
         </label>
-        <button id="loadBoard">Load Dispatcher Board</button>
+        <button id="loadBoard">Load Crew Job List</button>
       </section>
 
       <section class="panel controls">
@@ -24,11 +24,13 @@
           Incident ID
           <input id="incidentId" placeholder="INC-000001" />
         </label>
-        <button id="loadIncident">Load Incident Detail</button>
+        <button id="loadCrewIncident">Load Crew Incident Detail</button>
+        <button id="loadIncident">Load Operational Summary</button>
       </section>
 
       <p id="status" aria-live="polite"></p>
-      <div id="boardOutput"></div>
+      <div id="crewJobOutput"></div>
+      <div id="crewIncidentOutput"></div>
       <div id="incidentOutput"></div>
     </main>
 

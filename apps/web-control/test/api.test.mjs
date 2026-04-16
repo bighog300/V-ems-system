@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadDispatcherBoardData, loadIncidentOperationalData } from "../src/api.mjs";
+import { loadCrewJobListData, loadDispatcherBoardData, loadIncidentOperationalData } from "../src/api.mjs";
 
 test("loadDispatcherBoardData uses GET /api/incidents list endpoint", async () => {
   const calls = [];
@@ -30,6 +30,25 @@ test("loadDispatcherBoardData uses GET /api/incidents list endpoint", async () =
   assert.deepEqual(calls, ["http://127.0.0.1:8080/api/incidents"]);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].incident_id, "INC-000123");
+});
+
+test("loadCrewJobListData uses GET /api/incidents list endpoint", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { incidents: [] };
+      }
+    };
+  };
+
+  const result = await loadCrewJobListData({ apiBaseUrl: "http://127.0.0.1:8080", fetchImpl });
+
+  assert.deepEqual(calls, ["http://127.0.0.1:8080/api/incidents"]);
+  assert.deepEqual(result.items, []);
 });
 
 test("loadIncidentOperationalData remains on incident detail read-path endpoints", async () => {

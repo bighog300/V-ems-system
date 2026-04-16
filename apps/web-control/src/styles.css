@@ -81,3 +81,38 @@ dt {
 .board-card dl {
   grid-template-columns: 140px 1fr;
 }
+
+.crew-job-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.crew-job-card {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0.75rem;
+}
+
+.crew-job-card h3 {
+  margin-top: 0;
+}
+
+.crew-action-list {
+  list-style: none;
+  display: grid;
+  gap: 0.6rem;
+  padding: 0;
+}
+
+.crew-action-list li {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.crew-action-list button {
+  text-align: left;
+}
