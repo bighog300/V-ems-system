@@ -193,6 +193,42 @@ function validateCreateIntervention(payload) {
   }
 }
 
+function validateCreateHandover(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new ApiError("INVALID_PAYLOAD", "Handover payload is required", 400);
+  }
+
+  const allowedFields = new Set([
+    "handover_time",
+    "destination_facility",
+    "receiving_clinician",
+    "disposition",
+    "handover_status",
+    "notes"
+  ]);
+  const unknownFields = Object.keys(payload).filter((field) => !allowedFields.has(field));
+  if (unknownFields.length > 0) {
+    throw new ApiError("INVALID_PAYLOAD", `Unknown handover fields: ${unknownFields.join(", ")}`, 400);
+  }
+
+  if (!payload.handover_time || typeof payload.handover_time !== "string" || Number.isNaN(Date.parse(payload.handover_time))) {
+    throw new ApiError("INVALID_PAYLOAD", "handover_time is required and must be an ISO-8601 datetime", 400);
+  }
+  if (!payload.disposition || typeof payload.disposition !== "string") {
+    throw new ApiError("INVALID_PAYLOAD", "disposition is required", 400);
+  }
+  const handoverStatuses = ["Ready for Handover", "Handover Completed"];
+  if (!handoverStatuses.includes(payload.handover_status)) {
+    throw new ApiError("INVALID_PAYLOAD", "handover_status must be one of: Ready for Handover, Handover Completed", 400);
+  }
+
+  for (const optionalField of ["destination_facility", "receiving_clinician", "notes"]) {
+    if (payload[optionalField] !== undefined && typeof payload[optionalField] !== "string") {
+      throw new ApiError("INVALID_PAYLOAD", `${optionalField} must be a string`, 400);
+    }
+  }
+}
+
 export function createApp(orchestration = new OrchestrationService()) {
   const server = createServer(async (req, res) => {
     try {
@@ -287,6 +323,16 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateCreateIntervention(payload);
         const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId });
         return okJson(res, 201, intervention);
+      }
+
+      const handoverCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/handover$/);
+      if (handoverCreateMatch && method === "POST") {
+        const encounterId = handoverCreateMatch[1];
+        validateEncounterId(encounterId);
+        const payload = await parseJson(req);
+        validateCreateHandover(payload);
+        const handover = await orchestration.createHandoverForEncounter(encounterId, payload, { correlationId });
+        return okJson(res, 201, handover);
       }
 
       const assignmentPatchMatch = url.pathname.match(/^\/api\/assignments\/(ASN-[0-9]{6})$/);

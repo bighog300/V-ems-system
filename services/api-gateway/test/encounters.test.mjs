@@ -27,7 +27,8 @@ async function startServerWithOpenemrTransport(transport, dbPath = createDbPath(
       createPatient: (payload) => transport({ method: "createPatient", payload }),
       createEncounter: (payload) => transport({ method: "createEncounter", payload }),
       createObservation: (payload) => transport({ method: "createObservation", payload }),
-      createIntervention: (payload) => transport({ method: "createIntervention", payload })
+      createIntervention: (payload) => transport({ method: "createIntervention", payload }),
+      createHandover: (payload) => transport({ method: "createHandover", payload })
     }
   });
 
@@ -536,6 +537,117 @@ test("observation payload validation failures", async () => {
     });
     assert.equal(missingRequiredField.status, 400);
     assert.equal(missingRequiredField.body.error.code, "INVALID_PAYLOAD");
+  } finally {
+    server.close();
+  }
+});
+
+test("handover create success path", async () => {
+  const calls = [];
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    calls.push(request);
+    if (request.method === "createEncounter") return { encounter_id: "ENC-800", status: "Ready for Handover" };
+    if (request.method === "createHandover") {
+      return {
+        handover_id: "HND-800",
+        encounter_id: "ENC-800",
+        handover_time: request.payload.handover_time,
+        disposition: request.payload.disposition,
+        handover_status: request.payload.handover_status,
+        destination_facility: request.payload.destination_facility,
+        receiving_clinician: request.payload.receiving_clinician,
+        notes: request.payload.notes
+      };
+    }
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-800" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-800",
+        care_started_at: "2026-04-16T13:00:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Fracture"
+      })
+    });
+
+    const created = await jsonFetch(base, "/api/encounters/ENC-800/handover", {
+      method: "POST",
+      body: JSON.stringify({
+        handover_time: "2026-04-16T13:20:00Z",
+        destination_facility: "General Hospital",
+        receiving_clinician: "Dr Smith",
+        disposition: "transport_to_facility",
+        handover_status: "Handover Completed",
+        notes: "Transferred to ED"
+      })
+    });
+
+    assert.equal(created.status, 201);
+    assert.deepEqual(created.body, {
+      handover_id: "HND-800",
+      encounter_id: "ENC-800",
+      handover_status: "Handover Completed",
+      disposition: "transport_to_facility",
+      closure_ready: true
+    });
+    assert.equal(calls.at(-1).method, "createHandover");
+  } finally {
+    server.close();
+  }
+});
+
+test("handover rejected if encounter does not exist", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+  try {
+    const missing = await jsonFetch(base, "/api/encounters/ENC-404/handover", {
+      method: "POST",
+      body: JSON.stringify({
+        handover_time: "2026-04-16T13:20:00Z",
+        disposition: "transport_to_facility",
+        handover_status: "Handover Completed"
+      })
+    });
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.error.code, "NOT_FOUND");
+  } finally {
+    server.close();
+  }
+});
+
+test("handover payload validation failures", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+  try {
+    const invalidEncounterId = await jsonFetch(base, "/api/encounters/invalid/handover", {
+      method: "POST",
+      body: JSON.stringify({
+        handover_time: "2026-04-16T13:20:00Z",
+        disposition: "transport_to_facility",
+        handover_status: "Handover Completed"
+      })
+    });
+    assert.equal(invalidEncounterId.status, 400);
+    assert.equal(invalidEncounterId.body.error.code, "INVALID_PAYLOAD");
+
+    const badStatus = await jsonFetch(base, "/api/encounters/ENC-800/handover", {
+      method: "POST",
+      body: JSON.stringify({
+        handover_time: "2026-04-16T13:20:00Z",
+        disposition: "transport_to_facility",
+        handover_status: "Closed"
+      })
+    });
+    assert.equal(badStatus.status, 400);
+    assert.equal(badStatus.body.error.code, "INVALID_PAYLOAD");
   } finally {
     server.close();
   }
