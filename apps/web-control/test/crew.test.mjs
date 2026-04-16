@@ -212,6 +212,7 @@ test("renderCrewIncidentDetailHtml shows existing handover summary without dupli
   });
 
   assert.match(html, /Handover already recorded: Handover Completed \/ transport_to_facility/);
+  assert.match(html, /<dt>Closure Ready<\/dt><dd>true<\/dd>/);
   assert.doesNotMatch(html, /id="recordHandoverForm"/);
 });
 

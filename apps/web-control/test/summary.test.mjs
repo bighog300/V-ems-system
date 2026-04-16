@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "../src/summary.mjs";
+import { buildIncidentOperationalSummary, renderIncidentClosePanelHtml, renderOperationalSummaryHtml } from "../src/summary.mjs";
 
 test("buildIncidentOperationalSummary includes closure readiness and encounter/handover data", () => {
   const summary = buildIncidentOperationalSummary({
@@ -64,5 +64,43 @@ test("renderOperationalSummaryHtml renders required operational labels", () => {
   assert.match(html, /Incident ID/);
   assert.match(html, /Priority/);
   assert.match(html, /Closure Ready/);
+  assert.match(html, /Closure State/);
   assert.match(html, /Patient Link Summary/);
+});
+
+test("renderIncidentClosePanelHtml shows close action for active incidents", () => {
+  const html = renderIncidentClosePanelHtml({
+    summary: {
+      status: "Handover Complete",
+      closureReady: true
+    }
+  });
+
+  assert.match(html, /id="closeIncidentAction"/);
+  assert.match(html, /Ready to close/);
+});
+
+test("renderIncidentClosePanelHtml hides close action when incident is already closed", () => {
+  const html = renderIncidentClosePanelHtml({
+    summary: {
+      status: "Closed",
+      closureReady: true
+    }
+  });
+
+  assert.doesNotMatch(html, /id="closeIncidentAction"/);
+  assert.match(html, /already closed/i);
+});
+
+test("renderIncidentClosePanelHtml renders backend rejection reason when provided", () => {
+  const html = renderIncidentClosePanelHtml({
+    summary: {
+      status: "Handover Complete",
+      closureReady: false
+    },
+    closeErrorMessage: "INVALID_STATUS_TRANSITION | details=required:closure_ready=true"
+  });
+
+  assert.match(html, /Not ready to close/);
+  assert.match(html, /INVALID_STATUS_TRANSITION/);
 });

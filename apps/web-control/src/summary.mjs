@@ -2,6 +2,28 @@ function asText(value, fallback = "Unavailable") {
   return value === undefined || value === null || value === "" ? fallback : String(value);
 }
 
+function getClosureReadiness(summary) {
+  if (summary.closureReady === true) {
+    return {
+      state: "ready",
+      label: "Ready to close",
+      description: "Backend reports closure_ready=true for this incident."
+    };
+  }
+  if (summary.closureReady === false) {
+    return {
+      state: "not-ready",
+      label: "Not ready to close",
+      description: "Backend reports closure_ready=false."
+    };
+  }
+  return {
+    state: "unknown",
+    label: "Not ready to close",
+    description: "closure_ready is not present in the current incident payload."
+  };
+}
+
 export function buildIncidentOperationalSummary({ incident, assignmentSummary: assignmentData, patientLink, encounterLink, handover }) {
   const assignments = assignmentData?.assignments ?? [];
   const latestAssignment = assignments[0];
@@ -75,6 +97,7 @@ export function buildIncidentOperationalSummary({ incident, assignmentSummary: a
 
 export function renderOperationalSummaryHtml(summary) {
   const closureReady = summary.closureReady === undefined ? "Not present" : String(summary.closureReady);
+  const readiness = getClosureReadiness(summary);
   const encounterSection = summary.encounterSummary.available
     ? `${summary.encounterSummary.encounter_status} (${summary.encounterSummary.encounter_id})`
     : asText(summary.encounterSummary.detail);
@@ -92,7 +115,34 @@ export function renderOperationalSummaryHtml(summary) {
       <dt>Patient Link Summary</dt><dd>${summary.patientLinkSummary.summary}</dd>
       <dt>Encounter Summary</dt><dd>${encounterSection}</dd>
       <dt>Closure Ready</dt><dd>${closureReady}</dd>
+      <dt>Closure State</dt><dd><span class="closure-state closure-state-${readiness.state}">${readiness.label}</span></dd>
+      <dt>Closure Note</dt><dd>${readiness.description}</dd>
       <dt>Handover</dt><dd>${handoverSection}</dd>
     </dl>
+  `;
+}
+
+export function renderIncidentClosePanelHtml({ summary, closeErrorMessage = "", closing = false }) {
+  if (summary.status === "Closed") {
+    return `
+      <section class="panel">
+        <h3>Incident Close</h3>
+        <p class="success-note">Incident is already closed. No close action is available.</p>
+      </section>
+    `;
+  }
+
+  const readiness = getClosureReadiness(summary);
+  const errorSection = closeErrorMessage
+    ? `<p id="closeIncidentFeedback" class="error-note" aria-live="polite">${closeErrorMessage}</p>`
+    : `<p id="closeIncidentFeedback" class="hint" aria-live="polite">Close attempts are validated by backend state-transition rules.</p>`;
+  return `
+    <section class="panel">
+      <h3>Incident Close</h3>
+      <p><strong>Current closure state:</strong> <span class="closure-state closure-state-${readiness.state}">${readiness.label}</span></p>
+      <p class="hint">${readiness.description}</p>
+      <button id="closeIncidentAction"${closing ? " disabled" : ""}>Close incident</button>
+      ${errorSection}
+    </section>
   `;
 }

@@ -46,6 +46,21 @@ async function postJson(fetchImpl, url, payload) {
   return body;
 }
 
+async function patchJson(fetchImpl, url, payload) {
+  const response = await fetchImpl(url, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw buildApiError(response.status, body);
+  }
+
+  return body;
+}
+
 export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetchImpl = fetch }) {
   const incidentUrl = `${apiBaseUrl}/api/incidents/${incidentId}`;
   const incidentResult = await getJson(fetchImpl, incidentUrl);
@@ -89,6 +104,10 @@ export async function createEncounterIntervention({ apiBaseUrl, encounterId, pay
 
 export async function createEncounterHandover({ apiBaseUrl, encounterId, payload, fetchImpl = fetch }) {
   return postJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterId}/handover`, payload);
+}
+
+export async function closeIncident({ apiBaseUrl, incidentId, fetchImpl = fetch }) {
+  return patchJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}`, { action: "close_incident" });
 }
 
 export async function loadDispatcherBoardData({ apiBaseUrl, fetchImpl = fetch }) {
