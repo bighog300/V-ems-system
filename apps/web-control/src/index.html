@@ -16,7 +16,53 @@
           API Base URL
           <input id="apiBaseUrl" value="http://127.0.0.1:8080" />
         </label>
+        <button id="loadDispatcherBoard">Load Dispatcher Board</button>
         <button id="loadBoard">Load Crew Job List</button>
+      </section>
+
+      <section class="panel controls">
+        <label>
+          Active Only
+          <input id="boardFilterActive" type="checkbox" />
+        </label>
+        <label>
+          Status
+          <select id="boardFilterStatus">
+            <option value="all">All statuses</option>
+            <option value="Awaiting Dispatch">Awaiting Dispatch</option>
+            <option value="Assigned">Assigned</option>
+            <option value="Crew Acknowledged">Crew Acknowledged</option>
+            <option value="En Route">En Route</option>
+            <option value="On Scene">On Scene</option>
+            <option value="Transporting">Transporting</option>
+            <option value="At Destination">At Destination</option>
+            <option value="Handover Complete">Handover Complete</option>
+            <option value="Closed">Closed</option>
+            <option value="Cancelled">Cancelled</option>
+            <option value="Stood Down">Stood Down</option>
+          </select>
+        </label>
+        <label>
+          Priority
+          <select id="boardFilterPriority">
+            <option value="all">All priorities</option>
+            <option value="critical">critical</option>
+            <option value="high">high</option>
+            <option value="medium">medium</option>
+            <option value="low">low</option>
+          </select>
+        </label>
+        <label>
+          Sort
+          <select id="boardSortBy">
+            <option value="priority">Priority</option>
+            <option value="recency">Recency</option>
+          </select>
+        </label>
+        <label>
+          Auto Refresh (15s)
+          <input id="boardAutoRefresh" type="checkbox" checked />
+        </label>
       </section>
 
       <section class="panel controls">
@@ -29,6 +75,7 @@
       </section>
 
       <p id="status" aria-live="polite"></p>
+      <div id="dispatcherBoardOutput"></div>
       <div id="crewJobOutput"></div>
       <div id="crewIncidentOutput"></div>
       <div id="incidentOutput"></div>
