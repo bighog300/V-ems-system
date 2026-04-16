@@ -24,6 +24,23 @@ export class SyncWorker {
     return results;
   }
 
+  async processCycle(limit = 100) {
+    const startedAt = new Date().toISOString();
+    const results = await this.processPending(limit);
+    const statusCounts = results.reduce((acc, result) => {
+      const key = result.status;
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+
+    return {
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      fetchedCount: results.length,
+      statusCounts
+    };
+  }
+
   resolveAdapter(intent) {
     if (intent.target_system === "vtiger") return this.vtiger;
     if (intent.target_system === "openemr") return this.openemr;
