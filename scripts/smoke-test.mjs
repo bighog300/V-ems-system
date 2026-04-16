@@ -68,6 +68,20 @@ async function run() {
       spo2_pct: 98
     }
   };
+  const interventionPayload = {
+    performed_at: "2026-04-16T10:07:00Z",
+    type: "procedure",
+    name: "Deterministic smoke intervention",
+    response: "Patient tolerated well"
+  };
+  const handoverPayload = {
+    handover_time: "2026-04-16T10:20:00Z",
+    disposition: "transferred_to_ed",
+    handover_status: "Handover Completed",
+    destination_facility: "Deterministic General",
+    receiving_clinician: "Dr Deterministic",
+    notes: "Deterministic smoke handover"
+  };
 
   if (!enforceRbac) {
     const createdIncident = await request("/api/incidents", {
@@ -219,6 +233,48 @@ async function run() {
     allowedObservationCreate.body
   );
   assert.equal(allowedObservationCreate.body.error.code, "NOT_FOUND");
+
+  const deniedInterventionCreate = await request("/api/encounters/ENC-RBAC-DET-001/interventions", {
+    method: "POST",
+    body: JSON.stringify(interventionPayload),
+    headers: roleHeaders("dispatcher", "deny-intervention-create")
+  });
+  assertStatus(deniedInterventionCreate.response.status, 403, "dispatcher should be denied intervention create", deniedInterventionCreate.body);
+  assert.equal(deniedInterventionCreate.body.error.code, "FORBIDDEN");
+
+  const allowedInterventionCreate = await request("/api/encounters/ENC-RBAC-DET-001/interventions", {
+    method: "POST",
+    body: JSON.stringify(interventionPayload),
+    headers: roleHeaders("field_crew", "allow-intervention-create")
+  });
+  assertStatus(
+    allowedInterventionCreate.response.status,
+    404,
+    "field_crew should pass RBAC for intervention create and fail deterministically on missing encounter",
+    allowedInterventionCreate.body
+  );
+  assert.equal(allowedInterventionCreate.body.error.code, "NOT_FOUND");
+
+  const deniedHandoverCreate = await request("/api/encounters/ENC-RBAC-DET-001/handover", {
+    method: "POST",
+    body: JSON.stringify(handoverPayload),
+    headers: roleHeaders("dispatcher", "deny-handover-create")
+  });
+  assertStatus(deniedHandoverCreate.response.status, 403, "dispatcher should be denied handover create", deniedHandoverCreate.body);
+  assert.equal(deniedHandoverCreate.body.error.code, "FORBIDDEN");
+
+  const allowedHandoverCreate = await request("/api/encounters/ENC-RBAC-DET-001/handover", {
+    method: "POST",
+    body: JSON.stringify(handoverPayload),
+    headers: roleHeaders("field_crew", "allow-handover-create")
+  });
+  assertStatus(
+    allowedHandoverCreate.response.status,
+    404,
+    "field_crew should pass RBAC for handover create and fail deterministically on missing encounter",
+    allowedHandoverCreate.body
+  );
+  assert.equal(allowedHandoverCreate.body.error.code, "NOT_FOUND");
 
   const listIncidents = await request("/api/incidents", { method: "GET" });
   assert.equal(listIncidents.response.status, 200, "GET /api/incidents should return 200");
