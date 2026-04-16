@@ -143,6 +143,62 @@ test("rbac policy extends to clinical write routes using adapter-safe determinis
     });
     assert.equal(allowedObservation.status, 404);
     assert.equal(allowedObservation.body.error.code, "NOT_FOUND");
+
+    const deniedIntervention = await jsonFetch(base, "/api/encounters/ENC-RBAC-001/interventions", {
+      method: "POST",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-445" },
+      body: JSON.stringify({
+        performed_at: "2026-04-16T10:12:00Z",
+        type: "procedure",
+        name: "Airway positioning",
+        response: "Improved respiratory effort"
+      })
+    });
+    assert.equal(deniedIntervention.status, 403);
+    assert.equal(deniedIntervention.body.error.code, "FORBIDDEN");
+
+    const allowedIntervention = await jsonFetch(base, "/api/encounters/ENC-RBAC-001/interventions", {
+      method: "POST",
+      headers: { "x-user-role": "field_crew", "x-actor-id": "STAFF-123" },
+      body: JSON.stringify({
+        performed_at: "2026-04-16T10:12:00Z",
+        type: "procedure",
+        name: "Airway positioning",
+        response: "Improved respiratory effort"
+      })
+    });
+    assert.equal(allowedIntervention.status, 404);
+    assert.equal(allowedIntervention.body.error.code, "NOT_FOUND");
+
+    const deniedHandover = await jsonFetch(base, "/api/encounters/ENC-RBAC-001/handover", {
+      method: "POST",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-445" },
+      body: JSON.stringify({
+        handover_time: "2026-04-16T10:20:00Z",
+        disposition: "transferred_to_ed",
+        handover_status: "Handover Completed",
+        destination_facility: "General Hospital",
+        receiving_clinician: "Dr Rivera",
+        notes: "Neurology review requested"
+      })
+    });
+    assert.equal(deniedHandover.status, 403);
+    assert.equal(deniedHandover.body.error.code, "FORBIDDEN");
+
+    const allowedHandover = await jsonFetch(base, "/api/encounters/ENC-RBAC-001/handover", {
+      method: "POST",
+      headers: { "x-user-role": "field_crew", "x-actor-id": "STAFF-123" },
+      body: JSON.stringify({
+        handover_time: "2026-04-16T10:20:00Z",
+        disposition: "transferred_to_ed",
+        handover_status: "Handover Completed",
+        destination_facility: "General Hospital",
+        receiving_clinician: "Dr Rivera",
+        notes: "Neurology review requested"
+      })
+    });
+    assert.equal(allowedHandover.status, 404);
+    assert.equal(allowedHandover.body.error.code, "NOT_FOUND");
   } finally {
     server.close();
     delete process.env.RBAC_ENFORCE;
