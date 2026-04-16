@@ -19,6 +19,24 @@ async function startServer(dbPath = createDbPath()) {
   return { server, orchestration, dbPath, base: `http://127.0.0.1:${port}` };
 }
 
+async function startServerWithOpenemrTransport(transport, dbPath = createDbPath()) {
+  const orchestration = new OrchestrationService({
+    dbPath,
+    openemr: {
+      searchPatient: (payload) => transport({ method: "searchPatient", payload }),
+      createPatient: (payload) => transport({ method: "createPatient", payload }),
+      createEncounter: (payload) => transport({ method: "createEncounter", payload }),
+      createObservation: (payload) => transport({ method: "createObservation", payload }),
+      createIntervention: (payload) => transport({ method: "createIntervention", payload }),
+      createHandover: (payload) => transport({ method: "createHandover", payload })
+    }
+  });
+  const server = createApp(orchestration);
+  await new Promise((resolve) => server.listen(0, resolve));
+  const port = server.address().port;
+  return { server, orchestration, dbPath, base: `http://127.0.0.1:${port}` };
+}
+
 async function jsonFetch(base, path, options = {}) {
   const response = await fetch(`${base}${path}`, {
     headers: { "content-type": "application/json", ...(options.headers ?? {}) },
@@ -36,6 +54,16 @@ async function createDefaultIncident(base, headers = {}) {
       incident: { category: "medical_emergency", priority: "critical", description: "Chest pain", address: "Main St", patient_count: 1 }
     })
   });
+}
+
+async function moveIncidentToHandoverComplete(base, incidentId) {
+  await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "queue_for_dispatch" }) });
+  await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "assign_resource" }) });
+  await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "acknowledge_assignment" }) });
+  await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "depart_to_scene" }) });
+  await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "arrive_scene" }) });
+  await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "begin_treatment" }) });
+  await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "complete_non_transport_handover" }) });
 }
 
 test("persistence-backed incident lifecycle", async () => {
@@ -143,6 +171,150 @@ test("incident close rejection with active assignments", async () => {
     const closing = await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "close_incident" }) });
     assert.equal(closing.status, 409);
     assert.equal(closing.body.error.code, "INVALID_STATUS_TRANSITION");
+    assert.equal(closing.body.error.message, "Incident cannot close while active assignments exist");
+  } finally {
+    server.close();
+  }
+});
+
+test("incident close succeeds when encounter closure metadata exists and assignments are inactive", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-301", status: "Open" };
+    if (request.method === "createHandover") {
+      return {
+        handover_id: "HND-301",
+        encounter_id: request.payload.encounter_id,
+        handover_time: request.payload.handover_time,
+        disposition: request.payload.disposition,
+        handover_status: "Handover Completed"
+      };
+    }
+    return { ok: true };
+  });
+
+  try {
+    const created = await createDefaultIncident(base);
+    const incidentId = created.body.incident_id;
+    await moveIncidentToHandoverComplete(base, incidentId);
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-301" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-301",
+        care_started_at: "2026-04-16T10:30:00Z",
+        crew_ids: ["STAFF-010"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+    await jsonFetch(base, "/api/encounters/ENC-301/handover", {
+      method: "POST",
+      body: JSON.stringify({
+        handover_time: "2026-04-16T10:55:00Z",
+        disposition: "transport_to_facility",
+        handover_status: "Handover Completed"
+      })
+    });
+
+    const closing = await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "close_incident" }) });
+    assert.equal(closing.status, 200);
+    assert.equal(closing.body.status, "Closed");
+    assert.equal(closing.body.closure_ready, true);
+  } finally {
+    server.close();
+  }
+});
+
+test("incident close fails when encounter exists but closure metadata is missing", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-302", status: "Open" };
+    return { ok: true };
+  });
+
+  try {
+    const created = await createDefaultIncident(base);
+    const incidentId = created.body.incident_id;
+    await moveIncidentToHandoverComplete(base, incidentId);
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-302" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-302",
+        care_started_at: "2026-04-16T10:30:00Z",
+        crew_ids: ["STAFF-010"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+
+    const closing = await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "PATCH", body: JSON.stringify({ action: "close_incident" }) });
+    assert.equal(closing.status, 409);
+    assert.equal(closing.body.error.code, "INVALID_STATUS_TRANSITION");
+    assert.equal(closing.body.error.message, "Incident cannot close without persisted encounter handover/disposition closure metadata");
+  } finally {
+    server.close();
+  }
+});
+
+test("incident detail includes minimal closure readiness when encounter workflow exists", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-303", status: "Open" };
+    if (request.method === "createHandover") {
+      return {
+        handover_id: "HND-303",
+        encounter_id: request.payload.encounter_id,
+        handover_time: request.payload.handover_time,
+        disposition: request.payload.disposition,
+        handover_status: "Handover Completed"
+      };
+    }
+    return { ok: true };
+  });
+
+  try {
+    const created = await createDefaultIncident(base);
+    const incidentId = created.body.incident_id;
+
+    const beforeEncounter = await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "GET" });
+    assert.equal(beforeEncounter.status, 200);
+    assert.equal("closure_ready" in beforeEncounter.body, false);
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-303" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-303",
+        care_started_at: "2026-04-16T10:30:00Z",
+        crew_ids: ["STAFF-010"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+
+    const afterEncounter = await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "GET" });
+    assert.equal(afterEncounter.status, 200);
+    assert.equal(afterEncounter.body.closure_ready, false);
+
+    await jsonFetch(base, "/api/encounters/ENC-303/handover", {
+      method: "POST",
+      body: JSON.stringify({
+        handover_time: "2026-04-16T11:00:00Z",
+        disposition: "transport_to_facility",
+        handover_status: "Handover Completed"
+      })
+    });
+
+    const afterHandover = await jsonFetch(base, `/api/incidents/${incidentId}`, { method: "GET" });
+    assert.equal(afterHandover.status, 200);
+    assert.equal(afterHandover.body.closure_ready, true);
   } finally {
     server.close();
   }
