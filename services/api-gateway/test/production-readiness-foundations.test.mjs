@@ -79,6 +79,28 @@ test("rbac policy is enforced for write endpoints when enabled", async () => {
   }
 });
 
+test("rbac enforcement can be disabled for local development safety", async () => {
+  process.env.RBAC_ENFORCE = "false";
+  const { server, base } = await startServer();
+
+  try {
+    const response = await jsonFetch(base, "/api/incidents", {
+      method: "POST",
+      headers: { "x-user-role": "field_crew", "x-actor-id": "STAFF-333" },
+      body: JSON.stringify({
+        call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
+        incident: { category: "medical_emergency", priority: "critical", description: "Chest pain", address: "Main St", patient_count: 1 }
+      })
+    });
+
+    assert.equal(response.status, 201);
+    assert.ok(response.body.incident_id);
+  } finally {
+    server.close();
+    delete process.env.RBAC_ENFORCE;
+  }
+});
+
 test("readiness endpoint provides supportability snapshot", async () => {
   const { server, base } = await startServer();
 
