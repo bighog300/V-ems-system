@@ -9,6 +9,7 @@ import {
   loadDispatcherBoardData,
   loadIncidentOperationalData
 } from "./api.mjs";
+import { runCloseIncidentAction, runCrewFormAction } from "./workflow-actions.mjs";
 import { buildDispatcherBoardItems, filterAndSortDispatcherItems, renderDispatcherBoardHtml } from "./board.mjs";
 import { buildIncidentOperationalSummary, renderIncidentClosePanelHtml, renderOperationalSummaryHtml } from "./summary.mjs";
 import {
@@ -137,27 +138,17 @@ async function onCloseIncidentClick(event) {
   const button = event.currentTarget;
   const status = document.querySelector("#status");
   const config = readConfig();
-  if (!config.apiBaseUrl || !config.incidentId) {
-    closeIncidentFeedback = "API Base URL and Incident ID are required.";
-    await renderIncidentDetail();
-    return;
-  }
-
-  try {
-    button.disabled = true;
-    closeIncidentFeedback = "";
-    status.textContent = "Closing incident...";
-    await closeIncident({ apiBaseUrl: config.apiBaseUrl, incidentId: config.incidentId });
-    closeIncidentFeedback = "";
-    await renderIncidentDetail();
-    status.textContent = "Incident closed and incident detail refreshed.";
-  } catch (error) {
-    closeIncidentFeedback = formatApiError(error);
-    await renderIncidentDetail();
-    status.textContent = "Incident close failed.";
-  } finally {
-    button.disabled = false;
-  }
+  await runCloseIncidentAction({
+    button,
+    status,
+    config,
+    closeIncident,
+    refreshIncidentDetail: renderIncidentDetail,
+    formatError: formatApiError,
+    setCloseFeedback: (message) => {
+      closeIncidentFeedback = message;
+    }
+  });
 }
 
 async function renderCrewJobList() {
@@ -197,37 +188,22 @@ async function onCreateEncounterSubmit(event) {
   const feedback = document.querySelector("#createEncounterFeedback");
   const status = document.querySelector("#status");
   const submitButton = form.querySelector('button[type="submit"]');
-
-  const config = readConfig();
-  if (!config.apiBaseUrl || !config.incidentId) {
-    feedback.textContent = "API Base URL and Incident ID are required.";
-    feedback.className = "error-note";
-    return;
-  }
-
-  const { payload, validationErrors } = buildCreateEncounterPayload(new FormData(form));
-  if (validationErrors.length > 0) {
-    feedback.textContent = validationErrors.join(" ");
-    feedback.className = "error-note";
-    return;
-  }
-
-  try {
-    submitButton.disabled = true;
-    feedback.className = "hint";
-    feedback.textContent = "Creating encounter...";
-
-    await createIncidentEncounter({ apiBaseUrl: config.apiBaseUrl, incidentId: config.incidentId, payload });
-    status.textContent = "Encounter created. Refreshing crew incident detail...";
-    await renderCrewIncidentDetail();
-    status.textContent = "Encounter created and crew incident detail refreshed.";
-  } catch (error) {
-    feedback.textContent = formatApiError(error);
-    feedback.className = "error-note";
-    status.textContent = "Encounter create failed.";
-  } finally {
-    submitButton.disabled = false;
-  }
+  await runCrewFormAction({
+    form,
+    feedback,
+    status,
+    submitButton,
+    config: readConfig(),
+    buildPayload: buildCreateEncounterPayload,
+    progressMessage: "Creating encounter...",
+    successMessage: "Encounter created and crew incident detail refreshed.",
+    failureStatusMessage: "Encounter create failed.",
+    successStatusLoadingMessage: "Encounter created. Refreshing crew incident detail...",
+    buildRequest: ({ apiBaseUrl, incidentId, payload }) => ({ apiBaseUrl, incidentId, payload }),
+    requestAction: createIncidentEncounter,
+    refreshCrewIncidentDetail: renderCrewIncidentDetail,
+    formatError: formatApiError
+  });
 }
 
 
@@ -238,48 +214,24 @@ async function onRecordObservationSubmit(event) {
   const feedback = document.querySelector("#recordObservationFeedback");
   const status = document.querySelector("#status");
   const submitButton = form.querySelector('button[type="submit"]');
-
-  const config = readConfig();
-  if (!config.apiBaseUrl || !config.incidentId) {
-    feedback.textContent = "API Base URL and Incident ID are required.";
-    feedback.className = "error-note";
-    return;
-  }
-
-  const encounterId = form.dataset.encounterId;
-  if (!encounterId) {
-    feedback.textContent = "Observation entry requires an encounter first.";
-    feedback.className = "error-note";
-    return;
-  }
-
-  const { payload, validationErrors } = buildCreateObservationPayload(new FormData(form));
-  if (validationErrors.length > 0) {
-    feedback.textContent = validationErrors.join(" ");
-    feedback.className = "error-note";
-    return;
-  }
-
-  try {
-    submitButton.disabled = true;
-    feedback.className = "hint";
-    feedback.textContent = "Recording observation...";
-
-    await createEncounterObservation({
-      apiBaseUrl: config.apiBaseUrl,
-      encounterId,
-      payload
-    });
-    status.textContent = "Observation recorded. Refreshing crew incident detail...";
-    await renderCrewIncidentDetail();
-    status.textContent = "Observation recorded and crew incident detail refreshed.";
-  } catch (error) {
-    feedback.textContent = formatApiError(error);
-    feedback.className = "error-note";
-    status.textContent = "Observation create failed.";
-  } finally {
-    submitButton.disabled = false;
-  }
+  await runCrewFormAction({
+    form,
+    feedback,
+    status,
+    submitButton,
+    config: readConfig(),
+    requireEncounter: true,
+    missingEncounterMessage: "Observation entry requires an encounter first.",
+    buildPayload: buildCreateObservationPayload,
+    progressMessage: "Recording observation...",
+    successMessage: "Observation recorded and crew incident detail refreshed.",
+    failureStatusMessage: "Observation create failed.",
+    successStatusLoadingMessage: "Observation recorded. Refreshing crew incident detail...",
+    buildRequest: ({ apiBaseUrl, encounterId, payload }) => ({ apiBaseUrl, encounterId, payload }),
+    requestAction: createEncounterObservation,
+    refreshCrewIncidentDetail: renderCrewIncidentDetail,
+    formatError: formatApiError
+  });
 }
 
 async function onRecordInterventionSubmit(event) {
@@ -288,48 +240,24 @@ async function onRecordInterventionSubmit(event) {
   const feedback = document.querySelector("#recordInterventionFeedback");
   const status = document.querySelector("#status");
   const submitButton = form.querySelector('button[type="submit"]');
-
-  const config = readConfig();
-  if (!config.apiBaseUrl || !config.incidentId) {
-    feedback.textContent = "API Base URL and Incident ID are required.";
-    feedback.className = "error-note";
-    return;
-  }
-
-  const encounterId = form.dataset.encounterId;
-  if (!encounterId) {
-    feedback.textContent = "Intervention entry requires an encounter first.";
-    feedback.className = "error-note";
-    return;
-  }
-
-  const { payload, validationErrors } = buildCreateInterventionPayload(new FormData(form));
-  if (validationErrors.length > 0) {
-    feedback.textContent = validationErrors.join(" ");
-    feedback.className = "error-note";
-    return;
-  }
-
-  try {
-    submitButton.disabled = true;
-    feedback.className = "hint";
-    feedback.textContent = "Recording intervention...";
-
-    await createEncounterIntervention({
-      apiBaseUrl: config.apiBaseUrl,
-      encounterId,
-      payload
-    });
-    status.textContent = "Intervention recorded. Refreshing crew incident detail...";
-    await renderCrewIncidentDetail();
-    status.textContent = "Intervention recorded and crew incident detail refreshed.";
-  } catch (error) {
-    feedback.textContent = formatApiError(error);
-    feedback.className = "error-note";
-    status.textContent = "Intervention create failed.";
-  } finally {
-    submitButton.disabled = false;
-  }
+  await runCrewFormAction({
+    form,
+    feedback,
+    status,
+    submitButton,
+    config: readConfig(),
+    requireEncounter: true,
+    missingEncounterMessage: "Intervention entry requires an encounter first.",
+    buildPayload: buildCreateInterventionPayload,
+    progressMessage: "Recording intervention...",
+    successMessage: "Intervention recorded and crew incident detail refreshed.",
+    failureStatusMessage: "Intervention create failed.",
+    successStatusLoadingMessage: "Intervention recorded. Refreshing crew incident detail...",
+    buildRequest: ({ apiBaseUrl, encounterId, payload }) => ({ apiBaseUrl, encounterId, payload }),
+    requestAction: createEncounterIntervention,
+    refreshCrewIncidentDetail: renderCrewIncidentDetail,
+    formatError: formatApiError
+  });
 }
 
 async function onRecordHandoverSubmit(event) {
@@ -338,48 +266,24 @@ async function onRecordHandoverSubmit(event) {
   const feedback = document.querySelector("#recordHandoverFeedback");
   const status = document.querySelector("#status");
   const submitButton = form.querySelector('button[type="submit"]');
-
-  const config = readConfig();
-  if (!config.apiBaseUrl || !config.incidentId) {
-    feedback.textContent = "API Base URL and Incident ID are required.";
-    feedback.className = "error-note";
-    return;
-  }
-
-  const encounterId = form.dataset.encounterId;
-  if (!encounterId) {
-    feedback.textContent = "Handover entry requires an encounter first.";
-    feedback.className = "error-note";
-    return;
-  }
-
-  const { payload, validationErrors } = buildCreateHandoverPayload(new FormData(form));
-  if (validationErrors.length > 0) {
-    feedback.textContent = validationErrors.join(" ");
-    feedback.className = "error-note";
-    return;
-  }
-
-  try {
-    submitButton.disabled = true;
-    feedback.className = "hint";
-    feedback.textContent = "Recording handover...";
-
-    await createEncounterHandover({
-      apiBaseUrl: config.apiBaseUrl,
-      encounterId,
-      payload
-    });
-    status.textContent = "Handover recorded. Refreshing crew incident detail...";
-    await renderCrewIncidentDetail();
-    status.textContent = "Handover recorded and crew incident detail refreshed.";
-  } catch (error) {
-    feedback.textContent = formatApiError(error);
-    feedback.className = "error-note";
-    status.textContent = "Handover create failed.";
-  } finally {
-    submitButton.disabled = false;
-  }
+  await runCrewFormAction({
+    form,
+    feedback,
+    status,
+    submitButton,
+    config: readConfig(),
+    requireEncounter: true,
+    missingEncounterMessage: "Handover entry requires an encounter first.",
+    buildPayload: buildCreateHandoverPayload,
+    progressMessage: "Recording handover...",
+    successMessage: "Handover recorded and crew incident detail refreshed.",
+    failureStatusMessage: "Handover create failed.",
+    successStatusLoadingMessage: "Handover recorded. Refreshing crew incident detail...",
+    buildRequest: ({ apiBaseUrl, encounterId, payload }) => ({ apiBaseUrl, encounterId, payload }),
+    requestAction: createEncounterHandover,
+    refreshCrewIncidentDetail: renderCrewIncidentDetail,
+    formatError: formatApiError
+  });
 }
 
 async function renderCrewIncidentDetail() {
