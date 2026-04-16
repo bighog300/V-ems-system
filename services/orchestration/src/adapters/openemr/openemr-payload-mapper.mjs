@@ -131,7 +131,11 @@ export class OpenEmrPayloadMapper {
     return response.map((intervention) => ({
       intervention_id: intervention.intervention_id,
       encounter_id: intervention.encounter_id,
-      status: intervention.status
+      status: intervention.status,
+      stock_item_id: intervention.stock_item_id ?? null,
+      performed_at: intervention.performed_at ?? null,
+      type: intervention.type ?? null,
+      name: intervention.name ?? null
     }));
   }
 

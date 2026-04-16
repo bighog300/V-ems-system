@@ -51,9 +51,12 @@ export class VtigerPayloadMapper {
 
   mapStockUsageRecord(stockUsage) {
     return {
+      stock_usage_ref: stockUsage.intervention_id ?? null,
       incident_id: stockUsage.incident_id,
       encounter_id: stockUsage.encounter_id ?? null,
       stock_item_id: stockUsage.stock_item_id,
+      quantity_used: stockUsage.quantity_used ?? 1,
+      usage_source: stockUsage.usage_source ?? "clinical_event",
       performed_at: stockUsage.performed_at,
       intervention_type: stockUsage.intervention_type,
       intervention_name: stockUsage.intervention_name

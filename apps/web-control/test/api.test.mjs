@@ -99,6 +99,65 @@ test("loadIncidentOperationalData remains on incident detail read-path endpoints
   ]);
 });
 
+test("loadIncidentOperationalData includes intervention read when encounter is linked", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.endsWith("/api/incidents/INC-000777")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { incident_id: "INC-000777", priority: "high", status: "Assigned", address: "Main St" };
+        }
+      };
+    }
+    if (url.endsWith("/api/incidents/INC-000777/encounters")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { encounter_id: "ENC-777", encounter_status: "Open" };
+        }
+      };
+    }
+    if (url.endsWith("/api/encounters/ENC-777/interventions")) {
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return [{ intervention_id: "INT-777", status: "recorded", stock_item_id: "ITEM-777", stock_sync_status: "pending" }];
+        }
+      };
+    }
+
+    return {
+      ok: false,
+      status: 404,
+      async json() {
+        return { error: { code: "NOT_FOUND", message: "Not found", retryable: false, correlation_id: "123" } };
+      }
+    };
+  };
+
+  const result = await loadIncidentOperationalData({
+    apiBaseUrl: "http://127.0.0.1:8080",
+    incidentId: "INC-000777",
+    fetchImpl
+  });
+
+  assert.equal(result.encounterLink.encounter_id, "ENC-777");
+  assert.equal(result.interventions.length, 1);
+  assert.deepEqual(calls, [
+    "http://127.0.0.1:8080/api/incidents/INC-000777",
+    "http://127.0.0.1:8080/api/incidents/INC-000777/assignments",
+    "http://127.0.0.1:8080/api/incidents/INC-000777/patient-link",
+    "http://127.0.0.1:8080/api/incidents/INC-000777/encounters",
+    "http://127.0.0.1:8080/api/encounters/ENC-777/handover",
+    "http://127.0.0.1:8080/api/encounters/ENC-777/interventions"
+  ]);
+});
+
 test("createIncidentEncounter submits to POST /api/incidents/{incidentId}/encounters", async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {

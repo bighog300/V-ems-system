@@ -458,9 +458,12 @@ export class OrchestrationService {
 
     if (payload.stock_item_id) {
       this.syncIntent("stock_usage", "recordStockUsageMirror", meta.correlationId, {
+        intervention_id: normalized.intervention_id,
         incident_id: encounter.incident_id,
         encounter_id: normalized.encounter_id,
         stock_item_id: payload.stock_item_id,
+        quantity_used: 1,
+        usage_source: "clinical_event",
         performed_at: payload.performed_at,
         intervention_type: payload.type,
         intervention_name: payload.name
@@ -484,11 +487,35 @@ export class OrchestrationService {
       throw new ApiError("NOT_FOUND", `Interventions for encounter ${encounterId} not found`, 404);
     }
 
-    return interventions.map((intervention) => ({
-      intervention_id: intervention.intervention_id,
-      encounter_id: intervention.encounter_id ?? encounterId,
-      status: intervention.status
-    }));
+    const stockIntents = this.syncIntents
+      .listAll()
+      .filter((intent) => intent.entity_type === "stock_usage" && intent.payload?.encounter_id === encounterId);
+
+    return interventions.map((intervention) => {
+      const normalized = {
+        intervention_id: intervention.intervention_id,
+        encounter_id: intervention.encounter_id ?? encounterId,
+        status: intervention.status
+      };
+
+      if (!intervention.stock_item_id) return normalized;
+
+      const matchingIntent = stockIntents.find((intent) => {
+        if (intent.payload?.stock_item_id !== intervention.stock_item_id) return false;
+        if (intervention.performed_at && intent.payload?.performed_at !== intervention.performed_at) return false;
+        if (intervention.type && intent.payload?.intervention_type !== intervention.type) return false;
+        if (intervention.name && intent.payload?.intervention_name !== intervention.name) return false;
+        return true;
+      });
+
+      return {
+        ...normalized,
+        stock_item_id: intervention.stock_item_id,
+        stock_sync_status: matchingIntent?.status ?? "not_queued",
+        stock_sync_attempt_count: matchingIntent?.attempt_count ?? 0,
+        stock_sync_last_error: matchingIntent?.last_error ?? null
+      };
+    });
   }
 
   async createHandoverForEncounter(encounterId, payload, meta) {
