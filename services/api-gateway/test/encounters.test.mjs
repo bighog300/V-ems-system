@@ -205,14 +205,72 @@ test("encounter link persistence survives restart and lookup by incident", async
 
   const second = await startServerWithOpenemrTransport(async () => ({ encounter_id: "ENC-XXX", status: "Open" }), dbPath);
   try {
-    const persisted = second.orchestration.getEncounterByIncident(incidentId);
-    assert.equal(persisted.encounter_id, "ENC-200");
-    assert.equal(persisted.linked_incident_id, incidentId);
-    const persistedLink = second.orchestration.encounterLinks.findByIncidentId(incidentId);
-    assert.equal(persistedLink.openemr_patient_id, "OE-200");
-    assert.equal(persistedLink.care_started_at, "2026-04-16T10:15:00Z");
+    const persisted = await jsonFetch(second.base, `/api/incidents/${incidentId}/encounters`);
+    assert.equal(persisted.status, 200);
+    assert.equal(persisted.body.encounter_id, "ENC-200");
+    assert.equal(persisted.body.incident_id, incidentId);
+    assert.equal(persisted.body.openemr_encounter_id, "ENC-200");
+    assert.equal(persisted.body.encounter_id, "ENC-200");
+    assert.equal(persisted.body.openemr_patient_id, "OE-200");
+    assert.equal(persisted.body.encounter_status, "Open");
+    assert.equal(persisted.body.care_started_at, "2026-04-16T10:15:00Z");
   } finally {
     second.server.close();
+  }
+});
+
+test("encounter fetch returns 404 when no encounter is linked to incident", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const response = await jsonFetch(base, `/api/incidents/${incident.body.incident_id}/encounters`);
+    assert.equal(response.status, 404);
+    assert.equal(response.body.error.code, "NOT_FOUND");
+  } finally {
+    server.close();
+  }
+});
+
+test("encounter fetch returns persisted linkage metadata", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-400", status: "Ready for Handover" };
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-400" })
+    });
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-400",
+        care_started_at: "2026-04-16T12:00:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Headache"
+      })
+    });
+
+    const fetched = await jsonFetch(base, `/api/incidents/${incidentId}/encounters`);
+    assert.equal(fetched.status, 200);
+    assert.deepEqual(fetched.body, {
+      incident_id: incidentId,
+      openemr_encounter_id: "ENC-400",
+      encounter_id: "ENC-400",
+      openemr_patient_id: "OE-400",
+      encounter_status: "Ready for Handover",
+      care_started_at: "2026-04-16T12:00:00Z",
+      status: "Ready for Handover",
+      linked_incident_id: incidentId
+    });
+  } finally {
+    server.close();
   }
 });
 

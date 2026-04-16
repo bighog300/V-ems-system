@@ -218,6 +218,11 @@ paths:
       parameters:
         - $ref: '#/components/parameters/IncidentId'
   /api/incidents/{incidentId}/encounters:
+    get:
+      tags: [Encounters]
+      summary: Get persisted encounter linkage metadata for an incident.
+      parameters:
+        - $ref: '#/components/parameters/IncidentId'
     post:
       tags: [Encounters]
       summary: Create clinical encounter linked to an incident.
