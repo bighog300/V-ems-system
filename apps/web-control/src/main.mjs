@@ -1,5 +1,6 @@
 import {
   ApiError,
+  createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
   createIncidentEncounter,
@@ -9,6 +10,7 @@ import {
 import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "./summary.mjs";
 import {
   buildCreateEncounterPayload,
+  buildCreateHandoverPayload,
   buildCreateInterventionPayload,
   buildCreateObservationPayload,
   buildCrewJobListItems,
@@ -231,6 +233,56 @@ async function onRecordInterventionSubmit(event) {
   }
 }
 
+async function onRecordHandoverSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const feedback = document.querySelector("#recordHandoverFeedback");
+  const status = document.querySelector("#status");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const config = readConfig();
+  if (!config.apiBaseUrl || !config.incidentId) {
+    feedback.textContent = "API Base URL and Incident ID are required.";
+    feedback.className = "error-note";
+    return;
+  }
+
+  const encounterId = form.dataset.encounterId;
+  if (!encounterId) {
+    feedback.textContent = "Handover entry requires an encounter first.";
+    feedback.className = "error-note";
+    return;
+  }
+
+  const { payload, validationErrors } = buildCreateHandoverPayload(new FormData(form));
+  if (validationErrors.length > 0) {
+    feedback.textContent = validationErrors.join(" ");
+    feedback.className = "error-note";
+    return;
+  }
+
+  try {
+    submitButton.disabled = true;
+    feedback.className = "hint";
+    feedback.textContent = "Recording handover...";
+
+    await createEncounterHandover({
+      apiBaseUrl: config.apiBaseUrl,
+      encounterId,
+      payload
+    });
+    status.textContent = "Handover recorded. Refreshing crew incident detail...";
+    await renderCrewIncidentDetail();
+    status.textContent = "Handover recorded and crew incident detail refreshed.";
+  } catch (error) {
+    feedback.textContent = formatApiError(error);
+    feedback.className = "error-note";
+    status.textContent = "Handover create failed.";
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function renderCrewIncidentDetail() {
   const output = document.querySelector("#crewIncidentOutput");
   const status = document.querySelector("#status");
@@ -261,6 +313,12 @@ async function renderCrewIncidentDetail() {
     if (interventionForm && summary.encounterSummary.encounter_id) {
       interventionForm.dataset.encounterId = summary.encounterSummary.encounter_id;
       interventionForm.addEventListener("submit", onRecordInterventionSubmit);
+    }
+
+    const handoverForm = document.querySelector("#recordHandoverForm");
+    if (handoverForm && summary.encounterSummary.encounter_id) {
+      handoverForm.dataset.encounterId = summary.encounterSummary.encounter_id;
+      handoverForm.addEventListener("submit", onRecordHandoverSubmit);
     }
 
     status.textContent = "Loaded.";

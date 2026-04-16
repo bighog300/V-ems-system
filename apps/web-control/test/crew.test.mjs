@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCreateEncounterPayload,
+  buildCreateHandoverPayload,
   buildCreateInterventionPayload,
   buildCreateObservationPayload,
   buildCrewJobListItems,
@@ -124,6 +125,28 @@ test("renderCrewIncidentDetailHtml renders intervention form when encounter exis
   assert.match(html, /name="stock_item_id"/);
 });
 
+test("renderCrewIncidentDetailHtml renders handover form when encounter exists and handover is missing", () => {
+  const html = renderCrewIncidentDetailHtml({
+    incidentId: "INC-000125",
+    priority: "high",
+    status: "At Destination",
+    locationSummary: "9 Field Street",
+    closureReady: false,
+    assignmentSummary: { summary: "ASN-003 • Active • AMB-102" },
+    patientLinkSummary: { summary: "Linked patient OE-2", openemrPatientId: "OE-2" },
+    encounterSummary: { available: true, encounter_id: "ENC-10", encounter_status: "Ready for Handover" },
+    handoverSummary: { available: false, detail: "No handover payload available from GET /api/encounters/{encounterId}/handover." }
+  });
+
+  assert.match(html, /Record Handover/);
+  assert.match(html, /id="recordHandoverForm"/);
+  assert.match(html, /name="handover_time"/);
+  assert.match(html, /name="destination_facility"/);
+  assert.match(html, /name="receiving_clinician"/);
+  assert.match(html, /name="disposition"/);
+  assert.match(html, /name="handover_status"/);
+});
+
 test("renderCrewIncidentDetailHtml shows blocked observation state when encounter is missing", () => {
   const html = renderCrewIncidentDetailHtml({
     incidentId: "INC-000126",
@@ -156,6 +179,40 @@ test("renderCrewIncidentDetailHtml shows blocked intervention state when encount
 
   assert.match(html, /Intervention entry is unavailable because no encounter is linked yet/);
   assert.doesNotMatch(html, /id="recordInterventionForm"/);
+});
+
+test("renderCrewIncidentDetailHtml shows blocked handover state when encounter is missing", () => {
+  const html = renderCrewIncidentDetailHtml({
+    incidentId: "INC-000126",
+    priority: "medium",
+    status: "On Scene",
+    locationSummary: "10 Field Street",
+    closureReady: false,
+    assignmentSummary: { summary: "ASN-004 • Active • AMB-103" },
+    patientLinkSummary: { summary: "Linked patient OE-3", openemrPatientId: "OE-3" },
+    encounterSummary: { available: false, detail: "No encounter linkage found for this incident." },
+    handoverSummary: { available: false, detail: "Handover is unavailable until encounter linkage exists." }
+  });
+
+  assert.match(html, /Handover entry is unavailable because no encounter is linked yet/);
+  assert.doesNotMatch(html, /id="recordHandoverForm"/);
+});
+
+test("renderCrewIncidentDetailHtml shows existing handover summary without duplicate create form", () => {
+  const html = renderCrewIncidentDetailHtml({
+    incidentId: "INC-000127",
+    priority: "high",
+    status: "Handover Complete",
+    locationSummary: "11 Field Street",
+    closureReady: true,
+    assignmentSummary: { summary: "ASN-005 • Active • AMB-104" },
+    patientLinkSummary: { summary: "Linked patient OE-4", openemrPatientId: "OE-4" },
+    encounterSummary: { available: true, encounter_id: "ENC-11", encounter_status: "Handover Completed" },
+    handoverSummary: { available: true, handover_status: "Handover Completed", disposition: "transport_to_facility" }
+  });
+
+  assert.match(html, /Handover already recorded: Handover Completed \/ transport_to_facility/);
+  assert.doesNotMatch(html, /id="recordHandoverForm"/);
 });
 
 test("buildCreateEncounterPayload validates and normalizes required fields", () => {
@@ -237,5 +294,28 @@ test("buildCreateInterventionPayload normalizes payload to canonical interventio
     route: "oral",
     response: "Pain improved",
     stock_item_id: "ITEM-001"
+  });
+});
+
+test("buildCreateHandoverPayload normalizes payload to handover contract", () => {
+  const formData = new Map([
+    ["handover_time", "2026-04-16T11:05"],
+    ["destination_facility", "General Hospital"],
+    ["receiving_clinician", "Dr. Reed"],
+    ["disposition", "transport_to_facility"],
+    ["handover_status", "Handover Completed"],
+    ["notes", "Patient transferred with verbal report."]
+  ]);
+
+  const result = buildCreateHandoverPayload({ get: (key) => formData.get(key) });
+
+  assert.deepEqual(result.validationErrors, []);
+  assert.deepEqual(result.payload, {
+    handover_time: "2026-04-16T11:05:00.000Z",
+    destination_facility: "General Hospital",
+    receiving_clinician: "Dr. Reed",
+    disposition: "transport_to_facility",
+    handover_status: "Handover Completed",
+    notes: "Patient transferred with verbal report."
   });
 });

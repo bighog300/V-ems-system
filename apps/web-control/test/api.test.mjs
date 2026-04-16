@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ApiError,
+  createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
   createIncidentEncounter,
@@ -299,6 +300,82 @@ test("createEncounterIntervention surfaces structured backend errors", async () 
       assert.equal(error.code, "INVALID_PAYLOAD");
       assert.equal(error.correlationId, "33333333-3333-3333-3333-333333333333");
       assert.deepEqual(error.details, { field: "type" });
+      return true;
+    }
+  );
+});
+
+test("createEncounterHandover submits to POST /api/encounters/{encounterId}/handover", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      status: 201,
+      async json() {
+        return {
+          handover_id: "HAN-100",
+          encounter_id: "ENC-123",
+          handover_status: "Handover Completed",
+          disposition: "transport_to_facility",
+          closure_ready: true
+        };
+      }
+    };
+  };
+
+  const payload = {
+    handover_time: "2026-04-16T11:05:00Z",
+    destination_facility: "General Hospital",
+    receiving_clinician: "Dr. Reed",
+    disposition: "transport_to_facility",
+    handover_status: "Handover Completed"
+  };
+
+  const result = await createEncounterHandover({
+    apiBaseUrl: "http://127.0.0.1:8080",
+    encounterId: "ENC-123",
+    payload,
+    fetchImpl
+  });
+
+  assert.equal(result.handover_id, "HAN-100");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://127.0.0.1:8080/api/encounters/ENC-123/handover");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), payload);
+});
+
+test("createEncounterHandover surfaces structured backend errors", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
+    async json() {
+      return {
+        error: {
+          code: "INVALID_PAYLOAD",
+          message: "handover_status is invalid",
+          retryable: false,
+          correlation_id: "44444444-4444-4444-4444-444444444444",
+          details: { field: "handover_status" }
+        }
+      };
+    }
+  });
+
+  await assert.rejects(
+    createEncounterHandover({
+      apiBaseUrl: "http://127.0.0.1:8080",
+      encounterId: "ENC-123",
+      payload: { disposition: "transport_to_facility" },
+      fetchImpl
+    }),
+    (error) => {
+      assert.equal(error instanceof ApiError, true);
+      assert.equal(error.status, 400);
+      assert.equal(error.code, "INVALID_PAYLOAD");
+      assert.equal(error.correlationId, "44444444-4444-4444-4444-444444444444");
+      assert.deepEqual(error.details, { field: "handover_status" });
       return true;
     }
   );
