@@ -150,6 +150,27 @@ components:
         encounter_id: { type: string }
         status: { type: string, enum: [Not Started, Open, Assessment In Progress, Treatment In Progress, Ready for Handover, Handover Completed, Closed, Cancelled] }
         linked_incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+    EncounterLinkResponse:
+      type: object
+      required: [incident_id, openemr_encounter_id, encounter_id, openemr_patient_id, encounter_status, care_started_at]
+      properties:
+        incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+        openemr_encounter_id: { type: string }
+        encounter_id: { type: string }
+        openemr_patient_id: { type: string }
+        encounter_status: { type: string, enum: [Not Started, Open, Assessment In Progress, Treatment In Progress, Ready for Handover, Handover Completed, Closed, Cancelled] }
+        care_started_at: { type: string, format: date-time }
+    CreateObservationRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: true
+    ObservationResponse:
+      type: object
+      required: [observation_id, encounter_id, status]
+      properties:
+        observation_id: { type: string }
+        encounter_id: { type: string }
+        status: { type: string }
     StockUsageRequest:
       type: object
       required: [incident_id, vehicle_id, item_id, quantity_used, usage_source]
@@ -223,17 +244,80 @@ paths:
       summary: Get persisted encounter linkage metadata for an incident.
       parameters:
         - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '200':
+          description: Encounter linkage metadata for the incident.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncounterLinkResponse'
+        '404':
+          description: Incident or encounter linkage not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Encounters]
       summary: Create clinical encounter linked to an incident.
       parameters:
         - $ref: '#/components/parameters/IncidentId'
+      responses:
+        '201':
+          description: Encounter created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncounterResponse'
+        '400':
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Incident not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict creating encounter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/encounters/{encounterId}/observations:
     post:
       tags: [Encounters]
       summary: Add observation set to encounter.
       parameters:
         - $ref: '#/components/parameters/EncounterId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateObservationRequest'
+      responses:
+        '201':
+          description: Observation created for encounter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservationResponse'
+        '400':
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Encounter not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/encounters/{encounterId}/interventions:
     post:
       tags: [Encounters]

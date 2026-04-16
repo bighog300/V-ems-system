@@ -23,3 +23,28 @@ test("openemr payload mapper maps encounter create request/response", () => {
   });
   assert.deepEqual(response, { encounter_id: "ENC-700", status: "Open" });
 });
+
+test("openemr payload mapper maps observation create request/response", () => {
+  const mapper = new OpenEmrPayloadMapper();
+  const request = mapper.mapObservationCreateRequest({
+    encounter_id: "ENC-710",
+    incident_id: "INC-000001",
+    patient_id: "OE-710",
+    payload: { pulse_bpm: 88, rr: 16 }
+  });
+  const response = mapper.mapObservationCreateResponse({
+    observation_id: "OBS-710",
+    encounter_id: "ENC-710",
+    status: "recorded",
+    ignored: true
+  });
+
+  assert.deepEqual(request, {
+    encounter_id: "ENC-710",
+    incident_id: "INC-000001",
+    patient_id: "OE-710",
+    pulse_bpm: 88,
+    rr: 16
+  });
+  assert.deepEqual(response, { observation_id: "OBS-710", encounter_id: "ENC-710", status: "recorded" });
+});

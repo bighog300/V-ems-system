@@ -30,6 +30,15 @@ export class OpenEmrPayloadMapper {
     };
   }
 
+  mapObservationCreateRequest(observation) {
+    return {
+      encounter_id: observation.encounter_id,
+      incident_id: observation.incident_id,
+      patient_id: observation.patient_id,
+      ...observation.payload
+    };
+  }
+
   mapPatientSearchResponse(response) {
     return {
       match_status: response.match_status,
@@ -48,6 +57,14 @@ export class OpenEmrPayloadMapper {
 
   mapEncounterCreateResponse(response) {
     return {
+      encounter_id: response.encounter_id,
+      status: response.status
+    };
+  }
+
+  mapObservationCreateResponse(response) {
+    return {
+      observation_id: response.observation_id,
       encounter_id: response.encounter_id,
       status: response.status
     };

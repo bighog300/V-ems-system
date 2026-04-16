@@ -25,7 +25,8 @@ async function startServerWithOpenemrTransport(transport, dbPath = createDbPath(
     openemr: {
       searchPatient: (payload) => transport({ method: "searchPatient", payload }),
       createPatient: (payload) => transport({ method: "createPatient", payload }),
-      createEncounter: (payload) => transport({ method: "createEncounter", payload })
+      createEncounter: (payload) => transport({ method: "createEncounter", payload }),
+      createObservation: (payload) => transport({ method: "createObservation", payload })
     }
   });
 
@@ -305,6 +306,89 @@ test("duplicate encounter create is idempotent by incident linkage", async () =>
     assert.equal(createdB.status, 201);
     assert.equal(createdA.body.encounter_id, createdB.body.encounter_id);
     assert.equal(calls.length, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test("observation create success path", async () => {
+  const calls = [];
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    calls.push(request);
+    if (request.method === "createEncounter") return { encounter_id: "ENC-500", status: "Open" };
+    if (request.method === "createObservation") return { observation_id: "OBS-500", encounter_id: "ENC-500", status: "recorded" };
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-500" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-500",
+        care_started_at: "2026-04-16T12:00:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Headache"
+      })
+    });
+
+    const created = await jsonFetch(base, "/api/encounters/ENC-500/observations", {
+      method: "POST",
+      body: JSON.stringify({ systolic_bp: 120, diastolic_bp: 80 })
+    });
+
+    assert.equal(created.status, 201);
+    assert.deepEqual(created.body, { observation_id: "OBS-500", encounter_id: "ENC-500", status: "recorded" });
+    assert.equal(calls.at(-1).method, "createObservation");
+    assert.deepEqual(calls.at(-1).payload, {
+      encounter_id: "ENC-500",
+      incident_id: incidentId,
+      patient_id: "OE-500",
+      payload: {
+        systolic_bp: 120,
+        diastolic_bp: 80
+      }
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test("observation create rejected if encounter does not exist", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+  try {
+    const missing = await jsonFetch(base, "/api/encounters/ENC-999/observations", {
+      method: "POST",
+      body: JSON.stringify({ temperature_c: 37.1 })
+    });
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.error.code, "NOT_FOUND");
+  } finally {
+    server.close();
+  }
+});
+
+test("observation payload validation failures", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
+  try {
+    const badEncounterId = await jsonFetch(base, "/api/encounters/bad-id/observations", {
+      method: "POST",
+      body: JSON.stringify({ temperature_c: 37.1 })
+    });
+    assert.equal(badEncounterId.status, 400);
+    assert.equal(badEncounterId.body.error.code, "INVALID_PAYLOAD");
+
+    const emptyPayload = await jsonFetch(base, "/api/encounters/ENC-123/observations", {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    assert.equal(emptyPayload.status, 400);
+    assert.equal(emptyPayload.body.error.code, "INVALID_PAYLOAD");
   } finally {
     server.close();
   }
