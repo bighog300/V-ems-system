@@ -48,4 +48,15 @@ export class VtigerPayloadMapper {
       correlation_id: assignment.correlation_id
     };
   }
+
+  mapStockUsageRecord(stockUsage) {
+    return {
+      incident_id: stockUsage.incident_id,
+      encounter_id: stockUsage.encounter_id ?? null,
+      stock_item_id: stockUsage.stock_item_id,
+      performed_at: stockUsage.performed_at,
+      intervention_type: stockUsage.intervention_type,
+      intervention_name: stockUsage.intervention_name
+    };
+  }
 }

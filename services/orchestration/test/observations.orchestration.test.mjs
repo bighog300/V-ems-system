@@ -136,6 +136,76 @@ test("intervention orchestration emits audit/event metadata", async () => {
   const events = orchestration.listOutboxEvents();
   assert.equal(events.at(-1).event_type, "InterventionCreated");
   assert.equal(events.at(-1).payload.intervention_id, "INT-900");
+
+  const syncIntents = orchestration.listSyncIntents();
+  assert.equal(syncIntents.length, 1);
+  assert.equal(syncIntents.at(-1).intent_type, "createIncidentMirror");
+});
+
+test("intervention with stock_item_id emits stock usage sync intent", async () => {
+  const orchestration = createService({
+    createEncounter: async () => ({ encounter_id: "ENC-901", status: "Open" }),
+    createIntervention: async (payload) => ({ intervention_id: "INT-901", encounter_id: payload.encounter_id, status: "recorded" })
+  });
+
+  const incident = createIncident(orchestration, "corr-stock-int-1");
+  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+    verification_status: "verified",
+    openemr_patient_id: "OE-901"
+  }, { correlationId: "corr-stock-int-2" });
+  await orchestration.createEncounterForIncident(incident.incident_id, {
+    patient_id: "OE-901",
+    care_started_at: "2026-04-16T10:15:00Z",
+    crew_ids: ["STAFF-001"],
+    presenting_complaint: "Chest pain"
+  }, { correlationId: "corr-stock-int-3" });
+
+  await orchestration.createInterventionForEncounter("ENC-901", {
+    performed_at: "2026-04-16T10:25:00Z",
+    type: "medication",
+    name: "Aspirin",
+    stock_item_id: "ITEM-001"
+  }, { correlationId: "corr-stock-int-4" });
+
+  const stockIntent = orchestration.listSyncIntents().find((intent) => intent.intent_type === "recordStockUsageMirror");
+  assert.ok(stockIntent);
+  assert.equal(stockIntent.entity_type, "stock_usage");
+  assert.deepEqual(stockIntent.payload, {
+    incident_id: incident.incident_id,
+    encounter_id: "ENC-901",
+    stock_item_id: "ITEM-001",
+    performed_at: "2026-04-16T10:25:00Z",
+    intervention_type: "medication",
+    intervention_name: "Aspirin"
+  });
+});
+
+test("intervention without stock_item_id does not emit stock usage sync intent", async () => {
+  const orchestration = createService({
+    createEncounter: async () => ({ encounter_id: "ENC-902", status: "Open" }),
+    createIntervention: async (payload) => ({ intervention_id: "INT-902", encounter_id: payload.encounter_id, status: "recorded" })
+  });
+
+  const incident = createIncident(orchestration, "corr-stock-none-1");
+  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+    verification_status: "verified",
+    openemr_patient_id: "OE-902"
+  }, { correlationId: "corr-stock-none-2" });
+  await orchestration.createEncounterForIncident(incident.incident_id, {
+    patient_id: "OE-902",
+    care_started_at: "2026-04-16T10:15:00Z",
+    crew_ids: ["STAFF-001"],
+    presenting_complaint: "Chest pain"
+  }, { correlationId: "corr-stock-none-3" });
+
+  await orchestration.createInterventionForEncounter("ENC-902", {
+    performed_at: "2026-04-16T10:25:00Z",
+    type: "procedure",
+    name: "Splinting"
+  }, { correlationId: "corr-stock-none-4" });
+
+  const stockIntents = orchestration.listSyncIntents().filter((intent) => intent.intent_type === "recordStockUsageMirror");
+  assert.equal(stockIntents.length, 0);
 });
 
 test("intervention orchestration rejects missing encounter", async () => {

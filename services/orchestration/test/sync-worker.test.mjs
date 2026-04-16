@@ -131,6 +131,13 @@ test("worker dispatches to correct adapter method based on target_system and int
     operation: "createEncounter",
     payload: { encounter_id: "ENC-100" }
   });
+  appendIntent(syncIntents, {
+    target_system: "vtiger",
+    intent_type: "recordStockUsageMirror",
+    entity_type: "stock_usage",
+    operation: "recordStockUsageMirror",
+    payload: { incident_id: "INC-100", stock_item_id: "ITEM-100" }
+  });
 
   const calls = [];
   const worker = new SyncWorker({
@@ -138,6 +145,9 @@ test("worker dispatches to correct adapter method based on target_system and int
     vtiger: {
       async updateAssignmentMirror(payload) {
         calls.push({ target: "vtiger", method: "updateAssignmentMirror", payload });
+      },
+      async recordStockUsageMirror(payload) {
+        calls.push({ target: "vtiger", method: "recordStockUsageMirror", payload });
       }
     },
     openemr: {
@@ -151,8 +161,45 @@ test("worker dispatches to correct adapter method based on target_system and int
 
   assert.deepEqual(calls, [
     { target: "vtiger", method: "updateAssignmentMirror", payload: { assignment_id: "ASN-100" } },
-    { target: "openemr", method: "createEncounter", payload: { encounter_id: "ENC-100" } }
+    { target: "openemr", method: "createEncounter", payload: { encounter_id: "ENC-100" } },
+    { target: "vtiger", method: "recordStockUsageMirror", payload: { incident_id: "INC-100", stock_item_id: "ITEM-100" } }
   ]);
+});
+
+test("failed stock usage sync intent retries and dead-letters at max attempts", async () => {
+  const syncIntents = createIntentRepository();
+  appendIntent(syncIntents, {
+    target_system: "vtiger",
+    intent_type: "recordStockUsageMirror",
+    entity_type: "stock_usage",
+    operation: "recordStockUsageMirror",
+    payload: { incident_id: "INC-777", stock_item_id: "ITEM-777" }
+  });
+
+  const worker = new SyncWorker({
+    syncIntents,
+    vtiger: {
+      async recordStockUsageMirror() {
+        const error = new Error("stock mirror downstream timeout");
+        error.code = "DOWNSTREAM_TIMEOUT";
+        throw error;
+      }
+    },
+    openemr: {},
+    maxAttempts: 2
+  });
+
+  await worker.processPending();
+  let [intent] = syncIntents.listAll();
+  assert.equal(intent.status, "pending");
+  assert.equal(intent.attempt_count, 1);
+  assert.equal(intent.last_error_classification, "DOWNSTREAM_TIMEOUT");
+
+  await worker.processPending();
+  [intent] = syncIntents.listAll();
+  assert.equal(intent.status, "dead_lettered");
+  assert.equal(intent.attempt_count, 2);
+  assert.equal(intent.dead_lettered_at !== null, true);
 });
 
 test("worker does not reprocess already completed intents", async () => {

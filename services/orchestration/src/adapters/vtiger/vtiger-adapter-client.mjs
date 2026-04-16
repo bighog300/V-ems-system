@@ -37,4 +37,11 @@ export class VtigerAdapterClient {
       payload: this.mapper.mapAssignmentUpdate(assignment)
     });
   }
+
+  recordStockUsageMirror(stockUsage) {
+    return this.transport({
+      method: "recordStockUsageMirror",
+      payload: this.mapper.mapStockUsageRecord(stockUsage)
+    });
+  }
 }

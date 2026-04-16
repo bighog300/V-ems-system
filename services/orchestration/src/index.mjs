@@ -401,6 +401,17 @@ export class OrchestrationService {
       intervention_id: normalized.intervention_id
     });
 
+    if (payload.stock_item_id) {
+      this.syncIntent("stock_usage", "recordStockUsageMirror", meta.correlationId, {
+        incident_id: encounter.incident_id,
+        encounter_id: normalized.encounter_id,
+        stock_item_id: payload.stock_item_id,
+        performed_at: payload.performed_at,
+        intervention_type: payload.type,
+        intervention_name: payload.name
+      });
+    }
+
     return normalized;
   }
 
