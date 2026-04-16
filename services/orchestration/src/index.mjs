@@ -198,6 +198,7 @@ export class OrchestrationService {
   syncIntent(entityType, operation, correlationId, payload) {
     this.syncIntents.append({
       target_system: "vtiger",
+      intent_type: operation,
       entity_type: entityType,
       operation,
       correlation_id: correlationId,
