@@ -76,10 +76,53 @@ dt {
 
 .board-card.priority-critical {
   border-left: 6px solid #b91c1c;
+  box-shadow: 0 0 0 1px #fecaca;
+}
+
+.board-card.priority-high {
+  border-left: 6px solid #dc2626;
+}
+
+.board-card.priority-medium {
+  border-left: 6px solid #d97706;
+}
+
+.board-card.priority-low {
+  border-left: 6px solid #0284c7;
 }
 
 .board-card dl {
   grid-template-columns: 140px 1fr;
+}
+
+.priority-pill,
+.status-pill,
+.closure-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.priority-pill {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-pill {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.closure-pill.closure-ready-true {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.closure-pill.closure-ready-false {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .crew-job-list {

@@ -6,8 +6,10 @@ import {
   createEncounterObservation,
   createIncidentEncounter,
   loadCrewJobListData,
+  loadDispatcherBoardData,
   loadIncidentOperationalData
 } from "./api.mjs";
+import { buildDispatcherBoardItems, filterAndSortDispatcherItems, renderDispatcherBoardHtml } from "./board.mjs";
 import { buildIncidentOperationalSummary, renderIncidentClosePanelHtml, renderOperationalSummaryHtml } from "./summary.mjs";
 import {
   buildCreateEncounterPayload,
@@ -29,6 +31,68 @@ function readConfig() {
 }
 
 let closeIncidentFeedback = "";
+let dispatcherPollingIntervalId = null;
+
+function readDispatcherBoardControls() {
+  const activeOnlyInput = document.querySelector("#boardFilterActive");
+  const statusInput = document.querySelector("#boardFilterStatus");
+  const priorityInput = document.querySelector("#boardFilterPriority");
+  const sortInput = document.querySelector("#boardSortBy");
+  return {
+    activeOnly: Boolean(activeOnlyInput?.checked),
+    status: statusInput?.value ?? "all",
+    priority: priorityInput?.value ?? "all",
+    sort: sortInput?.value ?? "priority"
+  };
+}
+
+function startDispatcherPolling() {
+  stopDispatcherPolling();
+  const autoRefreshToggle = document.querySelector("#boardAutoRefresh");
+  if (!autoRefreshToggle?.checked) return;
+
+  dispatcherPollingIntervalId = window.setInterval(() => {
+    void renderDispatcherBoard({ refreshReason: "auto" });
+  }, 15000);
+}
+
+function stopDispatcherPolling() {
+  if (!dispatcherPollingIntervalId) return;
+  window.clearInterval(dispatcherPollingIntervalId);
+  dispatcherPollingIntervalId = null;
+}
+
+async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
+  const output = document.querySelector("#dispatcherBoardOutput");
+  const status = document.querySelector("#status");
+  const controls = readDispatcherBoardControls();
+  const config = readConfig();
+  if (!config.apiBaseUrl) {
+    status.textContent = "API Base URL is required.";
+    return;
+  }
+
+  if (refreshReason === "manual") {
+    status.textContent = "Loading dispatcher board...";
+  }
+
+  try {
+    const boardData = await loadDispatcherBoardData(config);
+    const items = buildDispatcherBoardItems(boardData.items);
+    const filteredAndSortedItems = filterAndSortDispatcherItems(items, controls);
+    output.innerHTML = renderDispatcherBoardHtml(filteredAndSortedItems, {
+      lastUpdatedLabel: new Date().toISOString()
+    });
+    if (refreshReason === "manual") {
+      status.textContent = "Dispatcher board loaded.";
+    } else {
+      status.textContent = "Dispatcher board auto-refreshed.";
+    }
+  } catch (error) {
+    output.innerHTML = "";
+    status.textContent = error.message;
+  }
+}
 
 async function renderIncidentDetail() {
   const output = document.querySelector("#incidentOutput");
@@ -379,5 +443,15 @@ function hydrateInputsFromQuery() {
 document.querySelector("#loadIncident").addEventListener("click", renderIncidentDetail);
 document.querySelector("#loadBoard").addEventListener("click", renderCrewJobList);
 document.querySelector("#loadCrewIncident").addEventListener("click", renderCrewIncidentDetail);
+document.querySelector("#loadDispatcherBoard").addEventListener("click", () => void renderDispatcherBoard());
+document.querySelector("#boardFilterActive").addEventListener("change", () => void renderDispatcherBoard());
+document.querySelector("#boardFilterStatus").addEventListener("change", () => void renderDispatcherBoard());
+document.querySelector("#boardFilterPriority").addEventListener("change", () => void renderDispatcherBoard());
+document.querySelector("#boardSortBy").addEventListener("change", () => void renderDispatcherBoard());
+document.querySelector("#boardAutoRefresh").addEventListener("change", () => {
+  startDispatcherPolling();
+  void renderDispatcherBoard();
+});
 
 hydrateInputsFromQuery();
+startDispatcherPolling();

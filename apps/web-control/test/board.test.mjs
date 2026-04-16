@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDispatcherBoardItems, renderDispatcherBoardHtml } from "../src/board.mjs";
+import { buildDispatcherBoardItems, filterAndSortDispatcherItems, renderDispatcherBoardHtml } from "../src/board.mjs";
 
 test("buildDispatcherBoardItems maps minimum operational fields", () => {
   const items = buildDispatcherBoardItems([
@@ -44,6 +44,32 @@ test("renderDispatcherBoardHtml includes drill-down incident link", () => {
   assert.match(html, /\?incidentId=INC-000222/);
   assert.match(html, /Priority:/);
   assert.match(html, /Closure Ready/);
+});
+
+test("filterAndSortDispatcherItems supports active, status, priority filters", () => {
+  const filtered = filterAndSortDispatcherItems([
+    { incidentId: "INC-001", status: "Closed", priority: "high", updatedAt: "2026-04-16T12:00:00Z" },
+    { incidentId: "INC-002", status: "Awaiting Dispatch", priority: "critical", updatedAt: "2026-04-16T10:00:00Z" },
+    { incidentId: "INC-003", status: "Awaiting Dispatch", priority: "high", updatedAt: "2026-04-16T09:00:00Z" }
+  ], {
+    activeOnly: true,
+    status: "Awaiting Dispatch",
+    priority: "critical",
+    sort: "priority"
+  });
+
+  assert.deepEqual(filtered.map((item) => item.incidentId), ["INC-002"]);
+});
+
+test("filterAndSortDispatcherItems supports recency sorting", () => {
+  const sorted = filterAndSortDispatcherItems([
+    { incidentId: "INC-100", status: "Assigned", priority: "high", updatedAt: "2026-04-16T10:00:00Z" },
+    { incidentId: "INC-101", status: "Assigned", priority: "high", updatedAt: "2026-04-16T12:00:00Z" }
+  ], {
+    sort: "recency"
+  });
+
+  assert.deepEqual(sorted.map((item) => item.incidentId), ["INC-101", "INC-100"]);
 });
 
 test("renderDispatcherBoardHtml shows explicit empty-state messaging", () => {
