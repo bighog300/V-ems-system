@@ -228,6 +228,14 @@ test("rbac enforcement can be disabled for local development safety", async () =
 });
 
 test("readiness endpoint provides supportability snapshot", async () => {
+  process.env.APP_ENV = "staging";
+  process.env.APP_PROFILE = "ops";
+  process.env.RBAC_ENFORCE = "true";
+  process.env.UPSTREAM_CONNECTIVITY_CHECKS_ENABLED = "true";
+  process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY = "false";
+  process.env.READINESS_MODE = "smoke";
+  process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT = "2026-04-16T10:30:00Z";
+  process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT = "ok";
   const { server, base } = await startServer();
 
   try {
@@ -235,8 +243,62 @@ test("readiness endpoint provides supportability snapshot", async () => {
     assert.equal(report.status, 200);
     assert.equal(report.body.production_readiness.structured_logging, true);
     assert.equal(report.body.production_readiness.correlation_headers, true);
+    assert.equal(report.body.production_readiness.rbac_enforced, true);
+    assert.deepEqual(report.body.diagnostics.environment, { app_env: "staging", profile: "ops" });
+    assert.deepEqual(report.body.diagnostics.controls, {
+      rbac_enforced: true,
+      upstream_connectivity_validation_enabled: true
+    });
+    assert.deepEqual(report.body.diagnostics.modes, {
+      smoke_include_upstream_connectivity: false,
+      readiness_mode: "smoke"
+    });
+    assert.deepEqual(report.body.diagnostics.last_validation, {
+      at: "2026-04-16T10:30:00Z",
+      result: "ok"
+    });
     assert.ok(report.body.incident_snapshot);
   } finally {
     server.close();
+    delete process.env.APP_ENV;
+    delete process.env.APP_PROFILE;
+    delete process.env.RBAC_ENFORCE;
+    delete process.env.UPSTREAM_CONNECTIVITY_CHECKS_ENABLED;
+    delete process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY;
+    delete process.env.READINESS_MODE;
+    delete process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT;
+    delete process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT;
+  }
+});
+
+test("readiness diagnostics use safe defaults when optional env values are unset", async () => {
+  process.env.RBAC_ENFORCE = "false";
+  process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY = "false";
+  delete process.env.UPSTREAM_CONNECTIVITY_CHECKS_ENABLED;
+  delete process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT;
+  delete process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT;
+  delete process.env.READINESS_MODE;
+  delete process.env.APP_ENV;
+  delete process.env.APP_PROFILE;
+
+  const { server, base } = await startServer();
+
+  try {
+    const report = await jsonFetch(base, "/api/support/readiness", { method: "GET" });
+    assert.equal(report.status, 200);
+    assert.deepEqual(report.body.diagnostics.environment, { app_env: "development", profile: "default" });
+    assert.deepEqual(report.body.diagnostics.controls, {
+      rbac_enforced: false,
+      upstream_connectivity_validation_enabled: false
+    });
+    assert.deepEqual(report.body.diagnostics.modes, {
+      smoke_include_upstream_connectivity: false,
+      readiness_mode: null
+    });
+    assert.equal(report.body.diagnostics.last_validation, null);
+  } finally {
+    server.close();
+    delete process.env.RBAC_ENFORCE;
+    delete process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY;
   }
 });
