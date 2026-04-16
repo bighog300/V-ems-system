@@ -265,9 +265,7 @@ test("encounter fetch returns persisted linkage metadata", async () => {
       encounter_id: "ENC-400",
       openemr_patient_id: "OE-400",
       encounter_status: "Ready for Handover",
-      care_started_at: "2026-04-16T12:00:00Z",
-      status: "Ready for Handover",
-      linked_incident_id: incidentId
+      care_started_at: "2026-04-16T12:00:00Z"
     });
   } finally {
     server.close();

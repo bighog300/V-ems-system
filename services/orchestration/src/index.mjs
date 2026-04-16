@@ -311,9 +311,7 @@ export class OrchestrationService {
       encounter_id: record.openemr_encounter_id,
       openemr_patient_id: record.openemr_patient_id,
       encounter_status: record.encounter_status,
-      care_started_at: record.care_started_at,
-      status: record.encounter_status,
-      linked_incident_id: record.incident_id
+      care_started_at: record.care_started_at
     };
   }
 
