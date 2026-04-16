@@ -1,29 +1,13 @@
-# VEMS Documentation
+# VEMS Sprint Execution Docs
 
-This folder contains the project reporting and phased completion roadmap for the VEMS platform.
+This folder contains the sprint-by-sprint execution plan for completing the VEMS platform, along with ready-to-use Codex prompts for each sprint.
 
 ## Structure
+- `sprints/` — sprint planning documents
+- `codex-prompts/` — execution prompts for Codex in the same order
 
-- `overview/`
-  - high-level project status and progress reporting
-- `phases/phase-a-mvp/`
-  - usable MVP scope and remaining work
-- `phases/phase-b-deployable/`
-  - deployable platform scope and remaining work
-- `phases/phase-c-production/`
-  - production-ready system scope and remaining work
-
-## Recommended reading order
-
-1. `overview/progress-report.md`
-2. `phases/phase-a-mvp/README.md`
-3. `phases/phase-b-deployable/README.md`
-4. `phases/phase-c-production/README.md`
-
-## Purpose
-
-These docs explain:
-- current project maturity
-- what has already been completed
-- what is still missing
-- what should happen next
+## Recommended usage
+1. Start with `sprints/00-roadmap-overview.md`
+2. Execute sprints in order from 01 to 07
+3. Use the matching prompt in `codex-prompts/`
+4. Commit after each sprint milestone
