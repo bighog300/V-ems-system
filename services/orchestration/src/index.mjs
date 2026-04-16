@@ -10,6 +10,7 @@ import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs"
 import { VtigerPayloadMapper } from "./adapters/vtiger/vtiger-payload-mapper.mjs";
 import { OpenEmrAdapterClient } from "./adapters/openemr/openemr-adapter-client.mjs";
 import { PatientLinkRepository } from "./repositories/patient-link-repository.mjs";
+import { EncounterLinkRepository } from "./repositories/encounter-link-repository.mjs";
 
 export class OrchestrationService {
   constructor(options = {}) {
@@ -21,6 +22,7 @@ export class OrchestrationService {
     this.idempotency = new IdempotencyKeyRepository(this.db);
     this.syncIntents = new SyncIntentRepository(this.db);
     this.patientLinks = new PatientLinkRepository(this.db);
+    this.encounterLinks = new EncounterLinkRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper();
     this.openemr = options.openemr ?? new OpenEmrAdapterClient();
   }
@@ -224,6 +226,79 @@ export class OrchestrationService {
   getPatientLink(incidentId) {
     this.getIncident(incidentId);
     return this.patientLinks.findByIncidentId(incidentId);
+  }
+
+
+  async createEncounterForIncident(incidentId, payload, meta) {
+    if (meta.idempotencyKey) {
+      const existingEncounterId = this.idempotency.getResourceId("encounter", meta.idempotencyKey);
+      if (existingEncounterId) {
+        const existingByKey = this.encounterLinks.findByEncounterId(existingEncounterId);
+        if (existingByKey) {
+          return {
+            encounter_id: existingByKey.openemr_encounter_id,
+            status: existingByKey.encounter_status,
+            linked_incident_id: existingByKey.incident_id
+          };
+        }
+      }
+    }
+
+    this.getIncident(incidentId);
+    const patientLink = this.patientLinks.findByIncidentId(incidentId);
+    if (!patientLink?.openemr_patient_id) {
+      throw new ApiError("PRECONDITION_FAILED", "Cannot create encounter without linked patient", 409);
+    }
+    if (payload.patient_id !== patientLink.openemr_patient_id) {
+      throw new ApiError("INVALID_PAYLOAD", "patient_id must match linked incident patient", 400);
+    }
+
+    const existing = this.encounterLinks.findByIncidentId(incidentId);
+    if (existing) {
+      return {
+        encounter_id: existing.openemr_encounter_id,
+        status: existing.encounter_status,
+        linked_incident_id: existing.incident_id
+      };
+    }
+
+    const created = await this.openemr.createEncounter({ incident_id: incidentId, ...payload });
+    const now = new Date().toISOString();
+    const record = {
+      incident_id: incidentId,
+      openemr_encounter_id: created.encounter_id,
+      encounter_status: created.status,
+      created_at: now,
+      updated_at: now,
+      correlation_id: meta.correlationId
+    };
+
+    this.encounterLinks.save(record);
+    this.audit("encounter_link", incidentId, "create_encounter", meta.correlationId, undefined, record);
+    this.event("EncounterCreated", meta.correlationId, {
+      incident_id: incidentId,
+      encounter_id: record.openemr_encounter_id,
+      status: record.encounter_status
+    });
+
+    if (meta.idempotencyKey) this.idempotency.save("encounter", meta.idempotencyKey, record.openemr_encounter_id, now);
+
+    return {
+      encounter_id: record.openemr_encounter_id,
+      status: record.encounter_status,
+      linked_incident_id: incidentId
+    };
+  }
+
+  getEncounterByIncident(incidentId) {
+    this.getIncident(incidentId);
+    const record = this.encounterLinks.findByIncidentId(incidentId);
+    if (!record) throw new ApiError("NOT_FOUND", `Encounter for incident ${incidentId} not found`, 404);
+    return {
+      encounter_id: record.openemr_encounter_id,
+      status: record.encounter_status,
+      linked_incident_id: record.incident_id
+    };
   }
 
   listOutboxEvents() {

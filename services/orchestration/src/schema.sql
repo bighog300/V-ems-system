@@ -74,3 +74,13 @@ CREATE TABLE IF NOT EXISTS patient_links (
   correlation_id TEXT NOT NULL,
   FOREIGN KEY (incident_id) REFERENCES incidents(incident_id)
 );
+
+CREATE TABLE IF NOT EXISTS encounter_links (
+  incident_id TEXT PRIMARY KEY,
+  openemr_encounter_id TEXT NOT NULL UNIQUE,
+  encounter_status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  correlation_id TEXT NOT NULL,
+  FOREIGN KEY (incident_id) REFERENCES incidents(incident_id)
+);

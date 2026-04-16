@@ -5,6 +5,7 @@ import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES } from
 
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
+const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Treatment In Progress", "Ready for Handover", "Handover Completed", "Closed", "Cancelled"];
 
 
 function okJson(res, status, body) {
@@ -74,6 +75,18 @@ function validatePatientLink(payload) {
   }
 }
 
+
+function validateCreateEncounter(payload) {
+  if (!payload || typeof payload !== "object") throw new ApiError("INVALID_PAYLOAD", "Encounter payload is required", 400);
+  if (!payload.patient_id || typeof payload.patient_id !== "string") throw new ApiError("INVALID_PAYLOAD", "patient_id is required", 400);
+  if (!payload.care_started_at || typeof payload.care_started_at !== "string") throw new ApiError("INVALID_PAYLOAD", "care_started_at is required", 400);
+  if (!Array.isArray(payload.crew_ids) || payload.crew_ids.length === 0) throw new ApiError("INVALID_PAYLOAD", "crew_ids required", 400);
+  if (!payload.crew_ids.every((id) => /^STAFF-[0-9]{3,}$/.test(id))) throw new ApiError("INVALID_PAYLOAD", "Invalid crew_ids format", 400);
+  if (!payload.presenting_complaint || typeof payload.presenting_complaint !== "string") {
+    throw new ApiError("INVALID_PAYLOAD", "presenting_complaint is required", 400);
+  }
+}
+
 export function createApp(orchestration = new OrchestrationService()) {
   const server = createServer(async (req, res) => {
     try {
@@ -132,6 +145,22 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateCreateAssignment(payload);
         const assignment = orchestration.createAssignment(assignmentCreateMatch[1], payload, { correlationId, idempotencyKey });
         return okJson(res, 201, assignment);
+      }
+
+
+      const encounterCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/);
+      if (encounterCreateMatch && method === "GET") {
+        const encounter = orchestration.getEncounterByIncident(encounterCreateMatch[1]);
+        return okJson(res, 200, encounter);
+      }
+      if (encounterCreateMatch && method === "POST") {
+        const payload = await parseJson(req);
+        validateCreateEncounter(payload);
+        const encounter = await orchestration.createEncounterForIncident(encounterCreateMatch[1], payload, { correlationId, idempotencyKey });
+        if (!ENCOUNTER_STATUSES.includes(encounter.status)) {
+          throw new ApiError("DOWNSTREAM_UNAVAILABLE", "Encounter status not recognized", 502, true);
+        }
+        return okJson(res, 201, encounter);
       }
 
       const assignmentPatchMatch = url.pathname.match(/^\/api\/assignments\/(ASN-[0-9]{6})$/);
