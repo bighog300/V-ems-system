@@ -58,3 +58,32 @@ make stop-env
 ```bash
 npm test
 ```
+
+## Load/performance baseline (API scaffold)
+Run a repeatable baseline against the running API Gateway using the existing scaffold:
+
+```bash
+API_BASE_URL=http://127.0.0.1:8080 \
+LOAD_TEST_REQUESTS=200 \
+LOAD_TEST_CONCURRENCY=20 \
+npm run perf:load
+```
+
+Optional knobs:
+- `LOAD_TEST_TIMEOUT_MS` (default `15000`): per-request timeout for transport issues.
+- `LOAD_TEST_ROLE` (default `dispatcher`): request role header.
+- `LOAD_TEST_ENDPOINT_PATH` (default `/api/incidents`): POST endpoint used for baseline.
+- `LOAD_TEST_INCLUDE_METRICS_SNAPSHOT` (default enabled): set to `false` to skip internal metrics snapshots.
+
+The script prints JSON with:
+- throughput: `throughput_rps`
+- failures: `failure_count`, `status_counts`, `transport_errors`
+- latency: `latency.min_ms`, `latency.avg_ms`, `latency.p50_ms`, `latency.p95_ms`, `latency.p99_ms`, `latency.max_ms`
+- timing: `duration_ms`, `started_at`, `finished_at`
+- optional gateway snapshots: `metrics_snapshot.before` and `metrics_snapshot.after`
+
+Interpretation guidance:
+1. Start with `failure_count`; non-zero means the baseline is unstable and should be fixed before tuning latency.
+2. Compare `p95_ms` and `p99_ms` to `avg_ms`; large spread indicates queueing/saturation under concurrency.
+3. Use `throughput_rps` and `duration_ms` together; rising duration with flat throughput suggests bottlenecks.
+4. Use `metrics_snapshot.after.api_gateway.by_route` to validate the expected route absorbed test traffic.
