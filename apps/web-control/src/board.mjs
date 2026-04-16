@@ -3,9 +3,8 @@ function asText(value, fallback = "Unavailable") {
 }
 
 function summarizeAssignment(assignmentSummary) {
-  const first = assignmentSummary?.assignments?.[0];
-  if (!first) return "No assignment summary";
-  return `${first.assignment_id} • ${first.status} • ${first.vehicle_id}`;
+  if (!assignmentSummary) return "No assignment summary";
+  return `${assignmentSummary.assignment_id} • ${assignmentSummary.status} • ${assignmentSummary.vehicle_id}`;
 }
 
 function priorityClass(priority) {
@@ -13,20 +12,20 @@ function priorityClass(priority) {
 }
 
 export function buildDispatcherBoardItems(boardData) {
-  return boardData.map(({ incident, assignmentSummary }) => ({
-    incidentId: asText(incident.incident_id),
-    priority: asText(incident.priority),
-    status: asText(incident.status),
-    locationSummary: asText(incident.address),
-    assignmentSummary: summarizeAssignment(assignmentSummary),
-    closureReady: incident.closure_ready,
-    priorityClassName: priorityClass(incident.priority)
+  return boardData.map((incidentSummary) => ({
+    incidentId: asText(incidentSummary.incident_id),
+    priority: asText(incidentSummary.priority),
+    status: asText(incidentSummary.status),
+    locationSummary: asText(incidentSummary.location_summary),
+    assignmentSummary: summarizeAssignment(incidentSummary.assignment_summary),
+    closureReady: incidentSummary.closure_ready,
+    priorityClassName: priorityClass(incidentSummary.priority)
   }));
 }
 
-export function renderDispatcherBoardHtml(items, boardContext = {}) {
+export function renderDispatcherBoardHtml(items) {
   if (items.length === 0) {
-    return `<p>No incidents loaded. Enter one or more Incident IDs to populate the board.</p>`;
+    return `<p>No incidents currently available for dispatch.</p>`;
   }
 
   const cards = items
@@ -49,9 +48,5 @@ export function renderDispatcherBoardHtml(items, boardContext = {}) {
     })
     .join("\n");
 
-  const gapNote = boardContext.discoveryGap
-    ? `<p class="hint">${boardContext.discoveryGap}</p>`
-    : "";
-
-  return `${gapNote}<section class="board-grid">${cards}</section>`;
+  return `<section class="board-grid">${cards}</section>`;
 }

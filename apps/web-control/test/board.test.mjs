@@ -5,17 +5,16 @@ import { buildDispatcherBoardItems, renderDispatcherBoardHtml } from "../src/boa
 test("buildDispatcherBoardItems maps minimum operational fields", () => {
   const items = buildDispatcherBoardItems([
     {
-      incident: {
-        incident_id: "INC-000111",
-        priority: "critical",
-        status: "Awaiting Dispatch",
-        address: "123 Main St",
-        closure_ready: false
+      incident_id: "INC-000111",
+      priority: "critical",
+      status: "Awaiting Dispatch",
+      location_summary: "123 Main St",
+      closure_ready: false,
+      assignment_summary: {
+        assignment_id: "ASN-000111",
+        status: "Assigned",
+        vehicle_id: "AMB-201"
       },
-      assignmentSummary: {
-        incident_id: "INC-000111",
-        assignments: [{ assignment_id: "ASN-000111", status: "Assigned", vehicle_id: "AMB-201" }]
-      }
     }
   ]);
 
@@ -29,24 +28,25 @@ test("buildDispatcherBoardItems maps minimum operational fields", () => {
   assert.equal(items[0].priorityClassName, "priority-critical");
 });
 
-test("renderDispatcherBoardHtml includes drill-down incident link and board gap note", () => {
-  const html = renderDispatcherBoardHtml(
-    [
-      {
-        incidentId: "INC-000222",
-        priority: "high",
-        status: "Assigned",
-        locationSummary: "456 Center Rd",
-        assignmentSummary: "No assignment summary",
-        closureReady: undefined,
-        priorityClassName: ""
-      }
-    ],
-    { discoveryGap: "Manual list loading currently required." }
-  );
+test("renderDispatcherBoardHtml includes drill-down incident link", () => {
+  const html = renderDispatcherBoardHtml([
+    {
+      incidentId: "INC-000222",
+      priority: "high",
+      status: "Assigned",
+      locationSummary: "456 Center Rd",
+      assignmentSummary: "No assignment summary",
+      closureReady: undefined,
+      priorityClassName: ""
+    }
+  ]);
 
   assert.match(html, /\?incidentId=INC-000222/);
   assert.match(html, /Priority:/);
   assert.match(html, /Closure Ready/);
-  assert.match(html, /Manual list loading currently required\./);
+});
+
+test("renderDispatcherBoardHtml shows explicit empty-state messaging", () => {
+  const html = renderDispatcherBoardHtml([]);
+  assert.match(html, /No incidents currently available for dispatch\./);
 });

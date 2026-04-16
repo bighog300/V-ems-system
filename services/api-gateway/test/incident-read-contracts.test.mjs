@@ -77,6 +77,48 @@ test("contract: GET /api/incidents/{incidentId}/assignments returns AssignmentLi
   }
 });
 
+test("contract: GET /api/incidents returns incident summary list shape on 200", async () => {
+  const { server, base } = await startServer();
+  try {
+    const created = await createDefaultIncident(base);
+    const incidentId = created.body.incident_id;
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/assignments`, {
+      method: "POST",
+      body: JSON.stringify({ vehicle_id: "AMB-901", crew_ids: ["STAFF-111", "STAFF-222"], reason: "Primary dispatch" })
+    });
+
+    const readResponse = await jsonFetch(base, "/api/incidents");
+    assert.equal(readResponse.status, 200);
+    assert.ok(Array.isArray(readResponse.body.incidents));
+    assert.equal(readResponse.body.incidents.length, 1);
+
+    const [incident] = readResponse.body.incidents;
+    assert.equal(incident.incident_id, incidentId);
+    assert.equal(typeof incident.priority, "string");
+    assert.equal(typeof incident.status, "string");
+    assert.equal(typeof incident.location_summary, "string");
+    assert.equal(Number.isNaN(Date.parse(incident.created_at)), false);
+    assert.equal(typeof incident.assignment_summary, "object");
+    assert.match(incident.assignment_summary.assignment_id, /^ASN-[0-9]{6}$/);
+    assert.equal(typeof incident.assignment_summary.status, "string");
+    assert.match(incident.assignment_summary.vehicle_id, /^AMB-[0-9]{3,}$/);
+  } finally {
+    server.close();
+  }
+});
+
+test("contract: GET /api/incidents returns empty incidents list when no incidents exist", async () => {
+  const { server, base } = await startServer();
+  try {
+    const readResponse = await jsonFetch(base, "/api/incidents");
+    assert.equal(readResponse.status, 200);
+    assert.deepEqual(readResponse.body, { incidents: [] });
+  } finally {
+    server.close();
+  }
+});
+
 test("contract: GET /api/incidents/{incidentId}/assignments returns structured 404 envelope", async () => {
   const { server, base } = await startServer();
   try {

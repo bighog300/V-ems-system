@@ -239,6 +239,11 @@ export function createApp(orchestration = new OrchestrationService()) {
 
       if (method === "GET" && url.pathname === "/health") return okJson(res, 200, { status: "ok" });
 
+      if (method === "GET" && url.pathname === "/api/incidents") {
+        const incidents = orchestration.listIncidentsForBoard();
+        return okJson(res, 200, { incidents });
+      }
+
       if (method === "POST" && url.pathname === "/api/incidents") {
         const payload = await parseJson(req);
         validateCreateIncident(payload);

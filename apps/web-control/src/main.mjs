@@ -5,14 +5,9 @@ import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from ".
 function readConfig() {
   const apiBaseInput = document.querySelector("#apiBaseUrl");
   const incidentInput = document.querySelector("#incidentId");
-  const boardIncidentIdsInput = document.querySelector("#boardIncidentIds");
   return {
     apiBaseUrl: apiBaseInput.value.trim().replace(/\/$/, ""),
-    incidentId: incidentInput.value.trim(),
-    boardIncidentIds: boardIncidentIdsInput.value
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
+    incidentId: incidentInput.value.trim()
   };
 }
 
@@ -62,7 +57,7 @@ async function renderDispatcherBoard() {
     }
     const boardData = await loadDispatcherBoardData(config);
     const items = buildDispatcherBoardItems(boardData.items);
-    output.innerHTML = renderDispatcherBoardHtml(items, { discoveryGap: boardData.discoveryGap });
+    output.innerHTML = renderDispatcherBoardHtml(items);
     status.textContent = "Loaded.";
   } catch (error) {
     output.innerHTML = "";

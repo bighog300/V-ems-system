@@ -64,6 +64,35 @@ export class OrchestrationService {
     return this.withClosureReadiness(incident);
   }
 
+  listIncidentsForBoard() {
+    const incidents = this.incidents.listAll();
+    return incidents.map((incident) => {
+      const assignment = this.assignments.findByIncidentId(incident.incident_id)[0];
+      const encounter = this.encounterLinks.findByIncidentId(incident.incident_id);
+
+      const summary = {
+        incident_id: incident.incident_id,
+        priority: incident.priority,
+        status: incident.status,
+        location_summary: incident.address,
+        created_at: incident.created_at
+      };
+
+      if (encounter) {
+        summary.closure_ready = Boolean(encounter.closure_ready);
+      }
+      if (assignment) {
+        summary.assignment_summary = {
+          assignment_id: assignment.assignment_id,
+          status: assignment.status,
+          vehicle_id: assignment.vehicle_id
+        };
+      }
+
+      return summary;
+    });
+  }
+
   updateIncident(incidentId, payload, meta) {
     const current = this.getIncident(incidentId);
     let nextStatus;

@@ -98,6 +98,33 @@ components:
           type: boolean
           readOnly: true
           description: Present when an encounter-linked workflow exists for the incident.
+    IncidentBoardSummary:
+      type: object
+      required: [incident_id, priority, status, location_summary, created_at]
+      properties:
+        incident_id: { type: string, pattern: '^INC-[0-9]{6}$' }
+        priority: { type: string, enum: [critical, high, medium, low] }
+        status: { type: string, enum: [New, Awaiting Dispatch, Assigned, Crew Acknowledged, En Route, On Scene, Treating On Scene, Transporting, At Destination, Handover Complete, Closed, Cancelled, Stood Down] }
+        location_summary: { type: string }
+        created_at: { type: string, format: date-time }
+        closure_ready:
+          type: boolean
+          description: Present when encounter-linked closure metadata is persisted.
+        assignment_summary:
+          type: object
+          required: [assignment_id, status, vehicle_id]
+          properties:
+            assignment_id: { type: string, pattern: '^ASN-[0-9]{6}$' }
+            status: { type: string, enum: [Proposed, Assigned, Accepted, Mobilised, Active, Completed, Reassigned, Cancelled, Stood Down] }
+            vehicle_id: { type: string, pattern: '^AMB-[0-9]{3,}$' }
+    IncidentBoardListResponse:
+      type: object
+      required: [incidents]
+      properties:
+        incidents:
+          type: array
+          items:
+            $ref: '#/components/schemas/IncidentBoardSummary'
     CreateAssignmentRequest:
       type: object
       required: [vehicle_id, crew_ids, reason]
@@ -301,6 +328,16 @@ components:
         usage_source: { type: string, enum: [manual, clinical_event] }
 paths:
   /api/incidents:
+    get:
+      tags: [Incidents]
+      summary: List incident board summaries for dispatcher discovery.
+      responses:
+        '200':
+          description: Incident summaries for dispatcher board.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentBoardListResponse'
     post:
       tags: [Incidents]
       summary: Create incident from call intake data.

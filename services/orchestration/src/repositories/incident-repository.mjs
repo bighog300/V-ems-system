@@ -41,6 +41,12 @@ export class IncidentRepository {
     return mapIncident(this.db.queryOne(`SELECT * FROM incidents WHERE incident_id = ${sqlValue(incidentId)};`));
   }
 
+  listAll() {
+    return this.db
+      .queryAll("SELECT * FROM incidents ORDER BY created_at DESC;")
+      .map(mapIncident);
+  }
+
   updateStatus(incidentId, status, updatedAt, correlationId) {
     this.db.execute(`UPDATE incidents SET status = ${sqlValue(status)}, updated_at = ${sqlValue(updatedAt)}, correlation_id = ${sqlValue(correlationId)} WHERE incident_id = ${sqlValue(incidentId)};`);
   }
