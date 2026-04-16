@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ApiError, createIncidentEncounter, loadCrewJobListData, loadDispatcherBoardData, loadIncidentOperationalData } from "../src/api.mjs";
+import {
+  ApiError,
+  createEncounterObservation,
+  createIncidentEncounter,
+  loadCrewJobListData,
+  loadDispatcherBoardData,
+  loadIncidentOperationalData
+} from "../src/api.mjs";
 
 test("loadDispatcherBoardData uses GET /api/incidents list endpoint", async () => {
   const calls = [];
@@ -156,6 +163,72 @@ test("createIncidentEncounter surfaces structured backend errors", async () => {
       assert.equal(error.status, 409);
       assert.equal(error.code, "CONFLICT");
       assert.equal(error.correlationId, "11111111-1111-1111-1111-111111111111");
+      return true;
+    }
+  );
+});
+
+
+test("createEncounterObservation submits to POST /api/encounters/{encounterId}/observations", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      status: 201,
+      async json() {
+        return { observation_id: "OBS-100", encounter_id: "ENC-123", status: "recorded" };
+      }
+    };
+  };
+
+  const payload = {
+    recorded_at: "2026-04-16T10:15:00Z",
+    vital_signs: { heart_rate_bpm: 88, gcs: 15 }
+  };
+
+  const result = await createEncounterObservation({
+    apiBaseUrl: "http://127.0.0.1:8080",
+    encounterId: "ENC-123",
+    payload,
+    fetchImpl
+  });
+
+  assert.equal(result.observation_id, "OBS-100");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://127.0.0.1:8080/api/encounters/ENC-123/observations");
+  assert.equal(calls[0].options.method, "POST");
+  assert.deepEqual(JSON.parse(calls[0].options.body), payload);
+});
+
+test("createEncounterObservation surfaces structured backend errors", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 400,
+    async json() {
+      return {
+        error: {
+          code: "INVALID_PAYLOAD",
+          message: "recorded_at is required",
+          retryable: false,
+          correlation_id: "22222222-2222-2222-2222-222222222222"
+        }
+      };
+    }
+  });
+
+  await assert.rejects(
+    createEncounterObservation({
+      apiBaseUrl: "http://127.0.0.1:8080",
+      encounterId: "ENC-123",
+      payload: { vital_signs: { heart_rate_bpm: 90 } },
+      fetchImpl
+    }),
+    (error) => {
+      assert.equal(error instanceof ApiError, true);
+      assert.equal(error.status, 400);
+      assert.equal(error.code, "INVALID_PAYLOAD");
+      assert.equal(error.correlationId, "22222222-2222-2222-2222-222222222222");
       return true;
     }
   );

@@ -1,6 +1,12 @@
-import { ApiError, createIncidentEncounter, loadCrewJobListData, loadIncidentOperationalData } from "./api.mjs";
+import { ApiError, createEncounterObservation, createIncidentEncounter, loadCrewJobListData, loadIncidentOperationalData } from "./api.mjs";
 import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "./summary.mjs";
-import { buildCreateEncounterPayload, buildCrewJobListItems, renderCrewIncidentDetailHtml, renderCrewJobListHtml } from "./crew.mjs";
+import {
+  buildCreateEncounterPayload,
+  buildCreateObservationPayload,
+  buildCrewJobListItems,
+  renderCrewIncidentDetailHtml,
+  renderCrewJobListHtml
+} from "./crew.mjs";
 
 function readConfig() {
   const apiBaseInput = document.querySelector("#apiBaseUrl");
@@ -112,6 +118,58 @@ async function onCreateEncounterSubmit(event) {
   }
 }
 
+
+
+async function onRecordObservationSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const feedback = document.querySelector("#recordObservationFeedback");
+  const status = document.querySelector("#status");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const config = readConfig();
+  if (!config.apiBaseUrl || !config.incidentId) {
+    feedback.textContent = "API Base URL and Incident ID are required.";
+    feedback.className = "error-note";
+    return;
+  }
+
+  const encounterId = form.dataset.encounterId;
+  if (!encounterId) {
+    feedback.textContent = "Observation entry requires an encounter first.";
+    feedback.className = "error-note";
+    return;
+  }
+
+  const { payload, validationErrors } = buildCreateObservationPayload(new FormData(form));
+  if (validationErrors.length > 0) {
+    feedback.textContent = validationErrors.join(" ");
+    feedback.className = "error-note";
+    return;
+  }
+
+  try {
+    submitButton.disabled = true;
+    feedback.className = "hint";
+    feedback.textContent = "Recording observation...";
+
+    await createEncounterObservation({
+      apiBaseUrl: config.apiBaseUrl,
+      encounterId,
+      payload
+    });
+    status.textContent = "Observation recorded. Refreshing crew incident detail...";
+    await renderCrewIncidentDetail();
+    status.textContent = "Observation recorded and crew incident detail refreshed.";
+  } catch (error) {
+    feedback.textContent = formatApiError(error);
+    feedback.className = "error-note";
+    status.textContent = "Observation create failed.";
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function renderCrewIncidentDetail() {
   const output = document.querySelector("#crewIncidentOutput");
   const status = document.querySelector("#status");
@@ -130,6 +188,12 @@ async function renderCrewIncidentDetail() {
     const createForm = document.querySelector("#createEncounterForm");
     if (createForm) {
       createForm.addEventListener("submit", onCreateEncounterSubmit);
+    }
+
+    const observationForm = document.querySelector("#recordObservationForm");
+    if (observationForm && summary.encounterSummary.encounter_id) {
+      observationForm.dataset.encounterId = summary.encounterSummary.encounter_id;
+      observationForm.addEventListener("submit", onRecordObservationSubmit);
     }
 
     status.textContent = "Loaded.";
