@@ -1,0 +1,14 @@
+{
+  "name": "@vems/api-gateway",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/server.mjs",
+  "dependencies": {
+    "@vems/orchestration": "0.1.0",
+    "@vems/shared": "0.1.0"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test"
+  }
+}
