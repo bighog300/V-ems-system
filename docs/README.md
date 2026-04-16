@@ -1,13 +1,29 @@
-# Documentation Map
+# VEMS Documentation
 
-This repository keeps project documentation under `docs/`.
+This folder contains the project reporting and phased completion roadmap for the VEMS platform.
 
-## Folders
-- `docs/specs/` — machine-readable contracts (OpenAPI, data model, state machines, events, env config).
-- `docs/build-pack/` — human-readable implementation guidance and planning docs.
-- `docs/root-legacy/` — legacy root-level documents moved under `docs/` for cleaner repository organization.
+## Structure
 
-## Usage guidance
-1. Use `docs/specs/` as implementation source-of-truth.
-2. Use `docs/build-pack/` for sequencing, context, and operational guidance.
-3. Use `docs/root-legacy/` only for historical reference and migration checks.
+- `overview/`
+  - high-level project status and progress reporting
+- `phases/phase-a-mvp/`
+  - usable MVP scope and remaining work
+- `phases/phase-b-deployable/`
+  - deployable platform scope and remaining work
+- `phases/phase-c-production/`
+  - production-ready system scope and remaining work
+
+## Recommended reading order
+
+1. `overview/progress-report.md`
+2. `phases/phase-a-mvp/README.md`
+3. `phases/phase-b-deployable/README.md`
+4. `phases/phase-c-production/README.md`
+
+## Purpose
+
+These docs explain:
+- current project maturity
+- what has already been completed
+- what is still missing
+- what should happen next
