@@ -88,6 +88,17 @@ function validateCreateEncounter(payload) {
   }
 }
 
+function validateEncounterId(encounterId) {
+  if (!/^ENC-[A-Za-z0-9-]+$/.test(encounterId)) throw new ApiError("INVALID_PAYLOAD", "Invalid encounter_id", 400);
+}
+
+function validateCreateObservation(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new ApiError("INVALID_PAYLOAD", "Observation payload is required", 400);
+  }
+  if (Object.keys(payload).length === 0) throw new ApiError("INVALID_PAYLOAD", "Observation payload cannot be empty", 400);
+}
+
 export function createApp(orchestration = new OrchestrationService()) {
   const server = createServer(async (req, res) => {
     try {
@@ -162,6 +173,16 @@ export function createApp(orchestration = new OrchestrationService()) {
           throw new ApiError("DOWNSTREAM_UNAVAILABLE", "Encounter status not recognized", 502, true);
         }
         return okJson(res, 201, encounter);
+      }
+
+      const observationCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/observations$/);
+      if (observationCreateMatch && method === "POST") {
+        const encounterId = observationCreateMatch[1];
+        validateEncounterId(encounterId);
+        const payload = await parseJson(req);
+        validateCreateObservation(payload);
+        const observation = await orchestration.createObservationForEncounter(encounterId, payload, { correlationId });
+        return okJson(res, 201, observation);
       }
 
       const assignmentPatchMatch = url.pathname.match(/^\/api\/assignments\/(ASN-[0-9]{6})$/);

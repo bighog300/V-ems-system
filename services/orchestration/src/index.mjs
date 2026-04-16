@@ -315,6 +315,36 @@ export class OrchestrationService {
     };
   }
 
+  async createObservationForEncounter(encounterId, payload, meta) {
+    const encounter = this.encounterLinks.findByEncounterId(encounterId);
+    if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+
+    const created = await this.openemr.createObservation({
+      encounter_id: encounterId,
+      incident_id: encounter.incident_id,
+      patient_id: encounter.openemr_patient_id,
+      payload
+    });
+
+    const normalized = {
+      observation_id: created.observation_id,
+      encounter_id: created.encounter_id ?? encounterId,
+      status: created.status
+    };
+
+    this.audit("observation", normalized.observation_id, "create_observation", meta.correlationId, undefined, {
+      ...normalized,
+      incident_id: encounter.incident_id
+    });
+    this.event("ObservationCreated", meta.correlationId, {
+      incident_id: encounter.incident_id,
+      encounter_id: normalized.encounter_id,
+      observation_id: normalized.observation_id
+    });
+
+    return normalized;
+  }
+
   listOutboxEvents() {
     return this.events.listAll();
   }
