@@ -35,7 +35,10 @@ export class OpenEmrPayloadMapper {
       encounter_id: observation.encounter_id,
       incident_id: observation.incident_id,
       patient_id: observation.patient_id,
-      ...observation.payload
+      recorded_at: observation.recorded_at,
+      source: observation.source,
+      notes: observation.notes,
+      vital_signs: observation.vital_signs
     };
   }
 

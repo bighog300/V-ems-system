@@ -323,7 +323,7 @@ export class OrchestrationService {
       encounter_id: encounterId,
       incident_id: encounter.incident_id,
       patient_id: encounter.openemr_patient_id,
-      payload
+      ...payload
     });
 
     const normalized = {

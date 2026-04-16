@@ -96,7 +96,72 @@ function validateCreateObservation(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new ApiError("INVALID_PAYLOAD", "Observation payload is required", 400);
   }
-  if (Object.keys(payload).length === 0) throw new ApiError("INVALID_PAYLOAD", "Observation payload cannot be empty", 400);
+  const allowedObservationFields = new Set(["recorded_at", "source", "notes", "vital_signs"]);
+  const unknownObservationFields = Object.keys(payload).filter((field) => !allowedObservationFields.has(field));
+  if (unknownObservationFields.length > 0) {
+    throw new ApiError("INVALID_PAYLOAD", `Unknown observation fields: ${unknownObservationFields.join(", ")}`, 400);
+  }
+
+  if (!payload.recorded_at || typeof payload.recorded_at !== "string" || Number.isNaN(Date.parse(payload.recorded_at))) {
+    throw new ApiError("INVALID_PAYLOAD", "recorded_at is required and must be an ISO-8601 datetime", 400);
+  }
+  if (payload.source !== undefined && !["manual", "monitor"].includes(payload.source)) {
+    throw new ApiError("INVALID_PAYLOAD", "source must be one of: manual, monitor", 400);
+  }
+  if (payload.notes !== undefined && typeof payload.notes !== "string") {
+    throw new ApiError("INVALID_PAYLOAD", "notes must be a string", 400);
+  }
+
+  if (!payload.vital_signs || typeof payload.vital_signs !== "object" || Array.isArray(payload.vital_signs)) {
+    throw new ApiError("INVALID_PAYLOAD", "vital_signs is required", 400);
+  }
+
+  const allowedVitalFields = new Set([
+    "heart_rate_bpm",
+    "respiratory_rate_bpm",
+    "systolic_bp_mmhg",
+    "diastolic_bp_mmhg",
+    "spo2_pct",
+    "temperature_c",
+    "gcs",
+    "pain_score"
+  ]);
+  const vitalKeys = Object.keys(payload.vital_signs);
+  if (vitalKeys.length === 0) throw new ApiError("INVALID_PAYLOAD", "vital_signs must include at least one field", 400);
+  const unknownVitalFields = vitalKeys.filter((field) => !allowedVitalFields.has(field));
+  if (unknownVitalFields.length > 0) {
+    throw new ApiError("INVALID_PAYLOAD", `Unknown vital_signs fields: ${unknownVitalFields.join(", ")}`, 400);
+  }
+
+  const integerFields = ["heart_rate_bpm", "respiratory_rate_bpm", "systolic_bp_mmhg", "diastolic_bp_mmhg", "gcs", "pain_score"];
+  for (const field of integerFields) {
+    if (payload.vital_signs[field] !== undefined && !Number.isInteger(payload.vital_signs[field])) {
+      throw new ApiError("INVALID_PAYLOAD", `${field} must be an integer`, 400);
+    }
+  }
+  const numberFields = ["spo2_pct", "temperature_c"];
+  for (const field of numberFields) {
+    if (payload.vital_signs[field] !== undefined && typeof payload.vital_signs[field] !== "number") {
+      throw new ApiError("INVALID_PAYLOAD", `${field} must be a number`, 400);
+    }
+  }
+
+  const rangedFields = {
+    heart_rate_bpm: [0, 300],
+    respiratory_rate_bpm: [0, 120],
+    systolic_bp_mmhg: [40, 300],
+    diastolic_bp_mmhg: [20, 200],
+    spo2_pct: [0, 100],
+    temperature_c: [25, 45],
+    gcs: [3, 15],
+    pain_score: [0, 10]
+  };
+  for (const [field, [min, max]] of Object.entries(rangedFields)) {
+    const value = payload.vital_signs[field];
+    if (value !== undefined && (value < min || value > max)) {
+      throw new ApiError("INVALID_PAYLOAD", `${field} must be between ${min} and ${max}`, 400);
+    }
+  }
 }
 
 export function createApp(orchestration = new OrchestrationService()) {
