@@ -8,8 +8,10 @@ Operational and clinical orchestration platform for an emergency ambulance servi
 - **Custom platform**: control UI, crew app, orchestration, sync, dashboards
 
 ## Repo layout
-- `docs/build-pack/` human-readable design and build docs
-- `docs/specs/` machine-readable contracts
+- `docs/` all documentation
+  - `docs/build-pack/` human-readable design and build docs
+  - `docs/specs/` machine-readable contracts
+  - `docs/root-legacy/` legacy root-level docs moved under `docs/`
 - `apps/` frontend applications
 - `services/` backend services
 - `packages/` shared code
