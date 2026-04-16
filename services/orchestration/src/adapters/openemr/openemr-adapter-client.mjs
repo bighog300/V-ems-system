@@ -50,11 +50,27 @@ export class OpenEmrAdapterClient {
     return this.mapper.mapInterventionCreateResponse(response);
   }
 
+  async getInterventions(context) {
+    const response = await this.transport({
+      method: "getInterventions",
+      payload: this.mapper.mapInterventionReadRequest(context)
+    });
+    return this.mapper.mapInterventionReadResponse(response);
+  }
+
   async createHandover(handover) {
     const response = await this.transport({
       method: "createHandover",
       payload: this.mapper.mapHandoverCreateRequest(handover)
     });
     return this.mapper.mapHandoverCreateResponse(response);
+  }
+
+  async getHandover(context) {
+    const response = await this.transport({
+      method: "getHandover",
+      payload: this.mapper.mapHandoverReadRequest(context)
+    });
+    return this.mapper.mapHandoverReadResponse(response);
   }
 }

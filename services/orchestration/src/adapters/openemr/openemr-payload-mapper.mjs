@@ -57,6 +57,14 @@ export class OpenEmrPayloadMapper {
     };
   }
 
+  mapInterventionReadRequest(context) {
+    return {
+      encounter_id: context.encounter_id,
+      incident_id: context.incident_id,
+      patient_id: context.patient_id
+    };
+  }
+
   mapHandoverCreateRequest(handover) {
     return {
       encounter_id: handover.encounter_id,
@@ -68,6 +76,14 @@ export class OpenEmrPayloadMapper {
       disposition: handover.disposition,
       handover_status: handover.handover_status,
       notes: handover.notes
+    };
+  }
+
+  mapHandoverReadRequest(context) {
+    return {
+      encounter_id: context.encounter_id,
+      incident_id: context.incident_id,
+      patient_id: context.patient_id
     };
   }
 
@@ -110,6 +126,15 @@ export class OpenEmrPayloadMapper {
     };
   }
 
+  mapInterventionReadResponse(response) {
+    if (!Array.isArray(response)) return [];
+    return response.map((intervention) => ({
+      intervention_id: intervention.intervention_id,
+      encounter_id: intervention.encounter_id,
+      status: intervention.status
+    }));
+  }
+
   mapHandoverCreateResponse(response) {
     return {
       handover_id: response.handover_id,
@@ -120,6 +145,17 @@ export class OpenEmrPayloadMapper {
       disposition: response.disposition,
       handover_status: response.handover_status,
       notes: response.notes
+    };
+  }
+
+  mapHandoverReadResponse(response) {
+    if (!response || typeof response !== "object") return null;
+    return {
+      handover_id: response.handover_id,
+      encounter_id: response.encounter_id,
+      handover_status: response.handover_status,
+      disposition: response.disposition,
+      closure_ready: Boolean(response.handover_status === "Handover Completed")
     };
   }
 }

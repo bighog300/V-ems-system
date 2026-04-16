@@ -28,7 +28,9 @@ async function startServerWithOpenemrTransport(transport, dbPath = createDbPath(
       createEncounter: (payload) => transport({ method: "createEncounter", payload }),
       createObservation: (payload) => transport({ method: "createObservation", payload }),
       createIntervention: (payload) => transport({ method: "createIntervention", payload }),
-      createHandover: (payload) => transport({ method: "createHandover", payload })
+      getInterventions: (payload) => transport({ method: "getInterventions", payload }),
+      createHandover: (payload) => transport({ method: "createHandover", payload }),
+      getHandover: (payload) => transport({ method: "getHandover", payload })
     }
   });
 
@@ -358,6 +360,74 @@ test("intervention create rejected if encounter does not exist", async () => {
   }
 });
 
+test("intervention read success path", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-510", status: "Open" };
+    if (request.method === "getInterventions") {
+      return [{ intervention_id: "INT-510", encounter_id: "ENC-510", status: "recorded" }];
+    }
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-510" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-510",
+        care_started_at: "2026-04-16T10:15:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+
+    const fetched = await jsonFetch(base, "/api/encounters/ENC-510/interventions");
+    assert.equal(fetched.status, 200);
+    assert.deepEqual(fetched.body, [{ intervention_id: "INT-510", encounter_id: "ENC-510", status: "recorded" }]);
+  } finally {
+    server.close();
+  }
+});
+
+test("intervention read returns structured 404 response", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-511", status: "Open" };
+    if (request.method === "getInterventions") return [];
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-511" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-511",
+        care_started_at: "2026-04-16T10:15:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+
+    const missing = await jsonFetch(base, "/api/encounters/ENC-511/interventions");
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.error.code, "NOT_FOUND");
+    assert.equal(typeof missing.body.error.correlation_id, "string");
+    assert.equal(typeof missing.body.error.retryable, "boolean");
+  } finally {
+    server.close();
+  }
+});
+
 test("intervention payload validation failures return structured envelope", async () => {
   const { server, base } = await startServerWithOpenemrTransport(async () => ({ ok: true }));
 
@@ -617,6 +687,83 @@ test("handover rejected if encounter does not exist", async () => {
         handover_status: "Handover Completed"
       })
     });
+    assert.equal(missing.status, 404);
+    assert.equal(missing.body.error.code, "NOT_FOUND");
+  } finally {
+    server.close();
+  }
+});
+
+test("handover read success path", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-820", status: "Ready for Handover" };
+    if (request.method === "getHandover") {
+      return {
+        handover_id: "HND-820",
+        encounter_id: "ENC-820",
+        disposition: "transport_to_facility",
+        handover_status: "Handover Completed"
+      };
+    }
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-820" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-820",
+        care_started_at: "2026-04-16T13:00:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Fracture"
+      })
+    });
+
+    const fetched = await jsonFetch(base, "/api/encounters/ENC-820/handover");
+    assert.equal(fetched.status, 200);
+    assert.deepEqual(fetched.body, {
+      handover_id: "HND-820",
+      encounter_id: "ENC-820",
+      handover_status: "Handover Completed",
+      disposition: "transport_to_facility",
+      closure_ready: true
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test("handover read 404 path", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-821", status: "Ready for Handover" };
+    if (request.method === "getHandover") return null;
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "verified", openemr_patient_id: "OE-821" })
+    });
+    await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-821",
+        care_started_at: "2026-04-16T13:00:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Fracture"
+      })
+    });
+
+    const missing = await jsonFetch(base, "/api/encounters/ENC-821/handover");
     assert.equal(missing.status, 404);
     assert.equal(missing.body.error.code, "NOT_FOUND");
   } finally {

@@ -41,6 +41,7 @@ components:
       required: true
       schema:
         type: string
+        pattern: '^ENC-[A-Za-z0-9-]+$'
   schemas:
     ErrorResponse:
       type: object
@@ -435,6 +436,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/encounters/{encounterId}/interventions:
+    get:
+      tags: [Encounters]
+      summary: Get interventions recorded for an encounter.
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+      responses:
+        '200':
+          description: Interventions found for encounter.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InterventionResponse'
+        '404':
+          description: Encounter or interventions not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Encounters]
       summary: Add intervention to encounter.
@@ -466,6 +487,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/encounters/{encounterId}/handover:
+    get:
+      tags: [Encounters]
+      summary: Get handover/disposition for an encounter.
+      parameters:
+        - $ref: '#/components/parameters/EncounterId'
+      responses:
+        '200':
+          description: Handover/disposition found for encounter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverResponse'
+        '404':
+          description: Encounter or handover not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       tags: [Encounters]
       summary: Complete handover/disposition.

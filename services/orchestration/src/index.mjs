@@ -415,6 +415,27 @@ export class OrchestrationService {
     return normalized;
   }
 
+  async getInterventionsForEncounter(encounterId) {
+    const encounter = this.encounterLinks.findByEncounterId(encounterId);
+    if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+
+    const interventions = await this.openemr.getInterventions({
+      encounter_id: encounterId,
+      incident_id: encounter.incident_id,
+      patient_id: encounter.openemr_patient_id
+    });
+
+    if (!Array.isArray(interventions) || interventions.length === 0) {
+      throw new ApiError("NOT_FOUND", `Interventions for encounter ${encounterId} not found`, 404);
+    }
+
+    return interventions.map((intervention) => ({
+      intervention_id: intervention.intervention_id,
+      encounter_id: intervention.encounter_id ?? encounterId,
+      status: intervention.status
+    }));
+  }
+
   async createHandoverForEncounter(encounterId, payload, meta) {
     const encounter = this.encounterLinks.findByEncounterId(encounterId);
     if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
@@ -465,6 +486,29 @@ export class OrchestrationService {
     });
 
     return normalized;
+  }
+
+  async getHandoverForEncounter(encounterId) {
+    const encounter = this.encounterLinks.findByEncounterId(encounterId);
+    if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+
+    const handover = await this.openemr.getHandover({
+      encounter_id: encounterId,
+      incident_id: encounter.incident_id,
+      patient_id: encounter.openemr_patient_id
+    });
+
+    if (!handover || !handover.handover_status || !handover.disposition) {
+      throw new ApiError("NOT_FOUND", `Handover for encounter ${encounterId} not found`, 404);
+    }
+
+    return {
+      handover_id: handover.handover_id,
+      encounter_id: encounterId,
+      handover_status: handover.handover_status,
+      disposition: handover.disposition,
+      closure_ready: Boolean(handover.closure_ready ?? (handover.handover_status === "Handover Completed"))
+    };
   }
 
   listOutboxEvents() {
