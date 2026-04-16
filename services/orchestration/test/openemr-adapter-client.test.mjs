@@ -40,6 +40,7 @@ test("openemr adapter methods route mapped payloads through transport", async ()
   ]);
   assert.equal(search.mapped, true);
   assert.equal(created.mapped, true);
+  assert.equal(encounter.mapped, true);
 });
 
 test("openemr adapter without transport fails explicitly", async () => {

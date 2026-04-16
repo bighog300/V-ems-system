@@ -12,6 +12,8 @@ import { OpenEmrAdapterClient } from "./adapters/openemr/openemr-adapter-client.
 import { PatientLinkRepository } from "./repositories/patient-link-repository.mjs";
 import { EncounterLinkRepository } from "./repositories/encounter-link-repository.mjs";
 
+const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
+
 export class OrchestrationService {
   constructor(options = {}) {
     this.db = options.db ?? new SqliteClient(options.dbPath);
@@ -247,13 +249,20 @@ export class OrchestrationService {
     this.getIncident(incidentId);
     const patientLink = this.patientLinks.findByIncidentId(incidentId);
     if (!patientLink?.openemr_patient_id) {
-      throw new ApiError("PRECONDITION_FAILED", "Cannot create encounter without linked patient", 409);
+      throw new ApiError("CONFLICT", "Cannot create encounter without linked patient", 409);
+    }
+    if (!ENCOUNTER_ALLOWED_PATIENT_LINK_STATES.includes(patientLink.verification_status)) {
+      throw new ApiError(
+        "INVALID_STATUS_TRANSITION",
+        `Cannot create encounter when patient link is ${patientLink.verification_status}`,
+        409
+      );
     }
     if (payload.patient_id !== patientLink.openemr_patient_id) {
       throw new ApiError("INVALID_PAYLOAD", "patient_id must match linked incident patient", 400);
     }
 
-    const existing = this.encounterLinks.findByIncidentId(incidentId);
+    const existing = this.encounterLinks.findByIncidentAndPatient(incidentId, payload.patient_id) ?? this.encounterLinks.findByIncidentId(incidentId);
     if (existing) {
       return {
         encounter_id: existing.openemr_encounter_id,
@@ -266,8 +275,10 @@ export class OrchestrationService {
     const now = new Date().toISOString();
     const record = {
       incident_id: incidentId,
+      openemr_patient_id: patientLink.openemr_patient_id,
       openemr_encounter_id: created.encounter_id,
       encounter_status: created.status,
+      care_started_at: payload.care_started_at,
       created_at: now,
       updated_at: now,
       correlation_id: meta.correlationId

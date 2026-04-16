@@ -77,8 +77,10 @@ CREATE TABLE IF NOT EXISTS patient_links (
 
 CREATE TABLE IF NOT EXISTS encounter_links (
   incident_id TEXT PRIMARY KEY,
+  openemr_patient_id TEXT NOT NULL,
   openemr_encounter_id TEXT NOT NULL UNIQUE,
   encounter_status TEXT NOT NULL,
+  care_started_at TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   correlation_id TEXT NOT NULL,
