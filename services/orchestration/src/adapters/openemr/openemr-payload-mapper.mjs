@@ -57,6 +57,20 @@ export class OpenEmrPayloadMapper {
     };
   }
 
+  mapHandoverCreateRequest(handover) {
+    return {
+      encounter_id: handover.encounter_id,
+      incident_id: handover.incident_id,
+      patient_id: handover.patient_id,
+      handover_time: handover.handover_time,
+      destination_facility: handover.destination_facility,
+      receiving_clinician: handover.receiving_clinician,
+      disposition: handover.disposition,
+      handover_status: handover.handover_status,
+      notes: handover.notes
+    };
+  }
+
   mapPatientSearchResponse(response) {
     return {
       match_status: response.match_status,
@@ -93,6 +107,19 @@ export class OpenEmrPayloadMapper {
       intervention_id: response.intervention_id,
       encounter_id: response.encounter_id,
       status: response.status
+    };
+  }
+
+  mapHandoverCreateResponse(response) {
+    return {
+      handover_id: response.handover_id,
+      encounter_id: response.encounter_id,
+      handover_time: response.handover_time,
+      destination_facility: response.destination_facility,
+      receiving_clinician: response.receiving_clinician,
+      disposition: response.disposition,
+      handover_status: response.handover_status,
+      notes: response.notes
     };
   }
 }

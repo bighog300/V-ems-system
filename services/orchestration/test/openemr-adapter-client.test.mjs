@@ -14,7 +14,9 @@ test("openemr adapter methods route mapped payloads through transport", async ()
     mapObservationCreateRequest: (payload) => ({ ...payload, type: "observation-create" }),
     mapObservationCreateResponse: (response) => ({ ...response, mapped: true }),
     mapInterventionCreateRequest: (payload) => ({ ...payload, mapped_type: "intervention-create" }),
-    mapInterventionCreateResponse: (response) => ({ ...response, mapped: true })
+    mapInterventionCreateResponse: (response) => ({ ...response, mapped: true }),
+    mapHandoverCreateRequest: (payload) => ({ ...payload, mapped_type: "handover-create" }),
+    mapHandoverCreateResponse: (response) => ({ ...response, mapped: true })
   };
 
   const client = new OpenEmrAdapterClient({
@@ -25,7 +27,8 @@ test("openemr adapter methods route mapped payloads through transport", async ()
       if (request.method === "createPatient") return { patient_id: "OE-123", display_name: "Jane Doe" };
       if (request.method === "createEncounter") return { encounter_id: "ENC-001", status: "Open" };
       if (request.method === "createObservation") return { observation_id: "OBS-001", encounter_id: "ENC-001", status: "recorded" };
-      return { intervention_id: "INT-001", encounter_id: "ENC-001", status: "recorded" };
+      if (request.method === "createIntervention") return { intervention_id: "INT-001", encounter_id: "ENC-001", status: "recorded" };
+      return { handover_id: "HND-001", encounter_id: "ENC-001", handover_time: "2026-04-16T10:30:00Z", disposition: "transport_to_facility", handover_status: "Handover Completed" };
     }
   });
 
@@ -34,6 +37,7 @@ test("openemr adapter methods route mapped payloads through transport", async ()
   const encounter = await client.createEncounter({ incident_id: "INC-000001", patient_id: "OE-123", care_started_at: "2026-04-16T10:15:00Z", crew_ids: ["STAFF-001"], presenting_complaint: "Chest pain" });
   const observation = await client.createObservation({ encounter_id: "ENC-001", payload: { spo2: 98 } });
   const intervention = await client.createIntervention({ encounter_id: "ENC-001", type: "medication", name: "Aspirin" });
+  const handover = await client.createHandover({ encounter_id: "ENC-001", disposition: "transport_to_facility", handover_status: "Handover Completed" });
 
   assert.deepEqual(calls, [
     { method: "searchPatient", payload: { first_name: "Jane", type: "patient-search" } },
@@ -52,6 +56,10 @@ test("openemr adapter methods route mapped payloads through transport", async ()
     {
       method: "createIntervention",
       payload: { encounter_id: "ENC-001", type: "medication", name: "Aspirin", mapped_type: "intervention-create" }
+    },
+    {
+      method: "createHandover",
+      payload: { encounter_id: "ENC-001", disposition: "transport_to_facility", handover_status: "Handover Completed", mapped_type: "handover-create" }
     }
   ]);
   assert.equal(search.mapped, true);
@@ -59,6 +67,7 @@ test("openemr adapter methods route mapped payloads through transport", async ()
   assert.equal(encounter.mapped, true);
   assert.equal(observation.mapped, true);
   assert.equal(intervention.mapped, true);
+  assert.equal(handover.mapped, true);
 });
 
 test("openemr adapter without transport fails explicitly", async () => {

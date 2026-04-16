@@ -224,6 +224,36 @@ components:
         intervention_id: { type: string }
         encounter_id: { type: string }
         status: { type: string }
+    CreateHandoverRequest:
+      type: object
+      required: [handover_time, disposition, handover_status]
+      additionalProperties: false
+      properties:
+        handover_time:
+          type: string
+          format: date-time
+        destination_facility:
+          type: string
+        receiving_clinician:
+          type: string
+        disposition:
+          type: string
+          minLength: 1
+        handover_status:
+          type: string
+          enum: [Ready for Handover, Handover Completed]
+        notes:
+          type: string
+          maxLength: 1000
+    HandoverResponse:
+      type: object
+      required: [handover_id, encounter_id, handover_status, disposition, closure_ready]
+      properties:
+        handover_id: { type: string }
+        encounter_id: { type: string }
+        handover_status: { type: string, enum: [Ready for Handover, Handover Completed] }
+        disposition: { type: string }
+        closure_ready: { type: boolean }
     StockUsageRequest:
       type: object
       required: [incident_id, vehicle_id, item_id, quantity_used, usage_source]
@@ -408,6 +438,31 @@ paths:
       summary: Complete handover/disposition.
       parameters:
         - $ref: '#/components/parameters/EncounterId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHandoverRequest'
+      responses:
+        '201':
+          description: Handover/disposition recorded for encounter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverResponse'
+        '400':
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Encounter not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/stock/usage:
     post:
       tags: [Stock]

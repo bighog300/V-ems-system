@@ -375,6 +375,58 @@ export class OrchestrationService {
     return normalized;
   }
 
+  async createHandoverForEncounter(encounterId, payload, meta) {
+    const encounter = this.encounterLinks.findByEncounterId(encounterId);
+    if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+
+    const created = await this.openemr.createHandover({
+      encounter_id: encounterId,
+      incident_id: encounter.incident_id,
+      patient_id: encounter.openemr_patient_id,
+      ...payload
+    });
+
+    const now = new Date().toISOString();
+    const closureReady = created.handover_status === "Handover Completed";
+    const updatedEncounter = {
+      ...encounter,
+      encounter_status: closureReady ? "Handover Completed" : encounter.encounter_status,
+      handover_time: created.handover_time,
+      handover_status: created.handover_status,
+      disposition: created.disposition,
+      destination_facility: created.destination_facility ?? null,
+      receiving_clinician: created.receiving_clinician ?? null,
+      handover_notes: created.notes ?? null,
+      closure_ready: closureReady,
+      updated_at: now,
+      correlation_id: meta.correlationId
+    };
+    this.encounterLinks.save(updatedEncounter);
+
+    const normalized = {
+      handover_id: created.handover_id,
+      encounter_id: encounterId,
+      handover_status: created.handover_status,
+      disposition: created.disposition,
+      closure_ready: closureReady
+    };
+
+    this.audit("handover", normalized.handover_id, "create_handover", meta.correlationId, undefined, {
+      ...normalized,
+      incident_id: encounter.incident_id
+    });
+    this.event("HandoverCompleted", meta.correlationId, {
+      incident_id: encounter.incident_id,
+      encounter_id: encounterId,
+      handover_id: normalized.handover_id,
+      disposition: normalized.disposition,
+      handover_status: normalized.handover_status,
+      closure_ready: normalized.closure_ready
+    });
+
+    return normalized;
+  }
+
   listOutboxEvents() {
     return this.events.listAll();
   }
