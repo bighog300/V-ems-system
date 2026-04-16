@@ -20,6 +20,8 @@ export function buildIncidentOperationalSummary({ incident, assignmentSummary: a
   const patientLinkSummary = patientLink
     ? {
         available: true,
+        openemrPatientId: patientLink.openemr_patient_id ?? null,
+        verificationStatus: patientLink.verification_status ?? null,
         summary: patientLink.openemr_patient_id
           ? `Linked patient ${patientLink.openemr_patient_id}`
           : `Patient link ${patientLink.verification_status}`,

@@ -1,6 +1,6 @@
-import { loadCrewJobListData, loadIncidentOperationalData } from "./api.mjs";
+import { ApiError, createIncidentEncounter, loadCrewJobListData, loadIncidentOperationalData } from "./api.mjs";
 import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "./summary.mjs";
-import { buildCrewJobListItems, renderCrewIncidentDetailHtml, renderCrewJobListHtml } from "./crew.mjs";
+import { buildCreateEncounterPayload, buildCrewJobListItems, renderCrewIncidentDetailHtml, renderCrewJobListHtml } from "./crew.mjs";
 
 function readConfig() {
   const apiBaseInput = document.querySelector("#apiBaseUrl");
@@ -65,6 +65,53 @@ async function renderCrewJobList() {
   }
 }
 
+function formatApiError(error) {
+  if (!(error instanceof ApiError)) return error.message;
+  const parts = [error.message];
+  if (error.code) parts.push(`code=${error.code}`);
+  if (error.correlationId) parts.push(`correlation_id=${error.correlationId}`);
+  return parts.join(" | ");
+}
+
+async function onCreateEncounterSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const feedback = document.querySelector("#createEncounterFeedback");
+  const status = document.querySelector("#status");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const config = readConfig();
+  if (!config.apiBaseUrl || !config.incidentId) {
+    feedback.textContent = "API Base URL and Incident ID are required.";
+    feedback.className = "error-note";
+    return;
+  }
+
+  const { payload, validationErrors } = buildCreateEncounterPayload(new FormData(form));
+  if (validationErrors.length > 0) {
+    feedback.textContent = validationErrors.join(" ");
+    feedback.className = "error-note";
+    return;
+  }
+
+  try {
+    submitButton.disabled = true;
+    feedback.className = "hint";
+    feedback.textContent = "Creating encounter...";
+
+    await createIncidentEncounter({ apiBaseUrl: config.apiBaseUrl, incidentId: config.incidentId, payload });
+    status.textContent = "Encounter created. Refreshing crew incident detail...";
+    await renderCrewIncidentDetail();
+    status.textContent = "Encounter created and crew incident detail refreshed.";
+  } catch (error) {
+    feedback.textContent = formatApiError(error);
+    feedback.className = "error-note";
+    status.textContent = "Encounter create failed.";
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function renderCrewIncidentDetail() {
   const output = document.querySelector("#crewIncidentOutput");
   const status = document.querySelector("#status");
@@ -79,6 +126,12 @@ async function renderCrewIncidentDetail() {
     const data = await loadIncidentOperationalData(config);
     const summary = buildIncidentOperationalSummary(data);
     output.innerHTML = renderCrewIncidentDetailHtml(summary);
+
+    const createForm = document.querySelector("#createEncounterForm");
+    if (createForm) {
+      createForm.addEventListener("submit", onCreateEncounterSubmit);
+    }
+
     status.textContent = "Loaded.";
   } catch (error) {
     output.innerHTML = "";

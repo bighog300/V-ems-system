@@ -116,3 +116,19 @@ dt {
 .crew-action-list button {
   text-align: left;
 }
+
+.encounter-form {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 520px;
+}
+
+.success-note {
+  color: #166534;
+  font-weight: 600;
+}
+
+.error-note {
+  color: #b91c1c;
+  font-weight: 600;
+}

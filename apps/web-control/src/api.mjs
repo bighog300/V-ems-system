@@ -1,11 +1,49 @@
+class ApiError extends Error {
+  constructor(message, { status, code, retryable, correlationId, details } = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.retryable = retryable;
+    this.correlationId = correlationId;
+    this.details = details;
+  }
+}
+
+function buildApiError(status, body = {}) {
+  const error = body?.error ?? {};
+  return new ApiError(error.message ?? `Request failed: ${status}`, {
+    status,
+    code: error.code,
+    retryable: error.retryable,
+    correlationId: error.correlation_id,
+    details: error.details
+  });
+}
+
 async function getJson(fetchImpl, url) {
   const response = await fetchImpl(url, { headers: { "content-type": "application/json" } });
   if (response.status === 404) return { notFound: true, data: null };
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body?.error?.message ?? `Request failed: ${response.status}`);
+    throw buildApiError(response.status, body);
   }
   return { notFound: false, data: await response.json() };
+}
+
+async function postJson(fetchImpl, url, payload) {
+  const response = await fetchImpl(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw buildApiError(response.status, body);
+  }
+
+  return body;
 }
 
 export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetchImpl = fetch }) {
@@ -37,6 +75,10 @@ export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetc
   };
 }
 
+export async function createIncidentEncounter({ apiBaseUrl, incidentId, payload, fetchImpl = fetch }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/encounters`, payload);
+}
+
 export async function loadDispatcherBoardData({ apiBaseUrl, fetchImpl = fetch }) {
   const boardList = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents`);
   return {
@@ -50,3 +92,5 @@ export async function loadCrewJobListData({ apiBaseUrl, fetchImpl = fetch }) {
     items: boardList.data?.incidents ?? []
   };
 }
+
+export { ApiError };
