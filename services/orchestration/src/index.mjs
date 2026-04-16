@@ -61,7 +61,7 @@ export class OrchestrationService {
   getIncident(incidentId) {
     const incident = this.incidents.findById(incidentId);
     if (!incident) throw new ApiError("NOT_FOUND", `Incident ${incidentId} not found`, 404);
-    return incident;
+    return this.withClosureReadiness(incident);
   }
 
   updateIncident(incidentId, payload, meta) {
@@ -74,10 +74,7 @@ export class OrchestrationService {
     }
 
     if (nextStatus === "Closed") {
-      const hasActiveAssignments = this.assignments.findActiveByIncident(incidentId).length > 0;
-      if (hasActiveAssignments) {
-        throw new ApiError("INVALID_STATUS_TRANSITION", "Incident cannot close while active assignments exist", 409);
-      }
+      this.assertClosureAllowed(incidentId);
     }
 
     const updated = { ...current, status: nextStatus, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
@@ -85,7 +82,38 @@ export class OrchestrationService {
     this.audit("incident", incidentId, `incident_action:${payload.action}`, meta.correlationId, current, updated);
     this.event("IncidentUpdated", meta.correlationId, { incident_id: incidentId, old_status: current.status, new_status: nextStatus });
     this.syncIntent("incident", "updateIncidentMirror", meta.correlationId, this.vtigerMapper.mapIncidentUpdate(updated));
-    return updated;
+    return this.withClosureReadiness(updated);
+  }
+
+  assertClosureAllowed(incidentId) {
+    const hasActiveAssignments = this.assignments.findActiveByIncident(incidentId).length > 0;
+    if (hasActiveAssignments) {
+      throw new ApiError("INVALID_STATUS_TRANSITION", "Incident cannot close while active assignments exist", 409);
+    }
+
+    const encounter = this.encounterLinks.findByIncidentId(incidentId);
+    if (!encounter) return;
+
+    const hasClosureMetadata = Boolean(encounter.handover_time)
+      && Boolean(encounter.handover_status)
+      && Boolean(encounter.disposition)
+      && encounter.closure_ready === true;
+    if (!hasClosureMetadata) {
+      throw new ApiError(
+        "INVALID_STATUS_TRANSITION",
+        "Incident cannot close without persisted encounter handover/disposition closure metadata",
+        409
+      );
+    }
+  }
+
+  withClosureReadiness(incident) {
+    const encounter = this.encounterLinks.findByIncidentId(incident.incident_id);
+    if (!encounter) return incident;
+    return {
+      ...incident,
+      closure_ready: Boolean(encounter.closure_ready)
+    };
   }
 
   createAssignment(incidentId, payload, meta) {
