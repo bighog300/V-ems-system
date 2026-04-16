@@ -30,7 +30,7 @@ async function renderIncidentDetail() {
         ${renderOperationalSummaryHtml(summary)}
       </section>
       <section class="panel">
-        <h3>Backend Read-Path Notes</h3>
+        <h3>Read-Path Notes</h3>
         <ul>
           <li>${summary.assignmentSummary.detail}</li>
           <li>${summary.patientLinkSummary.detail}</li>

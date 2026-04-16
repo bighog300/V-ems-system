@@ -256,7 +256,33 @@ export class OrchestrationService {
 
   getPatientLink(incidentId) {
     this.getIncident(incidentId);
-    return this.patientLinks.findByIncidentId(incidentId);
+    const patientLink = this.patientLinks.findByIncidentId(incidentId);
+    if (!patientLink) throw new ApiError("NOT_FOUND", `Patient link for incident ${incidentId} not found`, 404);
+    return {
+      incident_id: patientLink.incident_id,
+      verification_status: patientLink.verification_status,
+      openemr_patient_id: patientLink.openemr_patient_id,
+      temporary_label: patientLink.temporary_label,
+      updated_at: patientLink.updated_at
+    };
+  }
+
+  getAssignmentsByIncident(incidentId) {
+    this.getIncident(incidentId);
+    const assignments = this.assignments.findByIncidentId(incidentId);
+    if (assignments.length === 0) throw new ApiError("NOT_FOUND", `Assignments for incident ${incidentId} not found`, 404);
+    return {
+      incident_id: incidentId,
+      assignments: assignments.map((assignment) => ({
+        assignment_id: assignment.assignment_id,
+        status: assignment.status,
+        vehicle_status: assignment.vehicle_status,
+        vehicle_id: assignment.vehicle_id,
+        crew_ids: assignment.crew_ids,
+        reason: assignment.reason,
+        updated_at: assignment.updated_at
+      }))
+    };
   }
 
 

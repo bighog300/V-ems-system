@@ -11,6 +11,21 @@ test("buildIncidentOperationalSummary includes closure readiness and encounter/h
       address: "Main St",
       closure_ready: true
     },
+    assignmentSummary: {
+      incident_id: "INC-000111",
+      assignments: [
+        {
+          assignment_id: "ASN-000321",
+          status: "Active",
+          vehicle_id: "AMB-400"
+        }
+      ]
+    },
+    patientLink: {
+      incident_id: "INC-000111",
+      verification_status: "verified",
+      openemr_patient_id: "OE-100"
+    },
     encounterLink: {
       encounter_id: "ENC-11",
       openemr_encounter_id: "ENC-11",
@@ -27,6 +42,7 @@ test("buildIncidentOperationalSummary includes closure readiness and encounter/h
 
   assert.equal(summary.incidentId, "INC-000111");
   assert.equal(summary.closureReady, true);
+  assert.equal(summary.assignmentSummary.available, true);
   assert.equal(summary.patientLinkSummary.available, true);
   assert.equal(summary.encounterSummary.available, true);
   assert.equal(summary.handoverSummary.available, true);

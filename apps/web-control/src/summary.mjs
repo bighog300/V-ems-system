@@ -2,25 +2,33 @@ function asText(value, fallback = "Unavailable") {
   return value === undefined || value === null || value === "" ? fallback : String(value);
 }
 
-export function buildIncidentOperationalSummary({ incident, encounterLink, handover }) {
-  const patientIdFromEncounter = encounterLink?.openemr_patient_id;
-
-  const assignmentSummary = {
-    available: false,
-    summary: "Assignment summary unavailable",
-    detail: "Backend gap: there is no existing read endpoint for assignment-by-incident in current API contracts."
-  };
-
-  const patientLinkSummary = patientIdFromEncounter
+export function buildIncidentOperationalSummary({ incident, assignmentSummary: assignmentData, patientLink, encounterLink, handover }) {
+  const assignments = assignmentData?.assignments ?? [];
+  const latestAssignment = assignments[0];
+  const assignmentSummary = latestAssignment
     ? {
         available: true,
-        summary: `Linked patient ${patientIdFromEncounter}`,
-        detail: "Derived from encounter linkage read path (GET /api/incidents/{incidentId}/encounters)."
+        summary: `${latestAssignment.assignment_id} • ${latestAssignment.status} • ${latestAssignment.vehicle_id}`,
+        detail: `${assignments.length} assignment record(s) returned by GET /api/incidents/{incidentId}/assignments.`
+      }
+    : {
+        available: false,
+        summary: "Assignment summary unavailable",
+        detail: "No assignment summary returned by GET /api/incidents/{incidentId}/assignments."
+      };
+
+  const patientLinkSummary = patientLink
+    ? {
+        available: true,
+        summary: patientLink.openemr_patient_id
+          ? `Linked patient ${patientLink.openemr_patient_id}`
+          : `Patient link ${patientLink.verification_status}`,
+        detail: "Loaded from GET /api/incidents/{incidentId}/patient-link."
       }
     : {
         available: false,
         summary: "Patient link unavailable",
-        detail: "Backend gap: no existing read endpoint for patient link status by incident."
+        detail: "No patient-link summary returned by GET /api/incidents/{incidentId}/patient-link."
       };
 
   const encounterSummary = encounterLink

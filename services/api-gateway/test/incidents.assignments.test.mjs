@@ -120,6 +120,43 @@ test("persistence-backed assignment lifecycle", async () => {
   }
 });
 
+test("assignment read by incident returns persisted assignment summaries", async () => {
+  const { server, base } = await startServer();
+  try {
+    const created = await createDefaultIncident(base);
+    const incidentId = created.body.incident_id;
+
+    const assignment = await jsonFetch(base, `/api/incidents/${incidentId}/assignments`, {
+      method: "POST",
+      body: JSON.stringify({ vehicle_id: "AMB-901", crew_ids: ["STAFF-101"], reason: "Primary dispatch" })
+    });
+    assert.equal(assignment.status, 201);
+
+    const readResponse = await jsonFetch(base, `/api/incidents/${incidentId}/assignments`);
+    assert.equal(readResponse.status, 200);
+    assert.equal(readResponse.body.incident_id, incidentId);
+    assert.equal(readResponse.body.assignments.length, 1);
+    assert.equal(readResponse.body.assignments[0].assignment_id, assignment.body.assignment_id);
+    assert.equal(readResponse.body.assignments[0].vehicle_id, "AMB-901");
+  } finally {
+    server.close();
+  }
+});
+
+test("assignment read by incident returns 404 when no assignments are persisted", async () => {
+  const { server, base } = await startServer();
+  try {
+    const created = await createDefaultIncident(base);
+    const incidentId = created.body.incident_id;
+    const readResponse = await jsonFetch(base, `/api/incidents/${incidentId}/assignments`);
+    assert.equal(readResponse.status, 404);
+    assert.equal(readResponse.body.error.code, "NOT_FOUND");
+    assert.match(readResponse.body.error.message, new RegExp(`Assignments for incident ${incidentId} not found`));
+  } finally {
+    server.close();
+  }
+});
+
 test("idempotency on create endpoints", async () => {
   const { server, base } = await startServer();
   try {

@@ -13,6 +13,12 @@ export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetc
   const incidentResult = await getJson(fetchImpl, incidentUrl);
   if (incidentResult.notFound) throw new Error(`Incident ${incidentId} not found`);
 
+  const assignmentResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/assignments`);
+  const assignmentSummary = assignmentResult.notFound ? null : assignmentResult.data;
+
+  const patientLinkResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-link`);
+  const patientLink = patientLinkResult.notFound ? null : patientLinkResult.data;
+
   const encounterResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/encounters`);
   const encounterLink = encounterResult.notFound ? null : encounterResult.data;
 
@@ -24,6 +30,8 @@ export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetc
 
   return {
     incident: incidentResult.data,
+    assignmentSummary,
+    patientLink,
     encounterLink,
     handover
   };

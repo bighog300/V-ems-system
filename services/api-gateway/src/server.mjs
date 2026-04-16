@@ -274,6 +274,10 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
+      if (patientLinkMatch && method === "GET") {
+        const link = orchestration.getPatientLink(patientLinkMatch[1]);
+        return okJson(res, 200, link);
+      }
       if (patientLinkMatch && method === "POST") {
         const payload = await parseJson(req);
         validatePatientLink(payload);
@@ -282,6 +286,10 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const assignmentCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/);
+      if (assignmentCreateMatch && method === "GET") {
+        const assignments = orchestration.getAssignmentsByIncident(assignmentCreateMatch[1]);
+        return okJson(res, 200, assignments);
+      }
       if (assignmentCreateMatch && method === "POST") {
         const payload = await parseJson(req);
         validateCreateAssignment(payload);
