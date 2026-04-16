@@ -57,10 +57,17 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
 CREATE TABLE IF NOT EXISTS sync_intents (
   intent_id INTEGER PRIMARY KEY AUTOINCREMENT,
   target_system TEXT NOT NULL,
+  intent_type TEXT NOT NULL,
   entity_type TEXT NOT NULL,
   operation TEXT NOT NULL,
   correlation_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  last_error_classification TEXT,
+  processed_at TEXT,
+  dead_lettered_at TEXT,
   payload_json TEXT NOT NULL
 );
 
