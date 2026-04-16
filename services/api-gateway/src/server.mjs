@@ -11,6 +11,7 @@ const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Tr
 const logger = createLogger({ serviceName: "api-gateway" });
 
 const RBAC_POLICIES = [
+  { pattern: /^\/api\/support\/diagnostics$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
@@ -103,6 +104,77 @@ function readinessReport(orchestration, diagnostics) {
     incident_snapshot: {
       total: incidents.length,
       by_status: byStatus
+    }
+  };
+}
+
+function metricsSummary(metrics) {
+  return {
+    started_at: metrics.started_at,
+    request_count: metrics.request_count,
+    request_failures: metrics.request_failures,
+    failure_rate_pct: metrics.request_count === 0
+      ? 0
+      : Number(((metrics.request_failures / metrics.request_count) * 100).toFixed(2)),
+    latency_ms: {
+      avg: metrics.latency_ms.avg,
+      min: metrics.latency_ms.min,
+      max: metrics.latency_ms.max
+    }
+  };
+}
+
+function syncIntentSummary(orchestration) {
+  const intents = orchestration.listSyncIntents();
+  const byStatus = intents.reduce((acc, intent) => {
+    acc[intent.status] = (acc[intent.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const pendingRetries = intents
+    .filter((intent) => intent.status === "pending" && intent.attempt_count > 0)
+    .sort((a, b) => b.attempt_count - a.attempt_count);
+
+  const failedIntents = intents
+    .filter((intent) => intent.status === "dead_lettered" || (intent.status === "pending" && intent.attempt_count > 0))
+    .sort((a, b) => b.intent_id - a.intent_id)
+    .slice(0, 15)
+    .map((intent) => ({
+      intent_id: intent.intent_id,
+      target_system: intent.target_system,
+      intent_type: intent.intent_type,
+      entity_type: intent.entity_type,
+      status: intent.status,
+      attempt_count: intent.attempt_count,
+      last_error_classification: intent.last_error_classification,
+      last_error: intent.last_error,
+      dead_lettered_at: intent.dead_lettered_at,
+      created_at: intent.created_at,
+      correlation_id: intent.correlation_id,
+      reference_id: intent.payload?.incident_id ?? intent.payload?.encounter_id ?? intent.payload?.assignment_id ?? null
+    }));
+
+  return {
+    generated_at: new Date().toISOString(),
+    totals: {
+      total: intents.length,
+      by_status: byStatus,
+      pending_retries: pendingRetries.length,
+      dead_lettered: byStatus.dead_lettered ?? 0
+    },
+    failed_intents: failedIntents
+  };
+}
+
+function supportDiagnosticsReport(orchestration, diagnostics, metrics) {
+  return {
+    generated_at: new Date().toISOString(),
+    readiness_summary: readinessReport(orchestration, diagnostics),
+    metrics_summary: metricsSummary(metrics),
+    sync_intent_summary: syncIntentSummary(orchestration),
+    upstream_validation_status: {
+      enabled: diagnostics.upstreamConnectivityValidationEnabled,
+      last_validation: diagnostics.lastValidation
     }
   };
 }
@@ -440,6 +512,10 @@ export function createApp(orchestration = new OrchestrationService()) {
           generated_at: new Date().toISOString(),
           api_gateway: metrics
         }, context);
+      }
+
+      if (method === "GET" && url.pathname === "/api/support/diagnostics") {
+        return okJson(res, 200, supportDiagnosticsReport(orchestration, diagnostics, metrics), context);
       }
 
       if (method === "GET" && url.pathname === "/api/incidents") {

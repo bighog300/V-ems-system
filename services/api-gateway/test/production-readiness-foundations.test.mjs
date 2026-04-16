@@ -16,7 +16,7 @@ async function startServer() {
   const server = createApp(orchestration);
   await new Promise((resolve) => server.listen(0, resolve));
   const port = server.address().port;
-  return { server, base: `http://127.0.0.1:${port}` };
+  return { server, orchestration, base: `http://127.0.0.1:${port}` };
 }
 
 async function jsonFetch(base, path, options = {}) {
@@ -337,5 +337,89 @@ test("metrics endpoint remains disabled by default in production", async () => {
   } finally {
     server.close();
     delete process.env.APP_ENV;
+  }
+});
+
+test("support diagnostics endpoint requires admin/operator role when rbac is enabled", async () => {
+  process.env.RBAC_ENFORCE = "true";
+  const { server, base } = await startServer();
+
+  try {
+    const denied = await jsonFetch(base, "/api/support/diagnostics", { method: "GET" });
+    assert.equal(denied.status, 403);
+    assert.equal(denied.body.error.code, "FORBIDDEN");
+
+    const allowed = await jsonFetch(base, "/api/support/diagnostics", {
+      method: "GET",
+      headers: { "x-user-role": "supervisor", "x-actor-id": "STAFF-OPS-1" }
+    });
+    assert.equal(allowed.status, 200);
+  } finally {
+    server.close();
+    delete process.env.RBAC_ENFORCE;
+  }
+});
+
+test("support diagnostics exposes readiness, metrics, and failed sync intent visibility", async () => {
+  process.env.RBAC_ENFORCE = "true";
+  process.env.UPSTREAM_CONNECTIVITY_CHECKS_ENABLED = "true";
+  process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT = "2026-04-16T11:45:00Z";
+  process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT = "degraded";
+
+  const { server, base, orchestration } = await startServer();
+
+  try {
+    const created = await jsonFetch(base, "/api/incidents", {
+      method: "POST",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-DISP-1" },
+      body: JSON.stringify({
+        call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
+        incident: { category: "medical_emergency", priority: "critical", description: "Breathing difficulty", address: "Main St", patient_count: 1 }
+      })
+    });
+    assert.equal(created.status, 201);
+
+    const queuedIntent = orchestration.syncIntents.listAll()[0];
+    orchestration.syncIntents.markFailed(queuedIntent.intent_id, {
+      status: "pending",
+      attempt_count: 2,
+      last_error: "Vtiger endpoint timeout",
+      last_error_classification: "DOWNSTREAM_TIMEOUT",
+      dead_lettered_at: null
+    });
+
+    orchestration.syncIntents.markFailed(queuedIntent.intent_id, {
+      status: "dead_lettered",
+      attempt_count: 3,
+      last_error: "Vtiger endpoint unavailable after retry limit",
+      last_error_classification: "DOWNSTREAM_UNAVAILABLE",
+      dead_lettered_at: "2026-04-16T11:40:00Z"
+    });
+
+    const diagnostics = await jsonFetch(base, "/api/support/diagnostics", {
+      method: "GET",
+      headers: { "x-user-role": "operations_manager", "x-actor-id": "STAFF-OPS-2" }
+    });
+    assert.equal(diagnostics.status, 200);
+    assert.equal(diagnostics.body.readiness_summary.production_readiness.rbac_enforced, true);
+    assert.equal(diagnostics.body.metrics_summary.request_count >= 1, true);
+    assert.equal(diagnostics.body.sync_intent_summary.totals.dead_lettered, 1);
+    assert.equal(diagnostics.body.sync_intent_summary.failed_intents.length, 1);
+    assert.equal(diagnostics.body.sync_intent_summary.failed_intents[0].status, "dead_lettered");
+    assert.equal(diagnostics.body.sync_intent_summary.failed_intents[0].last_error_classification, "DOWNSTREAM_UNAVAILABLE");
+    assert.equal(diagnostics.body.sync_intent_summary.failed_intents[0].reference_id, created.body.incident_id);
+    assert.deepEqual(diagnostics.body.upstream_validation_status, {
+      enabled: true,
+      last_validation: {
+        at: "2026-04-16T11:45:00Z",
+        result: "degraded"
+      }
+    });
+  } finally {
+    server.close();
+    delete process.env.RBAC_ENFORCE;
+    delete process.env.UPSTREAM_CONNECTIVITY_CHECKS_ENABLED;
+    delete process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT;
+    delete process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT;
   }
 });
