@@ -43,3 +43,10 @@ export async function loadDispatcherBoardData({ apiBaseUrl, fetchImpl = fetch })
     items: boardList.data?.incidents ?? []
   };
 }
+
+export async function loadCrewJobListData({ apiBaseUrl, fetchImpl = fetch }) {
+  const boardList = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents`);
+  return {
+    items: boardList.data?.incidents ?? []
+  };
+}
