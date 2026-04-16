@@ -1,0 +1,12 @@
+{
+  "name": "v-ems-system",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present"
+  }
+}

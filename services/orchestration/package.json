@@ -1,0 +1,12 @@
+{
+  "name": "@vems/orchestration",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.mjs",
+  "dependencies": {
+    "@vems/shared": "0.1.0"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
