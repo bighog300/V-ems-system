@@ -76,9 +76,12 @@ export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetc
   const encounterLink = encounterResult.notFound ? null : encounterResult.data;
 
   let handover = null;
+  let interventions = [];
   if (encounterLink?.encounter_id) {
     const handoverResult = await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterLink.encounter_id}/handover`);
     handover = handoverResult.notFound ? null : handoverResult.data;
+    const interventionsResult = await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterLink.encounter_id}/interventions`);
+    interventions = interventionsResult.notFound ? [] : (interventionsResult.data ?? []);
   }
 
   return {
@@ -86,7 +89,8 @@ export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetc
     assignmentSummary,
     patientLink,
     encounterLink,
-    handover
+    handover,
+    interventions
   };
 }
 

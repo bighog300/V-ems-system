@@ -171,9 +171,12 @@ test("intervention with stock_item_id emits stock usage sync intent", async () =
   assert.ok(stockIntent);
   assert.equal(stockIntent.entity_type, "stock_usage");
   assert.deepEqual(stockIntent.payload, {
+    intervention_id: "INT-901",
     incident_id: incident.incident_id,
     encounter_id: "ENC-901",
     stock_item_id: "ITEM-001",
+    quantity_used: 1,
+    usage_source: "clinical_event",
     performed_at: "2026-04-16T10:25:00Z",
     intervention_type: "medication",
     intervention_name: "Aspirin"
@@ -257,6 +260,54 @@ test("intervention read uses OpenEMR source and returns normalized list", async 
     incident_id: incident.incident_id,
     patient_id: "OE-920"
   }]);
+});
+
+test("intervention read includes stock sync outcome when stock-linked intervention exists", async () => {
+  const orchestration = createService({
+    createEncounter: async () => ({ encounter_id: "ENC-930", status: "Open" }),
+    createIntervention: async (payload) => ({ intervention_id: "INT-930", encounter_id: payload.encounter_id, status: "recorded" }),
+    getInterventions: async (payload) => ([
+      {
+        intervention_id: "INT-930",
+        encounter_id: payload.encounter_id,
+        status: "recorded",
+        stock_item_id: "ITEM-930",
+        performed_at: "2026-04-16T10:30:00Z",
+        type: "medication",
+        name: "Epinephrine"
+      }
+    ])
+  });
+
+  const incident = createIncident(orchestration, "corr-int-stock-read-1");
+  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+    verification_status: "verified",
+    openemr_patient_id: "OE-930"
+  }, { correlationId: "corr-int-stock-read-2" });
+  await orchestration.createEncounterForIncident(incident.incident_id, {
+    patient_id: "OE-930",
+    care_started_at: "2026-04-16T10:20:00Z",
+    crew_ids: ["STAFF-001"],
+    presenting_complaint: "Anaphylaxis"
+  }, { correlationId: "corr-int-stock-read-3" });
+  await orchestration.createInterventionForEncounter("ENC-930", {
+    performed_at: "2026-04-16T10:30:00Z",
+    type: "medication",
+    name: "Epinephrine",
+    stock_item_id: "ITEM-930"
+  }, { correlationId: "corr-int-stock-read-4" });
+
+  const result = await orchestration.getInterventionsForEncounter("ENC-930");
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0], {
+    intervention_id: "INT-930",
+    encounter_id: "ENC-930",
+    status: "recorded",
+    stock_item_id: "ITEM-930",
+    stock_sync_status: "pending",
+    stock_sync_attempt_count: 0,
+    stock_sync_last_error: null
+  });
 });
 
 test("handover orchestration emits audit/event metadata and marks closure readiness", async () => {

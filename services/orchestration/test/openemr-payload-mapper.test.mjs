@@ -90,6 +90,33 @@ test("openemr payload mapper maps intervention create request/response", () => {
   assert.deepEqual(response, { intervention_id: "INT-720", encounter_id: "ENC-720", status: "recorded" });
 });
 
+test("openemr payload mapper preserves stock-aware intervention read fields", () => {
+  const mapper = new OpenEmrPayloadMapper();
+  const response = mapper.mapInterventionReadResponse([
+    {
+      intervention_id: "INT-721",
+      encounter_id: "ENC-721",
+      status: "recorded",
+      stock_item_id: "ITEM-721",
+      performed_at: "2026-04-16T10:40:00Z",
+      type: "medication",
+      name: "Epinephrine"
+    }
+  ]);
+
+  assert.deepEqual(response, [
+    {
+      intervention_id: "INT-721",
+      encounter_id: "ENC-721",
+      status: "recorded",
+      stock_item_id: "ITEM-721",
+      performed_at: "2026-04-16T10:40:00Z",
+      type: "medication",
+      name: "Epinephrine"
+    }
+  ]);
+});
+
 test("openemr payload mapper maps handover create request/response", () => {
   const mapper = new OpenEmrPayloadMapper();
   const request = mapper.mapHandoverCreateRequest({

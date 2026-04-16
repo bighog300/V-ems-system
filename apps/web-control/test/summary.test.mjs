@@ -37,7 +37,11 @@ test("buildIncidentOperationalSummary includes closure readiness and encounter/h
       handover_status: "Handover Completed",
       disposition: "transport_to_facility",
       closure_ready: true
-    }
+    },
+    interventions: [
+      { intervention_id: "INT-1", status: "recorded", stock_item_id: "ITEM-1", stock_sync_status: "pending" },
+      { intervention_id: "INT-2", status: "recorded" }
+    ]
   });
 
   assert.equal(summary.incidentId, "INC-000111");
@@ -46,6 +50,8 @@ test("buildIncidentOperationalSummary includes closure readiness and encounter/h
   assert.equal(summary.patientLinkSummary.available, true);
   assert.equal(summary.encounterSummary.available, true);
   assert.equal(summary.handoverSummary.available, true);
+  assert.equal(summary.stockUsageSummary.available, true);
+  assert.equal(summary.stockUsageSummary.stockLinkedInterventions, 1);
 });
 
 test("renderOperationalSummaryHtml renders required operational labels", () => {
@@ -66,6 +72,7 @@ test("renderOperationalSummaryHtml renders required operational labels", () => {
   assert.match(html, /Closure Ready/);
   assert.match(html, /Closure State/);
   assert.match(html, /Patient Link Summary/);
+  assert.match(html, /Stock Usage/);
 });
 
 test("renderIncidentClosePanelHtml shows close action for active incidents", () => {

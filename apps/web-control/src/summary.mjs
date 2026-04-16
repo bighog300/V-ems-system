@@ -24,7 +24,7 @@ function getClosureReadiness(summary) {
   };
 }
 
-export function buildIncidentOperationalSummary({ incident, assignmentSummary: assignmentData, patientLink, encounterLink, handover }) {
+export function buildIncidentOperationalSummary({ incident, assignmentSummary: assignmentData, patientLink, encounterLink, handover, interventions = [] }) {
   const assignments = assignmentData?.assignments ?? [];
   const latestAssignment = assignments[0];
   const assignmentSummary = latestAssignment
@@ -82,6 +82,14 @@ export function buildIncidentOperationalSummary({ incident, assignmentSummary: a
           : "Handover is unavailable until encounter linkage exists."
       };
 
+  const interventionList = Array.isArray(interventions) ? interventions : [];
+  const stockInterventions = interventionList.filter((intervention) => intervention?.stock_item_id);
+  const stockStatusCounts = stockInterventions.reduce((acc, intervention) => {
+    const status = intervention.stock_sync_status ?? "unknown";
+    acc[status] = (acc[status] ?? 0) + 1;
+    return acc;
+  }, {});
+
   return {
     incidentId: asText(incident.incident_id),
     priority: asText(incident.priority),
@@ -91,13 +99,25 @@ export function buildIncidentOperationalSummary({ incident, assignmentSummary: a
     assignmentSummary,
     patientLinkSummary,
     encounterSummary,
-    handoverSummary
+    handoverSummary,
+    stockUsageSummary: {
+      available: stockInterventions.length > 0,
+      totalInterventions: interventionList.length,
+      stockLinkedInterventions: stockInterventions.length,
+      statusCounts: stockStatusCounts
+    }
   };
 }
 
 export function renderOperationalSummaryHtml(summary) {
   const closureReady = summary.closureReady === undefined ? "Not present" : String(summary.closureReady);
   const readiness = getClosureReadiness(summary);
+  const stockUsageSummary = summary.stockUsageSummary ?? {
+    available: false,
+    totalInterventions: 0,
+    stockLinkedInterventions: 0,
+    statusCounts: {}
+  };
   const encounterSection = summary.encounterSummary.available
     ? `${summary.encounterSummary.encounter_status} (${summary.encounterSummary.encounter_id})`
     : asText(summary.encounterSummary.detail);
@@ -118,6 +138,11 @@ export function renderOperationalSummaryHtml(summary) {
       <dt>Closure State</dt><dd><span class="closure-state closure-state-${readiness.state}">${readiness.label}</span></dd>
       <dt>Closure Note</dt><dd>${readiness.description}</dd>
       <dt>Handover</dt><dd>${handoverSection}</dd>
+      <dt>Stock Usage</dt><dd>${
+        stockUsageSummary.available
+          ? `${stockUsageSummary.stockLinkedInterventions} stock-linked intervention(s); sync statuses: ${JSON.stringify(stockUsageSummary.statusCounts)}`
+          : `No stock-linked interventions yet (${stockUsageSummary.totalInterventions} intervention record(s) loaded).`
+      }</dd>
     </dl>
   `;
 }
