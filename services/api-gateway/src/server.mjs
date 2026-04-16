@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
 import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES } from "@vems/shared";
 
+const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
+const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
+
+
 function okJson(res, status, body) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -46,6 +50,30 @@ function validateAction(payload) {
   if (!payload?.action || typeof payload.action !== "string") throw new ApiError("INVALID_PAYLOAD", "action is required", 400);
 }
 
+function validatePatientSearch(payload) {
+  if (!payload || typeof payload !== "object") throw new ApiError("INVALID_PAYLOAD", "Patient search payload is required", 400);
+  const hasAnyField = [payload.first_name, payload.last_name, payload.dob, payload.sex, payload.phone].some(Boolean);
+  if (!hasAnyField) throw new ApiError("INVALID_PAYLOAD", "At least one search field is required", 400);
+  if (payload.sex && !PATIENT_SEX_VALUES.includes(payload.sex)) throw new ApiError("INVALID_PAYLOAD", "Invalid sex", 400);
+}
+
+function validatePatientCreate(payload) {
+  if (!payload?.first_name || !payload?.last_name || !payload?.dob) {
+    throw new ApiError("INVALID_PAYLOAD", "first_name, last_name, and dob are required", 400);
+  }
+  if (payload.sex && !PATIENT_SEX_VALUES.includes(payload.sex)) throw new ApiError("INVALID_PAYLOAD", "Invalid sex", 400);
+}
+
+function validatePatientLink(payload) {
+  if (!payload || typeof payload !== "object") throw new ApiError("INVALID_PAYLOAD", "Patient link payload is required", 400);
+  if (!PATIENT_LINK_VERIFICATION_STATUSES.includes(payload.verification_status)) {
+    throw new ApiError("INVALID_PAYLOAD", "Invalid verification_status", 400);
+  }
+  if (payload.verification_status === "verified" && !payload.openemr_patient_id) {
+    throw new ApiError("INVALID_PAYLOAD", "openemr_patient_id is required when verification_status is verified", 400);
+  }
+}
+
 export function createApp(orchestration = new OrchestrationService()) {
   const server = createServer(async (req, res) => {
     try {
@@ -63,6 +91,21 @@ export function createApp(orchestration = new OrchestrationService()) {
         return okJson(res, 201, incident);
       }
 
+
+      if (method === "POST" && url.pathname === "/api/patients/search") {
+        const payload = await parseJson(req);
+        validatePatientSearch(payload);
+        const result = await orchestration.searchPatient(payload, { correlationId });
+        return okJson(res, 200, result);
+      }
+
+      if (method === "POST" && url.pathname === "/api/patients") {
+        const payload = await parseJson(req);
+        validatePatientCreate(payload);
+        const patient = await orchestration.createPatient(payload, { correlationId, idempotencyKey });
+        return okJson(res, 201, patient);
+      }
+
       const incidentMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})$/);
       if (incidentMatch && method === "GET") {
         const incident = orchestration.getIncident(incidentMatch[1]);
@@ -73,6 +116,14 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateAction(payload);
         const incident = orchestration.updateIncident(incidentMatch[1], payload, { correlationId });
         return okJson(res, 200, incident);
+      }
+
+      const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
+      if (patientLinkMatch && method === "POST") {
+        const payload = await parseJson(req);
+        validatePatientLink(payload);
+        const link = orchestration.linkPatientToIncidentContext(patientLinkMatch[1], payload, { correlationId });
+        return okJson(res, 200, link);
       }
 
       const assignmentCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/);

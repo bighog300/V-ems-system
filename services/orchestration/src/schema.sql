@@ -63,3 +63,14 @@ CREATE TABLE IF NOT EXISTS sync_intents (
   created_at TEXT NOT NULL,
   payload_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS patient_links (
+  incident_id TEXT PRIMARY KEY,
+  openemr_patient_id TEXT,
+  temporary_label TEXT,
+  verification_status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  correlation_id TEXT NOT NULL,
+  FOREIGN KEY (incident_id) REFERENCES incidents(incident_id)
+);

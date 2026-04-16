@@ -8,6 +8,8 @@ import { EventOutboxRepository } from "./repositories/event-outbox-repository.mj
 import { IdempotencyKeyRepository } from "./repositories/idempotency-key-repository.mjs";
 import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
 import { VtigerPayloadMapper } from "./adapters/vtiger/vtiger-payload-mapper.mjs";
+import { OpenEmrAdapterClient } from "./adapters/openemr/openemr-adapter-client.mjs";
+import { PatientLinkRepository } from "./repositories/patient-link-repository.mjs";
 
 export class OrchestrationService {
   constructor(options = {}) {
@@ -18,7 +20,9 @@ export class OrchestrationService {
     this.events = new EventOutboxRepository(this.db);
     this.idempotency = new IdempotencyKeyRepository(this.db);
     this.syncIntents = new SyncIntentRepository(this.db);
+    this.patientLinks = new PatientLinkRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper();
+    this.openemr = options.openemr ?? new OpenEmrAdapterClient();
   }
 
   createIncident(payload, meta) {
@@ -168,6 +172,58 @@ export class OrchestrationService {
       created_at: new Date().toISOString(),
       payload
     });
+  }
+
+
+  async searchPatient(payload, meta) {
+    const result = await this.openemr.searchPatient(payload);
+    this.audit("patient", payload.phone ?? payload.last_name ?? "search", "search_patient", meta.correlationId, undefined, result);
+    this.event("PatientMatchRequested", meta.correlationId, { incident_id: payload.incident_id ?? null, match_status: result.match_status });
+    return result;
+  }
+
+  async createPatient(payload, meta) {
+    if (meta.idempotencyKey) {
+      const existingId = this.idempotency.getResourceId("patient", meta.idempotencyKey);
+      if (existingId) return { patient_id: existingId };
+    }
+
+    const created = await this.openemr.createPatient(payload);
+    this.audit("patient", created.patient_id, "create_patient", meta.correlationId, undefined, created);
+    this.event("PatientCreated", meta.correlationId, { patient_id: created.patient_id });
+
+    if (meta.idempotencyKey) this.idempotency.save("patient", meta.idempotencyKey, created.patient_id, new Date().toISOString());
+    return created;
+  }
+
+  linkPatientToIncidentContext(incidentId, payload, meta) {
+    this.getIncident(incidentId);
+
+    const now = new Date().toISOString();
+    const existing = this.patientLinks.findByIncidentId(incidentId);
+    const record = {
+      incident_id: incidentId,
+      openemr_patient_id: payload.openemr_patient_id ?? null,
+      temporary_label: payload.temporary_label ?? null,
+      verification_status: payload.verification_status,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+      correlation_id: meta.correlationId
+    };
+
+    this.patientLinks.save(record);
+    this.audit("patient_link", incidentId, "link_patient_to_incident", meta.correlationId, existing, record);
+    this.event("PatientMatched", meta.correlationId, {
+      incident_id: incidentId,
+      patient_id: record.openemr_patient_id,
+      verification_status: record.verification_status
+    });
+    return record;
+  }
+
+  getPatientLink(incidentId) {
+    this.getIncident(incidentId);
+    return this.patientLinks.findByIncidentId(incidentId);
   }
 
   listOutboxEvents() {
