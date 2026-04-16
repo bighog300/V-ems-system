@@ -236,6 +236,7 @@ const mentalStatusToGcs = {
 };
 
 const interventionTypes = new Set(["medication", "procedure", "airway", "oxygen_therapy", "immobilization", "other"]);
+const handoverStatuses = new Set(["Ready for Handover", "Handover Completed"]);
 
 export function buildCreateEncounterPayload(formDataLike) {
   const patientId = String(formDataLike.get("patient_id") ?? "").trim();
@@ -357,6 +358,103 @@ export function buildCreateInterventionPayload(formDataLike) {
   return { payload, validationErrors };
 }
 
+export function buildCreateHandoverPayload(formDataLike) {
+  const handoverTimeRaw = String(formDataLike.get("handover_time") ?? "").trim();
+  const destinationFacility = String(formDataLike.get("destination_facility") ?? "").trim();
+  const receivingClinician = String(formDataLike.get("receiving_clinician") ?? "").trim();
+  const disposition = String(formDataLike.get("disposition") ?? "").trim();
+  const handoverStatus = String(formDataLike.get("handover_status") ?? "").trim();
+  const notes = String(formDataLike.get("notes") ?? "").trim();
+
+  const handoverTimeDate = handoverTimeRaw ? new Date(handoverTimeRaw) : null;
+  const handoverTimeIso = handoverTimeDate && !Number.isNaN(handoverTimeDate.valueOf()) ? handoverTimeDate.toISOString() : "";
+
+  const payload = {
+    handover_time: handoverTimeIso,
+    destination_facility: destinationFacility,
+    receiving_clinician: receivingClinician,
+    disposition,
+    handover_status: handoverStatus
+  };
+
+  if (notes) payload.notes = notes;
+
+  const validationErrors = [
+    !handoverTimeRaw ? "handover_time is required." : null,
+    handoverTimeRaw && !handoverTimeIso ? "handover_time must be a valid datetime." : null,
+    !destinationFacility ? "destination_facility is required." : null,
+    !receivingClinician ? "receiving_clinician is required." : null,
+    !disposition ? "disposition is required." : null,
+    !handoverStatus ? "handover_status is required." : null,
+    handoverStatus && !handoverStatuses.has(handoverStatus) ? "handover_status is invalid." : null,
+    notes.length > 1000 ? "notes must be 1000 characters or fewer." : null
+  ].filter(Boolean);
+
+  return { payload, validationErrors };
+}
+
+function renderHandoverPanel(summary) {
+  if (!summary.encounterSummary.available) {
+    return `
+      <section class="panel">
+        <h3>Record Handover</h3>
+        <p class="error-note">Handover entry is unavailable because no encounter is linked yet.</p>
+        <p class="hint">Create an encounter first, then return here to complete handover/disposition.</p>
+      </section>
+    `;
+  }
+
+  if (summary.handoverSummary.available) {
+    return `
+      <section class="panel">
+        <h3>Record Handover</h3>
+        <p class="success-note">
+          Handover already recorded: ${summary.handoverSummary.handover_status} / ${summary.handoverSummary.disposition}.
+        </p>
+        <p>Use this summary for operational confirmation. Duplicate create is disabled for this encounter.</p>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="panel">
+      <h3>Record Handover</h3>
+      <form id="recordHandoverForm" class="encounter-form">
+        <label>
+          handover_time
+          <input name="handover_time" type="datetime-local" required />
+        </label>
+        <label>
+          destination_facility
+          <input name="destination_facility" required />
+        </label>
+        <label>
+          receiving_clinician
+          <input name="receiving_clinician" required />
+        </label>
+        <label>
+          disposition
+          <input name="disposition" required />
+        </label>
+        <label>
+          handover_status
+          <select name="handover_status" required>
+            <option value="">Select status</option>
+            <option value="Ready for Handover">Ready for Handover</option>
+            <option value="Handover Completed">Handover Completed</option>
+          </select>
+        </label>
+        <label>
+          notes (optional)
+          <textarea name="notes" rows="3" maxlength="1000" placeholder="Optional operational handover notes"></textarea>
+        </label>
+        <button type="submit">Record handover</button>
+        <p id="recordHandoverFeedback" aria-live="polite" class="hint"></p>
+      </form>
+    </section>
+  `;
+}
+
 export function buildCrewJobListItems(boardData) {
   return boardData.map((incidentSummary) => ({
     incidentId: asText(incidentSummary.incident_id),
@@ -400,9 +498,6 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
     ? `${summary.handoverSummary.handover_status} / ${summary.handoverSummary.disposition}`
     : asText(summary.handoverSummary.detail);
   const closureReady = summary.closureReady === undefined ? "Not present" : String(summary.closureReady);
-  const encounterId = summary.encounterSummary.encounter_id;
-  const encounterActionsEnabled = summary.encounterSummary.available;
-
   return `
     <section class="panel">
       <h2>Crew Incident Detail</h2>
@@ -420,13 +515,13 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
     ${renderEncounterCreatePanel(summary)}
     ${renderObservationPanel(summary)}
     ${renderInterventionPanel(summary)}
+    ${renderHandoverPanel(summary)}
     ${
       includeActionPlaceholders
         ? `<section class="panel">
       <h3>Crew Clinical Actions (Pending)</h3>
       <ul class="crew-action-list">
         ${renderAction("Patient search/create/link", "POST /api/patients/search | POST /api/patients | POST /api/incidents/{incidentId}/patient-link")}
-        ${renderAction("Record handover", `POST /api/encounters/${encounterId ?? "{encounterId}"}/handover`, encounterActionsEnabled)}
       </ul>
     </section>`
         : ""
