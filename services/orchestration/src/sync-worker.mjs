@@ -67,12 +67,17 @@ export class SyncWorker {
   handleFailure(intent, error) {
     const attemptCount = intent.attempt_count + 1;
     const deadLettered = attemptCount >= this.maxAttempts;
+    const classification = classifyError(error);
+
+    console.warn(
+      `[sync-worker] intent failed intent_id=${intent.intent_id} target=${intent.target_system} method=${intent.intent_type ?? intent.operation} attempt=${attemptCount}/${this.maxAttempts} classification=${classification} dead_lettered=${deadLettered} message=${error?.message ?? "Unknown sync failure"}`
+    );
 
     this.syncIntents.markFailed(intent.intent_id, {
       status: deadLettered ? "dead_lettered" : "pending",
       attempt_count: attemptCount,
       last_error: error?.message ?? "Unknown sync failure",
-      last_error_classification: classifyError(error),
+      last_error_classification: classification,
       dead_lettered_at: deadLettered ? new Date().toISOString() : null
     });
 

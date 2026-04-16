@@ -54,6 +54,19 @@ make smoke ENV=development
 npm test
 ```
 
+### Optional upstream connectivity validation (staging-like)
+By default smoke runs stay offline-safe and do **not** require live Vtiger/OpenEMR systems.
+
+Enable optional checks when targets are reachable:
+```bash
+SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY=true make smoke ENV=staging
+```
+
+Or run just connectivity checks:
+```bash
+make validate-connectivity ENV=staging
+```
+
 ### 5) Stop environment
 ```bash
 make stop-env
