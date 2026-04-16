@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCreateEncounterPayload,
+  buildCreateInterventionPayload,
   buildCreateObservationPayload,
   buildCrewJobListItems,
   renderCrewIncidentDetailHtml,
@@ -104,6 +105,25 @@ test("renderCrewIncidentDetailHtml renders observation form when encounter exist
   assert.match(html, /name="mental_status"/);
 });
 
+test("renderCrewIncidentDetailHtml renders intervention form when encounter exists", () => {
+  const html = renderCrewIncidentDetailHtml({
+    incidentId: "INC-000125",
+    priority: "high",
+    status: "Treating On Scene",
+    locationSummary: "9 Field Street",
+    closureReady: false,
+    assignmentSummary: { summary: "ASN-003 • Active • AMB-102" },
+    patientLinkSummary: { summary: "Linked patient OE-2", openemrPatientId: "OE-2" },
+    encounterSummary: { available: true, encounter_id: "ENC-10", encounter_status: "Open" },
+    handoverSummary: { available: false, detail: "No handover payload available from GET /api/encounters/{encounterId}/handover." }
+  });
+
+  assert.match(html, /Record Intervention/);
+  assert.match(html, /id="recordInterventionForm"/);
+  assert.match(html, /name="performed_at"/);
+  assert.match(html, /name="stock_item_id"/);
+});
+
 test("renderCrewIncidentDetailHtml shows blocked observation state when encounter is missing", () => {
   const html = renderCrewIncidentDetailHtml({
     incidentId: "INC-000126",
@@ -119,6 +139,23 @@ test("renderCrewIncidentDetailHtml shows blocked observation state when encounte
 
   assert.match(html, /Observation entry is unavailable because no encounter is linked yet/);
   assert.doesNotMatch(html, /id="recordObservationForm"/);
+});
+
+test("renderCrewIncidentDetailHtml shows blocked intervention state when encounter is missing", () => {
+  const html = renderCrewIncidentDetailHtml({
+    incidentId: "INC-000126",
+    priority: "medium",
+    status: "On Scene",
+    locationSummary: "10 Field Street",
+    closureReady: false,
+    assignmentSummary: { summary: "ASN-004 • Active • AMB-103" },
+    patientLinkSummary: { summary: "Linked patient OE-3", openemrPatientId: "OE-3" },
+    encounterSummary: { available: false, detail: "No encounter linkage found for this incident." },
+    handoverSummary: { available: false, detail: "Handover is unavailable until encounter linkage exists." }
+  });
+
+  assert.match(html, /Intervention entry is unavailable because no encounter is linked yet/);
+  assert.doesNotMatch(html, /id="recordInterventionForm"/);
 });
 
 test("buildCreateEncounterPayload validates and normalizes required fields", () => {
@@ -175,5 +212,30 @@ test("buildCreateObservationPayload normalizes payload to canonical observation 
       pain_score: 4,
       gcs: 15
     }
+  });
+});
+
+test("buildCreateInterventionPayload normalizes payload to canonical intervention contract", () => {
+  const formData = new Map([
+    ["performed_at", "2026-04-16T10:15"],
+    ["type", "medication"],
+    ["name", "Aspirin"],
+    ["dose", "300 mg"],
+    ["route", "oral"],
+    ["response", "Pain improved"],
+    ["stock_item_id", "ITEM-001"]
+  ]);
+
+  const result = buildCreateInterventionPayload({ get: (key) => formData.get(key) });
+
+  assert.deepEqual(result.validationErrors, []);
+  assert.deepEqual(result.payload, {
+    performed_at: "2026-04-16T10:15:00.000Z",
+    type: "medication",
+    name: "Aspirin",
+    dose: "300 mg",
+    route: "oral",
+    response: "Pain improved",
+    stock_item_id: "ITEM-001"
   });
 });

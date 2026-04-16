@@ -1,7 +1,15 @@
-import { ApiError, createEncounterObservation, createIncidentEncounter, loadCrewJobListData, loadIncidentOperationalData } from "./api.mjs";
+import {
+  ApiError,
+  createEncounterIntervention,
+  createEncounterObservation,
+  createIncidentEncounter,
+  loadCrewJobListData,
+  loadIncidentOperationalData
+} from "./api.mjs";
 import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "./summary.mjs";
 import {
   buildCreateEncounterPayload,
+  buildCreateInterventionPayload,
   buildCreateObservationPayload,
   buildCrewJobListItems,
   renderCrewIncidentDetailHtml,
@@ -76,6 +84,9 @@ function formatApiError(error) {
   const parts = [error.message];
   if (error.code) parts.push(`code=${error.code}`);
   if (error.correlationId) parts.push(`correlation_id=${error.correlationId}`);
+  if (error.details && typeof error.details === "object") {
+    parts.push(`details=${Object.entries(error.details).map(([key, value]) => `${key}:${value}`).join(", ")}`);
+  }
   return parts.join(" | ");
 }
 
@@ -170,6 +181,56 @@ async function onRecordObservationSubmit(event) {
   }
 }
 
+async function onRecordInterventionSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const feedback = document.querySelector("#recordInterventionFeedback");
+  const status = document.querySelector("#status");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const config = readConfig();
+  if (!config.apiBaseUrl || !config.incidentId) {
+    feedback.textContent = "API Base URL and Incident ID are required.";
+    feedback.className = "error-note";
+    return;
+  }
+
+  const encounterId = form.dataset.encounterId;
+  if (!encounterId) {
+    feedback.textContent = "Intervention entry requires an encounter first.";
+    feedback.className = "error-note";
+    return;
+  }
+
+  const { payload, validationErrors } = buildCreateInterventionPayload(new FormData(form));
+  if (validationErrors.length > 0) {
+    feedback.textContent = validationErrors.join(" ");
+    feedback.className = "error-note";
+    return;
+  }
+
+  try {
+    submitButton.disabled = true;
+    feedback.className = "hint";
+    feedback.textContent = "Recording intervention...";
+
+    await createEncounterIntervention({
+      apiBaseUrl: config.apiBaseUrl,
+      encounterId,
+      payload
+    });
+    status.textContent = "Intervention recorded. Refreshing crew incident detail...";
+    await renderCrewIncidentDetail();
+    status.textContent = "Intervention recorded and crew incident detail refreshed.";
+  } catch (error) {
+    feedback.textContent = formatApiError(error);
+    feedback.className = "error-note";
+    status.textContent = "Intervention create failed.";
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
 async function renderCrewIncidentDetail() {
   const output = document.querySelector("#crewIncidentOutput");
   const status = document.querySelector("#status");
@@ -194,6 +255,12 @@ async function renderCrewIncidentDetail() {
     if (observationForm && summary.encounterSummary.encounter_id) {
       observationForm.dataset.encounterId = summary.encounterSummary.encounter_id;
       observationForm.addEventListener("submit", onRecordObservationSubmit);
+    }
+
+    const interventionForm = document.querySelector("#recordInterventionForm");
+    if (interventionForm && summary.encounterSummary.encounter_id) {
+      interventionForm.dataset.encounterId = summary.encounterSummary.encounter_id;
+      interventionForm.addEventListener("submit", onRecordInterventionSubmit);
     }
 
     status.textContent = "Loaded.";
