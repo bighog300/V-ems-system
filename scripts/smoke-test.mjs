@@ -52,6 +52,22 @@ async function run() {
     verification_status: "provisional",
     match_confidence: 0.45
   };
+  const encounterPayload = {
+    patient_id: "PAT-RBAC-DET-001",
+    care_started_at: "2026-04-16T10:00:00Z",
+    crew_ids: ["STAFF-123"],
+    presenting_complaint: "Deterministic smoke assessment"
+  };
+  const observationPayload = {
+    recorded_at: "2026-04-16T10:05:00Z",
+    source: "manual",
+    notes: "Deterministic smoke observation",
+    vital_signs: {
+      heart_rate_bpm: 88,
+      respiratory_rate_bpm: 18,
+      spo2_pct: 98
+    }
+  };
 
   if (!enforceRbac) {
     const createdIncident = await request("/api/incidents", {
@@ -153,6 +169,56 @@ async function run() {
     headers: roleHeaders("supervisor", "link-patient")
   });
   assertStatus(supervisorPatientLink.response.status, 200, "supervisor should link patient context", supervisorPatientLink.body);
+
+  const clinicalIncident = await request("/api/incidents", {
+    method: "POST",
+    body: JSON.stringify(incidentPayload),
+    headers: roleHeaders("dispatcher", "clinical-rbac-incident")
+  });
+  assertStatus(clinicalIncident.response.status, 201, "dispatcher should create dedicated clinical RBAC incident", clinicalIncident.body);
+  const clinicalIncidentId = clinicalIncident.body.incident_id;
+
+  const deniedEncounterCreate = await request(`/api/incidents/${clinicalIncidentId}/encounters`, {
+    method: "POST",
+    body: JSON.stringify(encounterPayload),
+    headers: roleHeaders("dispatcher", "deny-encounter-create")
+  });
+  assertStatus(deniedEncounterCreate.response.status, 403, "dispatcher should be denied encounter create", deniedEncounterCreate.body);
+  assert.equal(deniedEncounterCreate.body.error.code, "FORBIDDEN");
+
+  const allowedEncounterCreate = await request(`/api/incidents/${clinicalIncidentId}/encounters`, {
+    method: "POST",
+    body: JSON.stringify(encounterPayload),
+    headers: roleHeaders("field_crew", "allow-encounter-create")
+  });
+  assertStatus(
+    allowedEncounterCreate.response.status,
+    409,
+    "field_crew should pass RBAC for encounter create and fail deterministically on precondition",
+    allowedEncounterCreate.body
+  );
+  assert.equal(allowedEncounterCreate.body.error.code, "CONFLICT");
+
+  const deniedObservationCreate = await request("/api/encounters/ENC-RBAC-DET-001/observations", {
+    method: "POST",
+    body: JSON.stringify(observationPayload),
+    headers: roleHeaders("dispatcher", "deny-observation-create")
+  });
+  assertStatus(deniedObservationCreate.response.status, 403, "dispatcher should be denied observation create", deniedObservationCreate.body);
+  assert.equal(deniedObservationCreate.body.error.code, "FORBIDDEN");
+
+  const allowedObservationCreate = await request("/api/encounters/ENC-RBAC-DET-001/observations", {
+    method: "POST",
+    body: JSON.stringify(observationPayload),
+    headers: roleHeaders("field_crew", "allow-observation-create")
+  });
+  assertStatus(
+    allowedObservationCreate.response.status,
+    404,
+    "field_crew should pass RBAC for observation create and fail deterministically on missing encounter",
+    allowedObservationCreate.body
+  );
+  assert.equal(allowedObservationCreate.body.error.code, "NOT_FOUND");
 
   const listIncidents = await request("/api/incidents", { method: "GET" });
   assert.equal(listIncidents.response.status, 200, "GET /api/incidents should return 200");
