@@ -4,44 +4,45 @@ async function unsupportedTransport() {
   throw new Error("Vtiger transport is not configured");
 }
 
+function wrapTransportError(method, error) {
+  const wrapped = new Error(`Vtiger adapter ${method} failed: ${error?.message ?? "Unknown transport error"}`);
+  wrapped.code = error?.code ?? "DOWNSTREAM_UNAVAILABLE";
+  wrapped.classification = error?.classification ?? wrapped.code;
+  wrapped.cause = error;
+  return wrapped;
+}
+
 export class VtigerAdapterClient {
   constructor(options = {}) {
     this.mapper = options.mapper ?? new VtigerPayloadMapper();
     this.transport = options.transport ?? unsupportedTransport;
   }
 
+  async invoke(method, payload) {
+    try {
+      return await this.transport({ method, payload });
+    } catch (error) {
+      throw wrapTransportError(method, error);
+    }
+  }
+
   createIncidentMirror(incident) {
-    return this.transport({
-      method: "createIncidentMirror",
-      payload: this.mapper.mapIncidentCreate(incident)
-    });
+    return this.invoke("createIncidentMirror", this.mapper.mapIncidentCreate(incident));
   }
 
   updateIncidentMirror(incident) {
-    return this.transport({
-      method: "updateIncidentMirror",
-      payload: this.mapper.mapIncidentUpdate(incident)
-    });
+    return this.invoke("updateIncidentMirror", this.mapper.mapIncidentUpdate(incident));
   }
 
   createAssignmentMirror(assignment) {
-    return this.transport({
-      method: "createAssignmentMirror",
-      payload: this.mapper.mapAssignmentCreate(assignment)
-    });
+    return this.invoke("createAssignmentMirror", this.mapper.mapAssignmentCreate(assignment));
   }
 
   updateAssignmentMirror(assignment) {
-    return this.transport({
-      method: "updateAssignmentMirror",
-      payload: this.mapper.mapAssignmentUpdate(assignment)
-    });
+    return this.invoke("updateAssignmentMirror", this.mapper.mapAssignmentUpdate(assignment));
   }
 
   recordStockUsageMirror(stockUsage) {
-    return this.transport({
-      method: "recordStockUsageMirror",
-      payload: this.mapper.mapStockUsageRecord(stockUsage)
-    });
+    return this.invoke("recordStockUsageMirror", this.mapper.mapStockUsageRecord(stockUsage));
   }
 }

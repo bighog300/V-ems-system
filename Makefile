@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 ENV ?= development
 
-.PHONY: help bootstrap init-db start-api start-web start-worker start-env stop-env smoke test clean
+.PHONY: help bootstrap init-db start-api start-web start-worker start-env stop-env smoke validate-connectivity test clean
 
 help:
 	@echo "Targets:"
@@ -14,6 +14,7 @@ help:
 	@echo "  make start-env ENV=...       Start api, web-control, and worker in background"
 	@echo "  make stop-env                Stop background environment services"
 	@echo "  make smoke ENV=...           Run API smoke test against started environment"
+	@echo "  make validate-connectivity   Run optional env-driven upstream connectivity checks"
 	@echo "  make test                    Run workspace tests"
 
 bootstrap:
@@ -39,6 +40,9 @@ stop-env:
 
 smoke:
 	./scripts/smoke.sh $(ENV)
+
+validate-connectivity:
+	./scripts/validate-connectivity.sh $(ENV)
 
 test:
 	npm test
