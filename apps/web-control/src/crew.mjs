@@ -18,7 +18,144 @@ function renderAction(actionLabel, endpointPath, enabled = true) {
   `;
 }
 
-function renderEncounterCreatePanel(summary) {
+function toLocalDateTimeInputValue(dateLike = new Date()) {
+  const date = dateLike instanceof Date ? dateLike : new Date(dateLike);
+  if (Number.isNaN(date.valueOf())) return "";
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  const localDate = new Date(date.valueOf() - offsetMs);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function isEncounterActive(summary) {
+  return Boolean(summary?.encounterSummary?.available);
+}
+
+function hasPatientLink(summary) {
+  return Boolean(summary?.patientLinkSummary?.openemrPatientId);
+}
+
+function getWorkflowGuidance(summary) {
+  if (!hasPatientLink(summary)) {
+    return {
+      title: "Link patient before clinical charting",
+      detail: "Use patient search/create/link first. Encounter and downstream care actions stay blocked until a patient is linked.",
+      action: "Run patient search/create/link"
+    };
+  }
+
+  if (!isEncounterActive(summary)) {
+    return {
+      title: "Create encounter to start care progression",
+      detail: "Patient link exists, but no encounter linkage is available for this incident yet.",
+      action: "Submit Create Encounter"
+    };
+  }
+
+  const encounterStatus = summary.encounterSummary.encounter_status;
+  if (encounterStatus === "Ready for Handover" && !summary.handoverSummary.available) {
+    return {
+      title: "Record handover now",
+      detail: "Encounter is in Ready for Handover. Capture destination/disposition to advance closure readiness.",
+      action: "Submit Record Handover"
+    };
+  }
+
+  if (summary.handoverSummary.available && summary.handoverSummary.handover_status !== "Handover Completed") {
+    return {
+      title: "Complete handover",
+      detail: "A handover record exists but is not yet marked Handover Completed.",
+      action: "Update handover to Handover Completed"
+    };
+  }
+
+  if (summary.closureReady === true) {
+    return {
+      title: "Workflow complete for crew",
+      detail: "Backend reports closure_ready=true. Confirm with dispatch/supervisor for final incident closure action.",
+      action: "Confirm closure handoff"
+    };
+  }
+
+  return {
+    title: "Continue assessment/treatment updates",
+    detail: "Encounter is active. Record observations and interventions as care progresses.",
+    action: "Record observation or intervention"
+  };
+}
+
+function renderWorkflowGuidancePanel(summary) {
+  const guidance = getWorkflowGuidance(summary);
+  return `
+    <section class="panel">
+      <h3>Next Step Guidance</h3>
+      <p><strong>${guidance.title}</strong></p>
+      <p class="hint">${guidance.detail}</p>
+      <p><strong>Suggested next action:</strong> ${guidance.action}</p>
+    </section>
+  `;
+}
+
+function renderCareTimeline(summary) {
+  const encounterStatus = summary.encounterSummary.available ? summary.encounterSummary.encounter_status : "Not Started";
+  const handoverStatus = summary.handoverSummary.available ? summary.handoverSummary.handover_status : null;
+
+  const timelineItems = [
+    {
+      label: "Assignment active",
+      detail: summary.assignmentSummary.summary,
+      state: summary.assignmentSummary.available ? "done" : "upcoming"
+    },
+    {
+      label: "Patient linked",
+      detail: summary.patientLinkSummary.summary,
+      state: hasPatientLink(summary) ? "done" : "current"
+    },
+    {
+      label: "Encounter created",
+      detail: summary.encounterSummary.available ? `${encounterStatus} (${summary.encounterSummary.encounter_id})` : summary.encounterSummary.detail,
+      state: summary.encounterSummary.available ? "done" : hasPatientLink(summary) ? "current" : "upcoming"
+    },
+    {
+      label: "Assessment & treatment",
+      detail: summary.encounterSummary.available
+        ? `Encounter status: ${encounterStatus}`
+        : "Assessment and interventions unlock after encounter creation.",
+      state: summary.encounterSummary.available && !summary.handoverSummary.available ? "current" : summary.handoverSummary.available ? "done" : "upcoming"
+    },
+    {
+      label: "Handover",
+      detail: summary.handoverSummary.available
+        ? `${summary.handoverSummary.handover_status} / ${summary.handoverSummary.disposition}`
+        : "No handover recorded yet.",
+      state:
+        handoverStatus === "Handover Completed"
+          ? "done"
+          : summary.encounterSummary.available && encounterStatus === "Ready for Handover"
+            ? "current"
+            : summary.encounterSummary.available
+              ? "upcoming"
+              : "upcoming"
+    },
+    {
+      label: "Closure readiness",
+      detail: summary.closureReady === undefined ? "Not present in payload" : `closure_ready=${summary.closureReady}`,
+      state: summary.closureReady === true ? "done" : summary.handoverSummary.available ? "current" : "upcoming"
+    }
+  ];
+
+  const itemsHtml = timelineItems
+    .map((item) => `<li class="timeline-item timeline-item-${item.state}"><p><strong>${item.label}</strong></p><p>${item.detail}</p></li>`)
+    .join("\n");
+
+  return `
+    <section class="panel">
+      <h3>Care Timeline / Progression</h3>
+      <ol class="care-timeline">${itemsHtml}</ol>
+    </section>
+  `;
+}
+
+function renderEncounterCreatePanel(summary, { defaultDateTimeValue = "" } = {}) {
   if (summary.encounterSummary.available) {
     return `
       <section class="panel">
@@ -54,7 +191,7 @@ function renderEncounterCreatePanel(summary) {
         </label>
         <label>
           care_started_at
-          <input id="encounterCareStartedAt" name="care_started_at" type="datetime-local" required />
+          <input id="encounterCareStartedAt" name="care_started_at" type="datetime-local" value="${defaultDateTimeValue}" required />
         </label>
         <label>
           crew_ids (comma separated)
@@ -71,7 +208,7 @@ function renderEncounterCreatePanel(summary) {
   `;
 }
 
-function renderObservationPanel(summary) {
+function renderObservationPanel(summary, { defaultDateTimeValue = "" } = {}) {
   if (!summary.encounterSummary.available) {
     return `
       <section class="panel">
@@ -88,7 +225,7 @@ function renderObservationPanel(summary) {
       <form id="recordObservationForm" class="encounter-form">
         <label>
           recorded_at
-          <input name="recorded_at" type="datetime-local" required />
+          <input name="recorded_at" type="datetime-local" value="${defaultDateTimeValue}" required />
         </label>
         <label>
           systolic BP (mmHg)
@@ -147,7 +284,7 @@ function renderObservationPanel(summary) {
   `;
 }
 
-function renderInterventionPanel(summary) {
+function renderInterventionPanel(summary, { defaultDateTimeValue = "" } = {}) {
   if (!summary.encounterSummary.available) {
     return `
       <section class="panel">
@@ -164,7 +301,7 @@ function renderInterventionPanel(summary) {
       <form id="recordInterventionForm" class="encounter-form">
         <label>
           performed_at
-          <input name="performed_at" type="datetime-local" required />
+          <input name="performed_at" type="datetime-local" value="${defaultDateTimeValue}" required />
         </label>
         <label>
           type
@@ -393,7 +530,7 @@ export function buildCreateHandoverPayload(formDataLike) {
   return { payload, validationErrors };
 }
 
-function renderHandoverPanel(summary) {
+function renderHandoverPanel(summary, { defaultDateTimeValue = "" } = {}) {
   if (!summary.encounterSummary.available) {
     return `
       <section class="panel">
@@ -422,7 +559,7 @@ function renderHandoverPanel(summary) {
       <form id="recordHandoverForm" class="encounter-form">
         <label>
           handover_time
-          <input name="handover_time" type="datetime-local" required />
+          <input name="handover_time" type="datetime-local" value="${defaultDateTimeValue}" required />
         </label>
         <label>
           destination_facility
@@ -490,7 +627,7 @@ export function renderCrewJobListHtml(items) {
   return `<ul class="crew-job-list">${listItems}</ul>`;
 }
 
-export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholders = true } = {}) {
+export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholders = true, now = new Date() } = {}) {
   const encounterSummary = summary.encounterSummary.available
     ? `${summary.encounterSummary.encounter_status} (${summary.encounterSummary.encounter_id})`
     : asText(summary.encounterSummary.detail);
@@ -498,6 +635,7 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
     ? `${summary.handoverSummary.handover_status} / ${summary.handoverSummary.disposition}`
     : asText(summary.handoverSummary.detail);
   const closureReady = summary.closureReady === undefined ? "Not present" : String(summary.closureReady);
+  const defaultDateTimeValue = toLocalDateTimeInputValue(now);
   return `
     <section class="panel">
       <h2>Crew Incident Detail</h2>
@@ -512,10 +650,27 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
         <dt>Closure Ready</dt><dd>${closureReady}</dd>
       </dl>
     </section>
-    ${renderEncounterCreatePanel(summary)}
-    ${renderObservationPanel(summary)}
-    ${renderInterventionPanel(summary)}
-    ${renderHandoverPanel(summary)}
+    ${renderCareTimeline(summary)}
+    ${renderWorkflowGuidancePanel(summary)}
+    <section class="panel">
+      <h3>Workflow Actions</h3>
+      <div class="workflow-stage-group">
+        <h4>1) Encounter setup</h4>
+        ${renderEncounterCreatePanel(summary, { defaultDateTimeValue })}
+      </div>
+      <div class="workflow-stage-group">
+        <h4>2) Assessment (observations)</h4>
+        ${renderObservationPanel(summary, { defaultDateTimeValue })}
+      </div>
+      <div class="workflow-stage-group">
+        <h4>3) Treatment (interventions)</h4>
+        ${renderInterventionPanel(summary, { defaultDateTimeValue })}
+      </div>
+      <div class="workflow-stage-group">
+        <h4>4) Handover / disposition</h4>
+        ${renderHandoverPanel(summary, { defaultDateTimeValue })}
+      </div>
+    </section>
     ${
       includeActionPlaceholders
         ? `<section class="panel">
