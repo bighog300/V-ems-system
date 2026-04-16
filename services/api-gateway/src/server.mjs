@@ -80,6 +80,7 @@ function validateCreateEncounter(payload) {
   if (!payload || typeof payload !== "object") throw new ApiError("INVALID_PAYLOAD", "Encounter payload is required", 400);
   if (!payload.patient_id || typeof payload.patient_id !== "string") throw new ApiError("INVALID_PAYLOAD", "patient_id is required", 400);
   if (!payload.care_started_at || typeof payload.care_started_at !== "string") throw new ApiError("INVALID_PAYLOAD", "care_started_at is required", 400);
+  if (Number.isNaN(Date.parse(payload.care_started_at))) throw new ApiError("INVALID_PAYLOAD", "care_started_at must be an ISO-8601 datetime", 400);
   if (!Array.isArray(payload.crew_ids) || payload.crew_ids.length === 0) throw new ApiError("INVALID_PAYLOAD", "crew_ids required", 400);
   if (!payload.crew_ids.every((id) => /^STAFF-[0-9]{3,}$/.test(id))) throw new ApiError("INVALID_PAYLOAD", "Invalid crew_ids format", 400);
   if (!payload.presenting_complaint || typeof payload.presenting_complaint !== "string") {

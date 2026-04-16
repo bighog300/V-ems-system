@@ -106,7 +106,68 @@ test("encounter create rejected when no linked patient", async () => {
     });
 
     assert.equal(rejected.status, 409);
-    assert.equal(rejected.body.error.code, "PRECONDITION_FAILED");
+    assert.equal(rejected.body.error.code, "CONFLICT");
+  } finally {
+    server.close();
+  }
+});
+
+test("encounter create allows provisional patient-link state for emergency workflow", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    if (request.method === "createEncounter") return { encounter_id: "ENC-150", status: "Open" };
+    return { ok: true };
+  });
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "provisional", openemr_patient_id: "OE-150" })
+    });
+
+    const created = await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-150",
+        care_started_at: "2026-04-16T10:15:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+
+    assert.equal(created.status, 201);
+    assert.equal(created.body.encounter_id, "ENC-150");
+  } finally {
+    server.close();
+  }
+});
+
+test("encounter create blocked for invalid patient-link verification state", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ encounter_id: "ENC-151", status: "Open" }));
+
+  try {
+    const incident = await createDefaultIncident(base);
+    const incidentId = incident.body.incident_id;
+
+    await jsonFetch(base, `/api/incidents/${incidentId}/patient-link`, {
+      method: "POST",
+      body: JSON.stringify({ verification_status: "duplicate_suspected", openemr_patient_id: "OE-151" })
+    });
+
+    const blocked = await jsonFetch(base, `/api/incidents/${incidentId}/encounters`, {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: "OE-151",
+        care_started_at: "2026-04-16T10:15:00Z",
+        crew_ids: ["STAFF-001"],
+        presenting_complaint: "Chest pain"
+      })
+    });
+
+    assert.equal(blocked.status, 409);
+    assert.equal(blocked.body.error.code, "INVALID_STATUS_TRANSITION");
   } finally {
     server.close();
   }
@@ -147,6 +208,9 @@ test("encounter link persistence survives restart and lookup by incident", async
     const persisted = second.orchestration.getEncounterByIncident(incidentId);
     assert.equal(persisted.encounter_id, "ENC-200");
     assert.equal(persisted.linked_incident_id, incidentId);
+    const persistedLink = second.orchestration.encounterLinks.findByIncidentId(incidentId);
+    assert.equal(persistedLink.openemr_patient_id, "OE-200");
+    assert.equal(persistedLink.care_started_at, "2026-04-16T10:15:00Z");
   } finally {
     second.server.close();
   }
