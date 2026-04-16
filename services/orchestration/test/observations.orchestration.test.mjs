@@ -228,6 +228,37 @@ test("intervention orchestration rejects missing encounter", async () => {
   );
 });
 
+test("intervention read uses OpenEMR source and returns normalized list", async () => {
+  const calls = [];
+  const orchestration = createService({
+    createEncounter: async () => ({ encounter_id: "ENC-920", status: "Open" }),
+    getInterventions: async (payload) => {
+      calls.push(payload);
+      return [{ intervention_id: "INT-920", encounter_id: payload.encounter_id, status: "recorded" }];
+    }
+  });
+
+  const incident = createIncident(orchestration, "corr-int-read-1");
+  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+    verification_status: "verified",
+    openemr_patient_id: "OE-920"
+  }, { correlationId: "corr-int-read-2" });
+  await orchestration.createEncounterForIncident(incident.incident_id, {
+    patient_id: "OE-920",
+    care_started_at: "2026-04-16T10:15:00Z",
+    crew_ids: ["STAFF-001"],
+    presenting_complaint: "Chest pain"
+  }, { correlationId: "corr-int-read-3" });
+
+  const result = await orchestration.getInterventionsForEncounter("ENC-920");
+  assert.deepEqual(result, [{ intervention_id: "INT-920", encounter_id: "ENC-920", status: "recorded" }]);
+  assert.deepEqual(calls, [{
+    encounter_id: "ENC-920",
+    incident_id: incident.incident_id,
+    patient_id: "OE-920"
+  }]);
+});
+
 test("handover orchestration emits audit/event metadata and marks closure readiness", async () => {
   const calls = [];
   const orchestration = createService({
@@ -317,4 +348,47 @@ test("handover orchestration rejects missing encounter", async () => {
     }, { correlationId: "corr-hnd-5" }),
     /not found/
   );
+});
+
+test("handover read returns normalized OpenEMR handover", async () => {
+  const calls = [];
+  const orchestration = createService({
+    createEncounter: async () => ({ encounter_id: "ENC-930", status: "Ready for Handover" }),
+    getHandover: async (payload) => {
+      calls.push(payload);
+      return {
+        handover_id: "HND-930",
+        encounter_id: payload.encounter_id,
+        disposition: "transport_to_facility",
+        handover_status: "Handover Completed",
+        closure_ready: true
+      };
+    }
+  });
+
+  const incident = createIncident(orchestration, "corr-hnd-read-1");
+  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+    verification_status: "verified",
+    openemr_patient_id: "OE-930"
+  }, { correlationId: "corr-hnd-read-2" });
+  await orchestration.createEncounterForIncident(incident.incident_id, {
+    patient_id: "OE-930",
+    care_started_at: "2026-04-16T10:15:00Z",
+    crew_ids: ["STAFF-001"],
+    presenting_complaint: "Chest pain"
+  }, { correlationId: "corr-hnd-read-3" });
+
+  const result = await orchestration.getHandoverForEncounter("ENC-930");
+  assert.deepEqual(result, {
+    handover_id: "HND-930",
+    encounter_id: "ENC-930",
+    handover_status: "Handover Completed",
+    disposition: "transport_to_facility",
+    closure_ready: true
+  });
+  assert.deepEqual(calls, [{
+    encounter_id: "ENC-930",
+    incident_id: incident.incident_id,
+    patient_id: "OE-930"
+  }]);
 });

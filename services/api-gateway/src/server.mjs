@@ -316,6 +316,12 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const interventionCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/interventions$/);
+      if (interventionCreateMatch && method === "GET") {
+        const encounterId = interventionCreateMatch[1];
+        validateEncounterId(encounterId);
+        const interventions = await orchestration.getInterventionsForEncounter(encounterId);
+        return okJson(res, 200, interventions);
+      }
       if (interventionCreateMatch && method === "POST") {
         const encounterId = interventionCreateMatch[1];
         validateEncounterId(encounterId);
@@ -326,6 +332,12 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const handoverCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/handover$/);
+      if (handoverCreateMatch && method === "GET") {
+        const encounterId = handoverCreateMatch[1];
+        validateEncounterId(encounterId);
+        const handover = await orchestration.getHandoverForEncounter(encounterId);
+        return okJson(res, 200, handover);
+      }
       if (handoverCreateMatch && method === "POST") {
         const encounterId = handoverCreateMatch[1];
         validateEncounterId(encounterId);
