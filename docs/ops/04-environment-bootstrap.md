@@ -41,6 +41,8 @@ Run smoke tests against running services:
 make smoke ENV=development
 ```
 
+`make smoke` now waits for the API `GET /health` endpoint to become ready (with timeout) before running smoke requests, so no manual sleep is required after `make start-env`.
+
 Smoke checks validate:
 1. `GET /health`
 2. `POST /api/incidents`
