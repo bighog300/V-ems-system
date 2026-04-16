@@ -79,6 +79,76 @@ test("rbac policy is enforced for write endpoints when enabled", async () => {
   }
 });
 
+test("rbac policy extends to clinical write routes using adapter-safe deterministic outcomes", async () => {
+  process.env.RBAC_ENFORCE = "true";
+  const { server, base } = await startServer();
+
+  try {
+    const incident = await jsonFetch(base, "/api/incidents", {
+      method: "POST",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-445" },
+      body: JSON.stringify({
+        call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
+        incident: { category: "medical_emergency", priority: "critical", description: "Stroke signs", address: "Main St", patient_count: 1 }
+      })
+    });
+    assert.equal(incident.status, 201);
+
+    const deniedEncounter = await jsonFetch(base, `/api/incidents/${incident.body.incident_id}/encounters`, {
+      method: "POST",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-445" },
+      body: JSON.stringify({
+        patient_id: "PAT-RBAC-001",
+        care_started_at: "2026-04-16T10:05:00Z",
+        crew_ids: ["STAFF-123"],
+        presenting_complaint: "Stroke signs"
+      })
+    });
+    assert.equal(deniedEncounter.status, 403);
+    assert.equal(deniedEncounter.body.error.code, "FORBIDDEN");
+
+    const allowedEncounter = await jsonFetch(base, `/api/incidents/${incident.body.incident_id}/encounters`, {
+      method: "POST",
+      headers: { "x-user-role": "field_crew", "x-actor-id": "STAFF-123" },
+      body: JSON.stringify({
+        patient_id: "PAT-RBAC-001",
+        care_started_at: "2026-04-16T10:05:00Z",
+        crew_ids: ["STAFF-123"],
+        presenting_complaint: "Stroke signs"
+      })
+    });
+    assert.equal(allowedEncounter.status, 409);
+    assert.equal(allowedEncounter.body.error.code, "CONFLICT");
+
+    const deniedObservation = await jsonFetch(base, "/api/encounters/ENC-RBAC-001/observations", {
+      method: "POST",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-445" },
+      body: JSON.stringify({
+        recorded_at: "2026-04-16T10:10:00Z",
+        source: "manual",
+        vital_signs: { heart_rate_bpm: 88 }
+      })
+    });
+    assert.equal(deniedObservation.status, 403);
+    assert.equal(deniedObservation.body.error.code, "FORBIDDEN");
+
+    const allowedObservation = await jsonFetch(base, "/api/encounters/ENC-RBAC-001/observations", {
+      method: "POST",
+      headers: { "x-user-role": "field_crew", "x-actor-id": "STAFF-123" },
+      body: JSON.stringify({
+        recorded_at: "2026-04-16T10:10:00Z",
+        source: "manual",
+        vital_signs: { heart_rate_bpm: 88 }
+      })
+    });
+    assert.equal(allowedObservation.status, 404);
+    assert.equal(allowedObservation.body.error.code, "NOT_FOUND");
+  } finally {
+    server.close();
+    delete process.env.RBAC_ENFORCE;
+  }
+});
+
 test("rbac enforcement can be disabled for local development safety", async () => {
   process.env.RBAC_ENFORCE = "false";
   const { server, base } = await startServer();
