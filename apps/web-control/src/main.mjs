@@ -1,5 +1,6 @@
 import {
   ApiError,
+  closeIncident,
   createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
@@ -7,7 +8,7 @@ import {
   loadCrewJobListData,
   loadIncidentOperationalData
 } from "./api.mjs";
-import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "./summary.mjs";
+import { buildIncidentOperationalSummary, renderIncidentClosePanelHtml, renderOperationalSummaryHtml } from "./summary.mjs";
 import {
   buildCreateEncounterPayload,
   buildCreateHandoverPayload,
@@ -26,6 +27,8 @@ function readConfig() {
     incidentId: incidentInput.value.trim()
   };
 }
+
+let closeIncidentFeedback = "";
 
 async function renderIncidentDetail() {
   const output = document.querySelector("#incidentOutput");
@@ -46,6 +49,7 @@ async function renderIncidentDetail() {
         <h2>Incident Detail / Operational Summary</h2>
         ${renderOperationalSummaryHtml(summary)}
       </section>
+      ${renderIncidentClosePanelHtml({ summary, closeErrorMessage: closeIncidentFeedback })}
       <section class="panel">
         <h3>Read-Path Notes</h3>
         <ul>
@@ -54,10 +58,41 @@ async function renderIncidentDetail() {
         </ul>
       </section>
     `;
+    const closeButton = document.querySelector("#closeIncidentAction");
+    if (closeButton) {
+      closeButton.addEventListener("click", onCloseIncidentClick);
+    }
     status.textContent = "Loaded.";
   } catch (error) {
     output.innerHTML = "";
     status.textContent = error.message;
+  }
+}
+
+async function onCloseIncidentClick(event) {
+  const button = event.currentTarget;
+  const status = document.querySelector("#status");
+  const config = readConfig();
+  if (!config.apiBaseUrl || !config.incidentId) {
+    closeIncidentFeedback = "API Base URL and Incident ID are required.";
+    await renderIncidentDetail();
+    return;
+  }
+
+  try {
+    button.disabled = true;
+    closeIncidentFeedback = "";
+    status.textContent = "Closing incident...";
+    await closeIncident({ apiBaseUrl: config.apiBaseUrl, incidentId: config.incidentId });
+    closeIncidentFeedback = "";
+    await renderIncidentDetail();
+    status.textContent = "Incident closed and incident detail refreshed.";
+  } catch (error) {
+    closeIncidentFeedback = formatApiError(error);
+    await renderIncidentDetail();
+    status.textContent = "Incident close failed.";
+  } finally {
+    button.disabled = false;
   }
 }
 

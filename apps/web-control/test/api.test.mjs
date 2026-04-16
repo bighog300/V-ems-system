@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ApiError,
+  closeIncident,
   createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
@@ -165,6 +166,68 @@ test("createIncidentEncounter surfaces structured backend errors", async () => {
       assert.equal(error.status, 409);
       assert.equal(error.code, "CONFLICT");
       assert.equal(error.correlationId, "11111111-1111-1111-1111-111111111111");
+      return true;
+    }
+  );
+});
+
+test("closeIncident submits to PATCH /api/incidents/{incidentId} with close action", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { incident_id: "INC-000333", status: "Closed", closure_ready: true };
+      }
+    };
+  };
+
+  const result = await closeIncident({
+    apiBaseUrl: "http://127.0.0.1:8080",
+    incidentId: "INC-000333",
+    fetchImpl
+  });
+
+  assert.equal(result.status, "Closed");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://127.0.0.1:8080/api/incidents/INC-000333");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { action: "close_incident" });
+});
+
+test("closeIncident surfaces structured backend errors", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 409,
+    async json() {
+      return {
+        error: {
+          code: "INVALID_STATUS_TRANSITION",
+          message: "Incident cannot close without persisted encounter handover/disposition closure metadata",
+          retryable: false,
+          correlation_id: "44444444-4444-4444-4444-444444444444",
+          details: {
+            required: "closure_ready=true"
+          }
+        }
+      };
+    }
+  });
+
+  await assert.rejects(
+    closeIncident({
+      apiBaseUrl: "http://127.0.0.1:8080",
+      incidentId: "INC-000333",
+      fetchImpl
+    }),
+    (error) => {
+      assert.equal(error instanceof ApiError, true);
+      assert.equal(error.status, 409);
+      assert.equal(error.code, "INVALID_STATUS_TRANSITION");
+      assert.equal(error.correlationId, "44444444-4444-4444-4444-444444444444");
+      assert.deepEqual(error.details, { required: "closure_ready=true" });
       return true;
     }
   );

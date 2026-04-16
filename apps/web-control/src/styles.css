@@ -132,3 +132,16 @@ dt {
   color: #b91c1c;
   font-weight: 600;
 }
+
+.closure-state {
+  font-weight: 700;
+}
+
+.closure-state-ready {
+  color: #166534;
+}
+
+.closure-state-not-ready,
+.closure-state-unknown {
+  color: #b91c1c;
+}
