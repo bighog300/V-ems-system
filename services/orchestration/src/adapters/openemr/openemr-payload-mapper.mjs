@@ -19,6 +19,17 @@ export class OpenEmrPayloadMapper {
     };
   }
 
+
+  mapEncounterCreateRequest(encounter) {
+    return {
+      incident_id: encounter.incident_id,
+      patient_id: encounter.patient_id,
+      care_started_at: encounter.care_started_at,
+      crew_ids: encounter.crew_ids,
+      presenting_complaint: encounter.presenting_complaint
+    };
+  }
+
   mapPatientSearchResponse(response) {
     return {
       match_status: response.match_status,
@@ -32,6 +43,13 @@ export class OpenEmrPayloadMapper {
     return {
       patient_id: response.patient_id,
       display_name: response.display_name
+    };
+  }
+
+  mapEncounterCreateResponse(response) {
+    return {
+      encounter_id: response.encounter_id,
+      status: response.status
     };
   }
 }

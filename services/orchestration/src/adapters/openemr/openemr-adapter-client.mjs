@@ -25,4 +25,12 @@ export class OpenEmrAdapterClient {
     });
     return this.mapper.mapPatientCreateResponse(response);
   }
+
+  async createEncounter(encounter) {
+    const response = await this.transport({
+      method: "createEncounter",
+      payload: this.mapper.mapEncounterCreateRequest(encounter)
+    });
+    return this.mapper.mapEncounterCreateResponse(response);
+  }
 }
