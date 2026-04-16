@@ -6,6 +6,8 @@ import { AssignmentRepository } from "./repositories/assignment-repository.mjs";
 import { AuditLogRepository } from "./repositories/audit-log-repository.mjs";
 import { EventOutboxRepository } from "./repositories/event-outbox-repository.mjs";
 import { IdempotencyKeyRepository } from "./repositories/idempotency-key-repository.mjs";
+import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
+import { VtigerPayloadMapper } from "./adapters/vtiger/vtiger-payload-mapper.mjs";
 
 export class OrchestrationService {
   constructor(options = {}) {
@@ -15,6 +17,8 @@ export class OrchestrationService {
     this.audits = new AuditLogRepository(this.db);
     this.events = new EventOutboxRepository(this.db);
     this.idempotency = new IdempotencyKeyRepository(this.db);
+    this.syncIntents = new SyncIntentRepository(this.db);
+    this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper();
   }
 
   createIncident(payload, meta) {
@@ -40,6 +44,7 @@ export class OrchestrationService {
     this.incidents.create(record);
     this.audit("incident", incidentId, "create_incident", meta.correlationId, undefined, record);
     this.event("IncidentCreated", meta.correlationId, { incident_id: incidentId, call_id: callId, status: record.status });
+    this.syncIntent("incident", "createIncidentMirror", meta.correlationId, this.vtigerMapper.mapIncidentCreate(record));
 
     if (meta.idempotencyKey) this.idempotency.save("incident", meta.idempotencyKey, incidentId, now);
     return record;
@@ -71,6 +76,7 @@ export class OrchestrationService {
     this.incidents.updateStatus(incidentId, nextStatus, updated.updated_at, meta.correlationId);
     this.audit("incident", incidentId, `incident_action:${payload.action}`, meta.correlationId, current, updated);
     this.event("IncidentUpdated", meta.correlationId, { incident_id: incidentId, old_status: current.status, new_status: nextStatus });
+    this.syncIntent("incident", "updateIncidentMirror", meta.correlationId, this.vtigerMapper.mapIncidentUpdate(updated));
     return updated;
   }
 
@@ -100,6 +106,7 @@ export class OrchestrationService {
     this.assignments.create(record);
     this.audit("assignment", assignmentId, "create_assignment", meta.correlationId, undefined, record);
     this.event("AssignmentCreated", meta.correlationId, { assignment_id: assignmentId, incident_id: incidentId, status: record.status });
+    this.syncIntent("assignment", "createAssignmentMirror", meta.correlationId, this.vtigerMapper.mapAssignmentCreate(record));
 
     if (meta.idempotencyKey) this.idempotency.save("assignment", meta.idempotencyKey, assignmentId, now);
     return record;
@@ -125,6 +132,7 @@ export class OrchestrationService {
       old_status: current.status,
       new_status: nextStatus
     });
+    this.syncIntent("assignment", "updateAssignmentMirror", meta.correlationId, this.vtigerMapper.mapAssignmentUpdate(updated));
     return updated;
   }
 
@@ -151,7 +159,22 @@ export class OrchestrationService {
     });
   }
 
+  syncIntent(entityType, operation, correlationId, payload) {
+    this.syncIntents.append({
+      target_system: "vtiger",
+      entity_type: entityType,
+      operation,
+      correlation_id: correlationId,
+      created_at: new Date().toISOString(),
+      payload
+    });
+  }
+
   listOutboxEvents() {
     return this.events.listAll();
+  }
+
+  listSyncIntents() {
+    return this.syncIntents.listAll();
   }
 }
