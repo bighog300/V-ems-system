@@ -1,20 +1,91 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
-import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES } from "@vems/shared";
+import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, createLogger } from "@vems/shared";
 
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
 const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Treatment In Progress", "Ready for Handover", "Handover Completed", "Closed", "Cancelled"];
 
 
-function okJson(res, status, body) {
-  res.writeHead(status, { "content-type": "application/json" });
+const logger = createLogger({ serviceName: "api-gateway" });
+
+const RBAC_POLICIES = [
+  { pattern: /^\/api\/incidents$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/assignments\/(ASN-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/patients\/search$/, method: "POST", roles: ["dispatcher", "field_crew", "field_crew_lead", "supervisor", "clinical_reviewer", "sys_admin"] },
+  { pattern: /^\/api\/patients$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/, method: "POST", roles: ["dispatcher", "field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/observations$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/interventions$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/handover$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] }
+];
+
+function toHeaderValue(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function buildRequestContext(req) {
+  return {
+    requestId: toHeaderValue(req.headers["x-request-id"]) ?? randomUUID(),
+    correlationId: toHeaderValue(req.headers["x-correlation-id"]) ?? randomUUID(),
+    actorId: toHeaderValue(req.headers["x-actor-id"]),
+    role: (toHeaderValue(req.headers["x-user-role"]) ?? "anonymous").toLowerCase(),
+    startedAt: Date.now()
+  };
+}
+
+function okJson(res, status, body, context) {
+  res.writeHead(status, {
+    "content-type": "application/json",
+    "x-correlation-id": context.correlationId,
+    "x-request-id": context.requestId
+  });
   res.end(JSON.stringify(body));
 }
 
-function errorEnvelope(code, message, retryable) {
-  return { error: { code, message, retryable, correlation_id: randomUUID() } };
+function errorEnvelope(code, message, retryable, context, details = undefined) {
+  const error = {
+    code,
+    message,
+    retryable,
+    correlation_id: context.correlationId
+  };
+  if (details !== undefined) error.details = details;
+  return { error };
+}
+
+function evaluateRbac({ method, pathname, role, enforceRbac }) {
+  const policy = RBAC_POLICIES.find((candidate) => candidate.method === method && candidate.pattern.test(pathname));
+  if (!policy) return { enforced: enforceRbac, requiresRole: false, allowed: true, requiredRoles: [] };
+  const allowed = policy.roles.includes(role);
+  return { enforced: enforceRbac, requiresRole: true, allowed: !enforceRbac || allowed, requiredRoles: policy.roles, roleMatched: allowed };
+}
+
+function readinessReport(orchestration, enforceRbac) {
+  const incidents = orchestration.listIncidentsForBoard();
+  const byStatus = incidents.reduce((acc, incident) => {
+    acc[incident.status] = (acc[incident.status] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  return {
+    generated_at: new Date().toISOString(),
+    production_readiness: {
+      structured_logging: true,
+      correlation_headers: true,
+      rbac_enforced: enforceRbac
+    },
+    incident_snapshot: {
+      total: incidents.length,
+      by_status: byStatus
+    }
+  };
 }
 
 async function parseJson(req) {
@@ -230,92 +301,125 @@ function validateCreateHandover(payload) {
 }
 
 export function createApp(orchestration = new OrchestrationService()) {
-  const server = createServer(async (req, res) => {
-    try {
-      const url = new URL(req.url ?? "/", "http://localhost");
-      const method = req.method ?? "GET";
-      const correlationId = req.headers["x-correlation-id"] ?? randomUUID();
-      const idempotencyKey = req.headers["idempotency-key"];
+  const enforceRbac = process.env.RBAC_ENFORCE === "true";
 
-      if (method === "GET" && url.pathname === "/health") return okJson(res, 200, { status: "ok" });
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const method = req.method ?? "GET";
+    const context = buildRequestContext(req);
+    const idempotencyKey = req.headers["idempotency-key"];
+
+    logger.info("request_received", {
+      correlation_id: context.correlationId,
+      request_id: context.requestId,
+      actor_id: context.actorId,
+      actor_role: context.role,
+      method,
+      path: url.pathname
+    });
+
+    const rbac = evaluateRbac({ method, pathname: url.pathname, role: context.role, enforceRbac });
+    if (rbac.requiresRole) {
+      logger.info("rbac_evaluated", {
+        correlation_id: context.correlationId,
+        request_id: context.requestId,
+        actor_id: context.actorId,
+        actor_role: context.role,
+        allowed: rbac.allowed,
+        enforce_rbac: rbac.enforced,
+        required_roles: rbac.requiredRoles,
+        method,
+        path: url.pathname
+      });
+      if (!rbac.allowed) {
+        return okJson(res, 403, errorEnvelope("FORBIDDEN", "Role is not authorized for this action", false, context, {
+          required_roles: rbac.requiredRoles
+        }), context);
+      }
+    }
+
+    try {
+      if (method === "GET" && url.pathname === "/health") return okJson(res, 200, { status: "ok" }, context);
+
+      if (method === "GET" && url.pathname === "/api/support/readiness") {
+        return okJson(res, 200, readinessReport(orchestration, enforceRbac), context);
+      }
 
       if (method === "GET" && url.pathname === "/api/incidents") {
         const incidents = orchestration.listIncidentsForBoard();
-        return okJson(res, 200, { incidents });
+        return okJson(res, 200, { incidents }, context);
       }
 
       if (method === "POST" && url.pathname === "/api/incidents") {
         const payload = await parseJson(req);
         validateCreateIncident(payload);
-        const incident = orchestration.createIncident(payload, { correlationId, idempotencyKey });
-        return okJson(res, 201, incident);
+        const incident = orchestration.createIncident(payload, { correlationId: context.correlationId, idempotencyKey });
+        return okJson(res, 201, incident, context);
       }
-
 
       if (method === "POST" && url.pathname === "/api/patients/search") {
         const payload = await parseJson(req);
         validatePatientSearch(payload);
-        const result = await orchestration.searchPatient(payload, { correlationId });
-        return okJson(res, 200, result);
+        const result = await orchestration.searchPatient(payload, { correlationId: context.correlationId });
+        return okJson(res, 200, result, context);
       }
 
       if (method === "POST" && url.pathname === "/api/patients") {
         const payload = await parseJson(req);
         validatePatientCreate(payload);
-        const patient = await orchestration.createPatient(payload, { correlationId, idempotencyKey });
-        return okJson(res, 201, patient);
+        const patient = await orchestration.createPatient(payload, { correlationId: context.correlationId, idempotencyKey });
+        return okJson(res, 201, patient, context);
       }
 
       const incidentMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})$/);
       if (incidentMatch && method === "GET") {
         const incident = orchestration.getIncident(incidentMatch[1]);
-        return okJson(res, 200, incident);
+        return okJson(res, 200, incident, context);
       }
       if (incidentMatch && method === "PATCH") {
         const payload = await parseJson(req);
         validateAction(payload);
-        const incident = orchestration.updateIncident(incidentMatch[1], payload, { correlationId });
-        return okJson(res, 200, incident);
+        const incident = orchestration.updateIncident(incidentMatch[1], payload, { correlationId: context.correlationId });
+        return okJson(res, 200, incident, context);
       }
 
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
       if (patientLinkMatch && method === "GET") {
         const link = orchestration.getPatientLink(patientLinkMatch[1]);
-        return okJson(res, 200, link);
+        return okJson(res, 200, link, context);
       }
       if (patientLinkMatch && method === "POST") {
         const payload = await parseJson(req);
         validatePatientLink(payload);
-        const link = orchestration.linkPatientToIncidentContext(patientLinkMatch[1], payload, { correlationId });
-        return okJson(res, 200, link);
+        const link = orchestration.linkPatientToIncidentContext(patientLinkMatch[1], payload, { correlationId: context.correlationId });
+        return okJson(res, 200, link, context);
       }
 
       const assignmentCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/);
       if (assignmentCreateMatch && method === "GET") {
         const assignments = orchestration.getAssignmentsByIncident(assignmentCreateMatch[1]);
-        return okJson(res, 200, assignments);
+        return okJson(res, 200, assignments, context);
       }
       if (assignmentCreateMatch && method === "POST") {
         const payload = await parseJson(req);
         validateCreateAssignment(payload);
-        const assignment = orchestration.createAssignment(assignmentCreateMatch[1], payload, { correlationId, idempotencyKey });
-        return okJson(res, 201, assignment);
+        const assignment = orchestration.createAssignment(assignmentCreateMatch[1], payload, { correlationId: context.correlationId, idempotencyKey });
+        return okJson(res, 201, assignment, context);
       }
-
 
       const encounterCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/);
       if (encounterCreateMatch && method === "GET") {
         const encounter = orchestration.getEncounterByIncident(encounterCreateMatch[1]);
-        return okJson(res, 200, encounter);
+        return okJson(res, 200, encounter, context);
       }
       if (encounterCreateMatch && method === "POST") {
         const payload = await parseJson(req);
         validateCreateEncounter(payload);
-        const encounter = await orchestration.createEncounterForIncident(encounterCreateMatch[1], payload, { correlationId, idempotencyKey });
+        const encounter = await orchestration.createEncounterForIncident(encounterCreateMatch[1], payload, { correlationId: context.correlationId, idempotencyKey });
         if (!ENCOUNTER_STATUSES.includes(encounter.status)) {
           throw new ApiError("DOWNSTREAM_UNAVAILABLE", "Encounter status not recognized", 502, true);
         }
-        return okJson(res, 201, encounter);
+        return okJson(res, 201, encounter, context);
       }
 
       const observationCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/observations$/);
@@ -324,8 +428,8 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateEncounterId(encounterId);
         const payload = await parseJson(req);
         validateCreateObservation(payload);
-        const observation = await orchestration.createObservationForEncounter(encounterId, payload, { correlationId });
-        return okJson(res, 201, observation);
+        const observation = await orchestration.createObservationForEncounter(encounterId, payload, { correlationId: context.correlationId });
+        return okJson(res, 201, observation, context);
       }
 
       const interventionCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/interventions$/);
@@ -333,15 +437,15 @@ export function createApp(orchestration = new OrchestrationService()) {
         const encounterId = interventionCreateMatch[1];
         validateEncounterId(encounterId);
         const interventions = await orchestration.getInterventionsForEncounter(encounterId);
-        return okJson(res, 200, interventions);
+        return okJson(res, 200, interventions, context);
       }
       if (interventionCreateMatch && method === "POST") {
         const encounterId = interventionCreateMatch[1];
         validateEncounterId(encounterId);
         const payload = await parseJson(req);
         validateCreateIntervention(payload);
-        const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId });
-        return okJson(res, 201, intervention);
+        const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId: context.correlationId });
+        return okJson(res, 201, intervention, context);
       }
 
       const handoverCreateMatch = url.pathname.match(/^\/api\/encounters\/([^/]+)\/handover$/);
@@ -349,34 +453,68 @@ export function createApp(orchestration = new OrchestrationService()) {
         const encounterId = handoverCreateMatch[1];
         validateEncounterId(encounterId);
         const handover = await orchestration.getHandoverForEncounter(encounterId);
-        return okJson(res, 200, handover);
+        return okJson(res, 200, handover, context);
       }
       if (handoverCreateMatch && method === "POST") {
         const encounterId = handoverCreateMatch[1];
         validateEncounterId(encounterId);
         const payload = await parseJson(req);
         validateCreateHandover(payload);
-        const handover = await orchestration.createHandoverForEncounter(encounterId, payload, { correlationId });
-        return okJson(res, 201, handover);
+        const handover = await orchestration.createHandoverForEncounter(encounterId, payload, { correlationId: context.correlationId });
+        return okJson(res, 201, handover, context);
       }
 
       const assignmentPatchMatch = url.pathname.match(/^\/api\/assignments\/(ASN-[0-9]{6})$/);
       if (assignmentPatchMatch && method === "PATCH") {
         const payload = await parseJson(req);
         validateAction(payload);
-        const assignment = orchestration.updateAssignment(assignmentPatchMatch[1], payload, { correlationId });
-        return okJson(res, 200, assignment);
+        const assignment = orchestration.updateAssignment(assignmentPatchMatch[1], payload, { correlationId: context.correlationId });
+        return okJson(res, 200, assignment, context);
       }
 
-      return okJson(res, 404, errorEnvelope("NOT_FOUND", "Route not found", false));
+      return okJson(res, 404, errorEnvelope("NOT_FOUND", "Route not found", false, context), context);
     } catch (error) {
-      if (error instanceof ApiError) return okJson(res, error.status, errorEnvelope(error.code, error.message, error.retryable));
-      return okJson(res, 500, errorEnvelope("DOWNSTREAM_UNAVAILABLE", "Unexpected server error", true));
+      if (error instanceof ApiError) {
+        logger.warn("request_failed", {
+          correlation_id: context.correlationId,
+          request_id: context.requestId,
+          actor_id: context.actorId,
+          actor_role: context.role,
+          method,
+          path: url.pathname,
+          status: error.status,
+          error_code: error.code,
+          error_message: error.message
+        });
+        return okJson(res, error.status, errorEnvelope(error.code, error.message, error.retryable, context), context);
+      }
+
+      logger.error("request_failed_unhandled", {
+        correlation_id: context.correlationId,
+        request_id: context.requestId,
+        actor_id: context.actorId,
+        actor_role: context.role,
+        method,
+        path: url.pathname,
+        error
+      });
+      return okJson(res, 500, errorEnvelope("DOWNSTREAM_UNAVAILABLE", "Unexpected server error", true, context), context);
+    } finally {
+      logger.info("request_completed", {
+        correlation_id: context.correlationId,
+        request_id: context.requestId,
+        actor_id: context.actorId,
+        actor_role: context.role,
+        method,
+        path: url.pathname,
+        duration_ms: Date.now() - context.startedAt
+      });
     }
   });
 
   return server;
 }
+
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const server = createApp();

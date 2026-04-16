@@ -25,14 +25,27 @@ import {
 function readConfig() {
   const apiBaseInput = document.querySelector("#apiBaseUrl");
   const incidentInput = document.querySelector("#incidentId");
+  const actorIdInput = selectOptional("#actorId");
+  const actorRoleInput = selectOptional("#actorRole");
   return {
     apiBaseUrl: apiBaseInput.value.trim().replace(/\/$/, ""),
-    incidentId: incidentInput.value.trim()
+    incidentId: incidentInput.value.trim(),
+    actorId: actorIdInput?.value.trim(),
+    actorRole: actorRoleInput?.value.trim()
   };
 }
 
 let closeIncidentFeedback = "";
 let dispatcherPollingIntervalId = null;
+
+function selectOptional(selector) {
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null;
+  }
+}
+
 
 function readDispatcherBoardControls() {
   const activeOnlyInput = document.querySelector("#boardFilterActive");
@@ -176,6 +189,7 @@ function formatApiError(error) {
   const parts = [error.message];
   if (error.code) parts.push(`code=${error.code}`);
   if (error.correlationId) parts.push(`correlation_id=${error.correlationId}`);
+  if (error.requestId) parts.push(`request_id=${error.requestId}`);
   if (error.details && typeof error.details === "object") {
     parts.push(`details=${Object.entries(error.details).map(([key, value]) => `${key}:${value}`).join(", ")}`);
   }
