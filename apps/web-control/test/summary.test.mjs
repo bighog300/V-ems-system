@@ -1,0 +1,52 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildIncidentOperationalSummary, renderOperationalSummaryHtml } from "../src/summary.mjs";
+
+test("buildIncidentOperationalSummary includes closure readiness and encounter/handover data", () => {
+  const summary = buildIncidentOperationalSummary({
+    incident: {
+      incident_id: "INC-000111",
+      priority: "critical",
+      status: "Handover Complete",
+      address: "Main St",
+      closure_ready: true
+    },
+    encounterLink: {
+      encounter_id: "ENC-11",
+      openemr_encounter_id: "ENC-11",
+      openemr_patient_id: "OE-100",
+      encounter_status: "Handover Completed",
+      care_started_at: "2026-04-16T10:20:00Z"
+    },
+    handover: {
+      handover_status: "Handover Completed",
+      disposition: "transport_to_facility",
+      closure_ready: true
+    }
+  });
+
+  assert.equal(summary.incidentId, "INC-000111");
+  assert.equal(summary.closureReady, true);
+  assert.equal(summary.patientLinkSummary.available, true);
+  assert.equal(summary.encounterSummary.available, true);
+  assert.equal(summary.handoverSummary.available, true);
+});
+
+test("renderOperationalSummaryHtml renders required operational labels", () => {
+  const html = renderOperationalSummaryHtml({
+    incidentId: "INC-000222",
+    priority: "high",
+    status: "Assigned",
+    locationSummary: "123 Center Road",
+    closureReady: undefined,
+    assignmentSummary: { summary: "Assignment summary unavailable" },
+    patientLinkSummary: { summary: "Patient link unavailable" },
+    encounterSummary: { available: false, detail: "No encounter" },
+    handoverSummary: { available: false, detail: "No handover" }
+  });
+
+  assert.match(html, /Incident ID/);
+  assert.match(html, /Priority/);
+  assert.match(html, /Closure Ready/);
+  assert.match(html, /Patient Link Summary/);
+});
