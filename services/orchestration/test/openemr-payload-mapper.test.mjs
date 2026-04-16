@@ -53,3 +53,39 @@ test("openemr payload mapper maps observation create request/response", () => {
   });
   assert.deepEqual(response, { observation_id: "OBS-710", encounter_id: "ENC-710", status: "recorded" });
 });
+
+test("openemr payload mapper maps intervention create request/response", () => {
+  const mapper = new OpenEmrPayloadMapper();
+  const request = mapper.mapInterventionCreateRequest({
+    encounter_id: "ENC-720",
+    incident_id: "INC-000001",
+    patient_id: "OE-720",
+    performed_at: "2026-04-16T10:10:00Z",
+    type: "medication",
+    name: "Aspirin",
+    dose: "300mg",
+    route: "oral",
+    response: "pain reduced",
+    stock_item_id: "ITEM-001"
+  });
+  const response = mapper.mapInterventionCreateResponse({
+    intervention_id: "INT-720",
+    encounter_id: "ENC-720",
+    status: "recorded",
+    ignored: true
+  });
+
+  assert.deepEqual(request, {
+    encounter_id: "ENC-720",
+    incident_id: "INC-000001",
+    patient_id: "OE-720",
+    performed_at: "2026-04-16T10:10:00Z",
+    type: "medication",
+    name: "Aspirin",
+    dose: "300mg",
+    route: "oral",
+    response: "pain reduced",
+    stock_item_id: "ITEM-001"
+  });
+  assert.deepEqual(response, { intervention_id: "INT-720", encounter_id: "ENC-720", status: "recorded" });
+});

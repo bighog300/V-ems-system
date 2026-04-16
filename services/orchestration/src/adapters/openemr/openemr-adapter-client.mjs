@@ -41,4 +41,12 @@ export class OpenEmrAdapterClient {
     });
     return this.mapper.mapObservationCreateResponse(response);
   }
+
+  async createIntervention(intervention) {
+    const response = await this.transport({
+      method: "createIntervention",
+      payload: this.mapper.mapInterventionCreateRequest(intervention)
+    });
+    return this.mapper.mapInterventionCreateResponse(response);
+  }
 }

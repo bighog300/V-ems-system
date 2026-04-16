@@ -88,3 +88,68 @@ test("observation orchestration rejects missing encounter", async () => {
     /not found/
   );
 });
+
+test("intervention orchestration emits audit/event metadata", async () => {
+  const calls = [];
+  const orchestration = createService({
+    searchPatient: async () => ({ match_status: "no_match", match_confidence: 0, candidates: [] }),
+    createPatient: async () => ({ patient_id: "OE-900" }),
+    createEncounter: async () => ({ encounter_id: "ENC-900", status: "Open" }),
+    createObservation: async () => ({ observation_id: "OBS-900", encounter_id: "ENC-900", status: "recorded" }),
+    createIntervention: async (payload) => {
+      calls.push(payload);
+      return { intervention_id: "INT-900", encounter_id: payload.encounter_id, status: "recorded" };
+    }
+  });
+
+  const incident = createIncident(orchestration, "corr-int-1");
+  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+    verification_status: "verified",
+    openemr_patient_id: "OE-900"
+  }, { correlationId: "corr-int-2" });
+  await orchestration.createEncounterForIncident(incident.incident_id, {
+    patient_id: "OE-900",
+    care_started_at: "2026-04-16T10:15:00Z",
+    crew_ids: ["STAFF-001"],
+    presenting_complaint: "Chest pain"
+  }, { correlationId: "corr-int-3" });
+
+  const created = await orchestration.createInterventionForEncounter("ENC-900", {
+    performed_at: "2026-04-16T10:25:00Z",
+    type: "medication",
+    name: "Aspirin"
+  }, { correlationId: "corr-int-4" });
+
+  assert.deepEqual(created, { intervention_id: "INT-900", encounter_id: "ENC-900", status: "recorded" });
+  assert.deepEqual(calls, [{
+    encounter_id: "ENC-900",
+    incident_id: incident.incident_id,
+    patient_id: "OE-900",
+    performed_at: "2026-04-16T10:25:00Z",
+    type: "medication",
+    name: "Aspirin"
+  }]);
+
+  const events = orchestration.listOutboxEvents();
+  assert.equal(events.at(-1).event_type, "InterventionCreated");
+  assert.equal(events.at(-1).payload.intervention_id, "INT-900");
+});
+
+test("intervention orchestration rejects missing encounter", async () => {
+  const orchestration = createService({
+    searchPatient: async () => ({ match_status: "no_match", match_confidence: 0, candidates: [] }),
+    createPatient: async () => ({ patient_id: "OE-100" }),
+    createEncounter: async () => ({ encounter_id: "ENC-100", status: "Open" }),
+    createObservation: async () => ({ observation_id: "OBS-100", encounter_id: "ENC-100", status: "recorded" }),
+    createIntervention: async () => ({ intervention_id: "INT-100", encounter_id: "ENC-100", status: "recorded" })
+  });
+
+  await assert.rejects(
+    () => orchestration.createInterventionForEncounter("ENC-404", {
+      performed_at: "2026-04-16T10:20:00Z",
+      type: "procedure",
+      name: "Splinting"
+    }, { correlationId: "corr-int-5" }),
+    /not found/
+  );
+});

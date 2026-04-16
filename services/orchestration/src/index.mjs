@@ -345,6 +345,36 @@ export class OrchestrationService {
     return normalized;
   }
 
+  async createInterventionForEncounter(encounterId, payload, meta) {
+    const encounter = this.encounterLinks.findByEncounterId(encounterId);
+    if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+
+    const created = await this.openemr.createIntervention({
+      encounter_id: encounterId,
+      incident_id: encounter.incident_id,
+      patient_id: encounter.openemr_patient_id,
+      ...payload
+    });
+
+    const normalized = {
+      intervention_id: created.intervention_id,
+      encounter_id: created.encounter_id ?? encounterId,
+      status: created.status
+    };
+
+    this.audit("intervention", normalized.intervention_id, "create_intervention", meta.correlationId, undefined, {
+      ...normalized,
+      incident_id: encounter.incident_id
+    });
+    this.event("InterventionCreated", meta.correlationId, {
+      incident_id: encounter.incident_id,
+      encounter_id: normalized.encounter_id,
+      intervention_id: normalized.intervention_id
+    });
+
+    return normalized;
+  }
+
   listOutboxEvents() {
     return this.events.listAll();
   }

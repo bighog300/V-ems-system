@@ -195,6 +195,35 @@ components:
         observation_id: { type: string }
         encounter_id: { type: string }
         status: { type: string }
+    CreateInterventionRequest:
+      type: object
+      required: [performed_at, type, name]
+      additionalProperties: false
+      properties:
+        performed_at:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [medication, procedure, airway, oxygen_therapy, immobilization, other]
+        name:
+          type: string
+          minLength: 1
+        dose:
+          type: string
+        route:
+          type: string
+        response:
+          type: string
+        stock_item_id:
+          type: string
+    InterventionResponse:
+      type: object
+      required: [intervention_id, encounter_id, status]
+      properties:
+        intervention_id: { type: string }
+        encounter_id: { type: string }
+        status: { type: string }
     StockUsageRequest:
       type: object
       required: [incident_id, vehicle_id, item_id, quantity_used, usage_source]
@@ -348,6 +377,31 @@ paths:
       summary: Add intervention to encounter.
       parameters:
         - $ref: '#/components/parameters/EncounterId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInterventionRequest'
+      responses:
+        '201':
+          description: Intervention created for encounter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InterventionResponse'
+        '400':
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Encounter not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/encounters/{encounterId}/handover:
     post:
       tags: [Encounters]
