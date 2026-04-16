@@ -56,6 +56,7 @@ npm test
 
 ### Optional upstream connectivity validation (staging-like)
 By default smoke runs stay offline-safe and do **not** require live Vtiger/OpenEMR systems.
+Staging profile also enables RBAC enforcement (`RBAC_ENFORCE=true`) so smoke runs validate representative role allow/deny behavior.
 
 Enable optional checks when targets are reachable:
 ```bash
@@ -74,7 +75,7 @@ make stop-env
 
 ### Environment files
 - `env/development.env`: reproducible local defaults
-- `env/staging.env`: staging-like placeholder config
+- `env/staging.env`: staging-like placeholder config (includes `RBAC_ENFORCE=true`)
 - `env/development.local.env`: optional local override file loaded after `env/development.env`
 
 ### One-off service startup
