@@ -32,5 +32,42 @@ Operational and clinical orchestration platform for an emergency ambulance servi
 ## Specs
 See `docs/specs/` for the machine-readable build contracts.
 
+## Local + staging-like environment commands
+
+### 1) Bootstrap once
+```bash
+make bootstrap
+```
+
+### 2) Start all runtime services (API + web + sync worker)
+```bash
+make start-env ENV=development
+```
+
+### 3) Run smoke tests
+```bash
+make smoke ENV=development
+```
+
+### 4) Run full tests
+```bash
+npm test
+```
+
+### 5) Stop environment
+```bash
+make stop-env
+```
+
+### Environment files
+- `env/development.env`: reproducible local defaults
+- `env/staging.env`: staging-like placeholder config
+- `env/development.local.env`: optional local override file loaded after `env/development.env`
+
+### One-off service startup
+- API only: `make start-api ENV=development`
+- Web control only: `make start-web ENV=development`
+- Sync worker only: `make start-worker ENV=development`
+
 ## Notes
 This starter bundle is designed to be imported into GitHub and used with AI-assisted execution tools.

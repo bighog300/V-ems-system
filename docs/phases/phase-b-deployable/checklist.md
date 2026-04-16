@@ -1,12 +1,12 @@
 # Phase B Checklist
 
-- [ ] Bootstrap scripts
-- [ ] Makefile / task commands
+- [x] Bootstrap scripts
+- [x] Makefile / task commands
 - [ ] Vtiger setup/apply scripts
 - [ ] OpenEMR setup/apply scripts
-- [ ] Local environment orchestration
+- [x] Local environment orchestration
 - [ ] Real adapter connectivity
-- [ ] Health checks
-- [ ] Smoke tests
+- [x] Health checks
+- [x] Smoke tests
 - [ ] CI/CD pipeline hardening
 - [ ] Secrets/config strategy implemented

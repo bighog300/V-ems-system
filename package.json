@@ -8,6 +8,11 @@
     "services/*"
   ],
   "scripts": {
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "bootstrap": "./scripts/bootstrap.sh",
+    "init-db": "./scripts/init-db.sh development",
+    "start:env": "./scripts/start-env.sh development",
+    "stop:env": "./scripts/stop-env.sh",
+    "smoke": "./scripts/smoke.sh development"
   }
 }
