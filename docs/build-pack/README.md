@@ -13,6 +13,7 @@ Canonical human-readable planning documents for implementation are in this direc
 - `12-repository-file-manifest-and-starter-files.md`
 - `13-codex-execution-plan-and-task-graph.md`
 - `15-repo-readiness-review-and-auto-build-recommendations.md`
+- `16-document-gap-analysis-and-middleman-app-design.md`
 
 ## Source-of-truth note
 Machine-readable contracts are in `docs/specs/` and should be treated as authoritative for implementation details.
