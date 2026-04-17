@@ -1,9 +1,9 @@
 # Issue 3 Task Checklist
 
 ## Investigation
-- [ ] Inspect `services/orchestration/src/db.mjs`
-- [ ] Identify every remaining `sqlite3` CLI invocation path
-- [ ] Identify assumptions in migrations/repositories/tests tied to the current DB implementation
+- [x] Inspect `services/orchestration/src/db.mjs`
+- [x] Identify every remaining `sqlite3` CLI invocation path
+- [x] Identify assumptions in migrations/repositories/tests tied to the current DB implementation
 
 ## Implementation
 - [ ] Remove all `sqlite3` CLI shell-out behavior

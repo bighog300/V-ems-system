@@ -4,7 +4,7 @@
 Complete orchestration DB runtime migration by removing the remaining `sqlite3` CLI fallback.
 
 ## Current status
-Issue 3 is still **Partial** because `services/orchestration/src/db.mjs` now prefers an embedded runtime when available, but still falls back to the external `sqlite3` CLI in the current Node 20 environment.
+Issue 3 is still **Partial** because `services/orchestration/src/db.mjs` prefers an embedded runtime when available, but still falls back to the external `sqlite3` CLI in the current Node 20 environment.
 
 ## Why this is still open
 The production-readiness requirement was to remove shell-out database execution and eliminate dependence on an external database executable at runtime.
