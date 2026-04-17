@@ -22,7 +22,12 @@ export class AssignmentRepository {
   }
 
   nextAssignmentId() {
-    const row = this.db.queryOne("SELECT COALESCE(MAX(CAST(SUBSTR(assignment_id, 5) AS INTEGER)), 0) + 1 AS next_id FROM assignments;");
+    const row = this.db.queryOne(`
+      INSERT INTO id_sequences (name, next_value)
+      VALUES ('assignment', 2)
+      ON CONFLICT(name) DO UPDATE SET next_value = id_sequences.next_value + 1
+      RETURNING next_value - 1 AS next_id;
+    `);
     return `ASN-${String(row.next_id).padStart(6, "0")}`;
   }
 

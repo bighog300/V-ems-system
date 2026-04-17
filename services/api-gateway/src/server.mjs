@@ -6,15 +6,22 @@ import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, creat
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
 const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Treatment In Progress", "Ready for Handover", "Handover Completed", "Closed", "Cancelled"];
+const DEFAULT_JSON_BODY_MAX_BYTES = 1024 * 1024;
 
 
 const logger = createLogger({ serviceName: "api-gateway" });
 
 const RBAC_POLICIES = [
   { pattern: /^\/api\/support\/diagnostics$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/interventions$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/handover$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
   { pattern: /^\/api\/assignments\/(ASN-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/patients\/search$/, method: "POST", roles: ["dispatcher", "field_crew", "field_crew_lead", "supervisor", "clinical_reviewer", "sys_admin"] },
   { pattern: /^\/api\/patients$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
@@ -251,9 +258,26 @@ function recordRequestMetrics(metrics, { method, pathname, durationMs, failed })
   if (failed) metrics.by_route[routeKey].request_failures += 1;
 }
 
+function assertJsonContentType(req) {
+  const contentTypeHeader = String(req.headers["content-type"] ?? "");
+  const [contentType] = contentTypeHeader.split(";");
+  if (contentType.trim().toLowerCase() !== "application/json") {
+    throw new ApiError("UNSUPPORTED_MEDIA_TYPE", "Content-Type must be application/json", 415);
+  }
+}
+
 async function parseJson(req) {
+  assertJsonContentType(req);
+  const jsonBodyMaxBytes = Number(process.env.JSON_BODY_MAX_BYTES ?? DEFAULT_JSON_BODY_MAX_BYTES);
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let bytesRead = 0;
+  for await (const chunk of req) {
+    bytesRead += chunk.length;
+    if (bytesRead > jsonBodyMaxBytes) {
+      throw new ApiError("PAYLOAD_TOO_LARGE", `JSON payload exceeds ${jsonBodyMaxBytes} bytes`, 413);
+    }
+    chunks.push(chunk);
+  }
   if (chunks.length === 0) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));

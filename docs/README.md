@@ -1,13 +1,27 @@
-# VEMS Sprint Execution Docs
+# Documentation Index
 
-This folder contains the sprint-by-sprint execution plan for completing the VEMS platform, along with ready-to-use Codex prompts for each sprint.
+This directory contains product specs, build artifacts, ops notes, and sprint planning documents.
 
-## Structure
-- `sprints/` — sprint planning documents
-- `codex-prompts/` — execution prompts for Codex in the same order
+## Recommended reading order for implementation work
 
-## Recommended usage
-1. Start with `sprints/00-roadmap-overview.md`
-2. Execute sprints in order from 01 to 07
-3. Use the matching prompt in `codex-prompts/`
-4. Commit after each sprint milestone
+1. `specs/README.md`
+2. `specs/openapi.yaml`
+3. `specs/state-machines.yaml`
+4. `specs/canonical-data-model.yaml`
+5. `specs/event-contracts.yaml`
+6. `build-pack/README.md` (design/implementation context)
+
+## Key folders
+
+- `specs/` — machine-readable contracts (API/data/state/event/env).
+- `build-pack/` — architecture/design documentation.
+- `ops/` — upstream system + operational runbooks.
+- `sprints/` — sprint-level execution objectives.
+- `codex-prompts/` — prompt artifacts aligned to the sprint docs.
+- `root-legacy/` — archived legacy source docs.
+
+## Development reality notes
+
+- The active code lives in top-level `apps/`, `services/`, and `packages/`.
+- Local startup/testing is script + npm-workspace based (see root `README.md`).
+- Current API auth context is header-based for development, with optional RBAC enforcement via environment flags.

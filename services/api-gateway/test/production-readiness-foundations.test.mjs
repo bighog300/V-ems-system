@@ -21,8 +21,8 @@ async function startServer() {
 
 async function jsonFetch(base, path, options = {}) {
   const response = await fetch(`${base}${path}`, {
-    headers: { "content-type": "application/json", ...(options.headers ?? {}) },
-    ...options
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers ?? {}) }
   });
 
   return {
@@ -76,6 +76,103 @@ test("rbac policy is enforced for write endpoints when enabled", async () => {
   } finally {
     server.close();
     delete process.env.RBAC_ENFORCE;
+  }
+});
+
+test("rbac policy is enforced for sensitive read endpoints when enabled", async () => {
+  process.env.RBAC_ENFORCE = "true";
+  const { server, base } = await startServer();
+
+  try {
+    const created = await jsonFetch(base, "/api/incidents", {
+      method: "POST",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-901" },
+      body: JSON.stringify({
+        call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
+        incident: { category: "medical_emergency", priority: "critical", description: "RBAC read", address: "Main St", patient_count: 1 }
+      })
+    });
+    assert.equal(created.status, 201);
+
+    const deniedIncidents = await jsonFetch(base, "/api/incidents", {
+      method: "GET",
+      headers: { "x-user-role": "field_crew", "x-actor-id": "STAFF-902" }
+    });
+    assert.equal(deniedIncidents.status, 403);
+
+    const allowedIncidents = await jsonFetch(base, "/api/incidents", {
+      method: "GET",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-901" }
+    });
+    assert.equal(allowedIncidents.status, 200);
+
+    const deniedPatientLinkRead = await jsonFetch(base, `/api/incidents/${created.body.incident_id}/patient-link`, {
+      method: "GET",
+      headers: { "x-user-role": "dispatcher", "x-actor-id": "STAFF-901" }
+    });
+    assert.equal(deniedPatientLinkRead.status, 403);
+
+    const allowedPatientLinkRead = await jsonFetch(base, `/api/incidents/${created.body.incident_id}/patient-link`, {
+      method: "GET",
+      headers: { "x-user-role": "supervisor", "x-actor-id": "STAFF-903" }
+    });
+    assert.equal(allowedPatientLinkRead.status, 404);
+  } finally {
+    server.close();
+    delete process.env.RBAC_ENFORCE;
+  }
+});
+
+test("json endpoints reject unsupported content types with 415", async () => {
+  const { server, base } = await startServer();
+  try {
+    const response = await fetch(`${base}/api/incidents`, {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-user-role": "dispatcher", "x-actor-id": "STAFF-904" },
+      body: "not-json"
+    });
+    const body = await response.json();
+    assert.equal(response.status, 415);
+    assert.equal(body.error.code, "UNSUPPORTED_MEDIA_TYPE");
+  } finally {
+    server.close();
+  }
+});
+
+test("json endpoints reject oversized payloads with 413", async () => {
+  process.env.JSON_BODY_MAX_BYTES = "64";
+  const { server, base } = await startServer();
+  try {
+    const response = await fetch(`${base}/api/incidents`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-user-role": "dispatcher", "x-actor-id": "STAFF-905" },
+      body: JSON.stringify({
+        call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
+        incident: { category: "medical_emergency", priority: "critical", description: "x".repeat(200), address: "Main St", patient_count: 1 }
+      })
+    });
+    const body = await response.json();
+    assert.equal(response.status, 413);
+    assert.equal(body.error.code, "PAYLOAD_TOO_LARGE");
+  } finally {
+    server.close();
+    delete process.env.JSON_BODY_MAX_BYTES;
+  }
+});
+
+test("json endpoints preserve malformed JSON behavior with 400", async () => {
+  const { server, base } = await startServer();
+  try {
+    const response = await fetch(`${base}/api/incidents`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-user-role": "dispatcher", "x-actor-id": "STAFF-906" },
+      body: "{\"call\":"
+    });
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, "INVALID_PAYLOAD");
+  } finally {
+    server.close();
   }
 });
 

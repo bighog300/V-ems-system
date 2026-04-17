@@ -13,8 +13,8 @@ function createDbPath() {
 
 async function jsonFetch(base, path, options = {}) {
   const response = await fetch(`${base}${path}`, {
-    headers: { "content-type": "application/json", ...(options.headers ?? {}) },
-    ...options
+    ...options,
+    headers: { "content-type": "application/json", ...(options.headers ?? {}) }
   });
   return { status: response.status, body: await response.json() };
 }
