@@ -292,6 +292,57 @@ test("closeIncident surfaces structured backend errors", async () => {
   );
 });
 
+test("API requests prefer bearer token auth when provided", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { incidents: [] };
+      }
+    };
+  };
+
+  await loadDispatcherBoardData({
+    apiBaseUrl: "http://127.0.0.1:8080",
+    authToken: "token-abc",
+    actorId: "STAFF-001",
+    actorRole: "dispatcher",
+    fetchImpl
+  });
+
+  assert.equal(calls[0].options.headers.authorization, "Bearer token-abc");
+  assert.equal(calls[0].options.headers["x-actor-id"], undefined);
+  assert.equal(calls[0].options.headers["x-user-role"], undefined);
+});
+
+test("API requests fallback to actor headers when bearer token missing", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return { incidents: [] };
+      }
+    };
+  };
+
+  await loadDispatcherBoardData({
+    apiBaseUrl: "http://127.0.0.1:8080",
+    actorId: "STAFF-001",
+    actorRole: "dispatcher",
+    fetchImpl
+  });
+
+  assert.equal(calls[0].options.headers.authorization, undefined);
+  assert.equal(calls[0].options.headers["x-actor-id"], "STAFF-001");
+  assert.equal(calls[0].options.headers["x-user-role"], "dispatcher");
+});
+
 
 test("createEncounterObservation submits to POST /api/encounters/{encounterId}/observations", async () => {
   const calls = [];

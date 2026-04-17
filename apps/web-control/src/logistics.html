@@ -38,6 +38,12 @@
           <input id="apiBaseUrl" value="http://127.0.0.1:8080" />
         </label>
         <label>
+          Bearer Token
+          <input id="authToken" type="password" autocomplete="off" placeholder="Paste JWT/OAuth bearer token" />
+        </label>
+        <details data-dev-only>
+          <summary>Development identity headers</summary>
+        <label>
           Actor ID
           <input id="actorId" value="STAFF-LOG-1" />
         </label>
@@ -49,6 +55,7 @@
             <option value="sys_admin">sys_admin</option>
           </select>
         </label>
+        </details>
         <button id="loadDashboard">Load Dashboard</button>
         <label>
           Auto Refresh (30s)
@@ -63,21 +70,19 @@
 
     <script type="module">
       import { loadLogisticsData, buildLogisticsSections, renderLogisticsDashboardHtml } from "./logistics.mjs";
+      import { applyProductionUiMode, readSessionFromDom } from "./session.mjs";
+      import { handleAppError, startPolling } from "./runtime.mjs";
 
       const output = document.querySelector("#dashOutput");
       const statusEl = document.querySelector("#dashStatus");
-      let pollingId = null;
-
-      function readConfig() {
-        return {
-          apiBaseUrl: document.querySelector("#apiBaseUrl").value.trim().replace(/\/$/, ""),
-          actorId: document.querySelector("#actorId").value.trim() || undefined,
-          actorRole: document.querySelector("#actorRole").value.trim() || undefined
-        };
-      }
+      const polling = startPolling({
+        enabled: () => Boolean(document.querySelector("#autoRefresh").checked),
+        intervalMs: 30000,
+        onTick: () => renderDashboard({ reason: "auto" })
+      });
 
       async function renderDashboard({ reason = "manual" } = {}) {
-        const config = readConfig();
+        const config = readSessionFromDom({ includeIncidentId: false });
         if (!config.apiBaseUrl) { statusEl.textContent = "API Base URL is required."; return; }
         if (reason === "manual") statusEl.textContent = "Loading logistics dashboard...";
 
@@ -89,27 +94,20 @@
             ? `Auto-refreshed at ${new Date().toLocaleTimeString()}.`
             : "Dashboard loaded.";
         } catch (err) {
-          output.innerHTML = err.code === "FORBIDDEN"
-            ? `<div class="log-access-denied">Access denied — requires supervisor, operations_manager, or sys_admin role.</div>`
-            : `<div class="log-access-denied">Failed to load dashboard: ${String(err.message)}</div>`;
-          statusEl.textContent = "Dashboard load failed.";
+          handleAppError(err, {
+            statusEl,
+            outputEl: output,
+            unauthorizedMessage: "Session expired or unauthorized for logistics dashboard.",
+            fallbackPrefix: "Dashboard load failed."
+          });
         }
       }
 
-      function startPolling() {
-        stopPolling();
-        if (!document.querySelector("#autoRefresh").checked) return;
-        pollingId = window.setInterval(() => void renderDashboard({ reason: "auto" }), 30000);
-      }
-      function stopPolling() {
-        if (!pollingId) return;
-        window.clearInterval(pollingId);
-        pollingId = null;
-      }
-
       document.querySelector("#loadDashboard").addEventListener("click", () => void renderDashboard());
-      document.querySelector("#autoRefresh").addEventListener("change", () => { startPolling(); void renderDashboard(); });
+      document.querySelector("#autoRefresh").addEventListener("change", () => { polling.start(); void renderDashboard(); });
 
+      applyProductionUiMode();
+      polling.start();
       void renderDashboard();
     </script>
   </body>

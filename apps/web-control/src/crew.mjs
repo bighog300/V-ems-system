@@ -88,9 +88,9 @@ function renderWorkflowGuidancePanel(summary) {
   return `
     <section class="panel">
       <h3>Next Step Guidance</h3>
-      <p><strong>${guidance.title}</strong></p>
-      <p class="hint">${guidance.detail}</p>
-      <p><strong>Suggested next action:</strong> ${guidance.action}</p>
+      <p><strong>${escapeHtml(guidance.title)}</strong></p>
+      <p class="hint">${escapeHtml(guidance.detail)}</p>
+      <p><strong>Suggested next action:</strong> ${escapeHtml(guidance.action)}</p>
     </section>
   `;
 }
@@ -144,7 +144,7 @@ function renderCareTimeline(summary) {
   ];
 
   const itemsHtml = timelineItems
-    .map((item) => `<li class="timeline-item timeline-item-${item.state}"><p><strong>${item.label}</strong></p><p>${item.detail}</p></li>`)
+    .map((item) => `<li class="timeline-item timeline-item-${item.state}"><p><strong>${escapeHtml(item.label)}</strong></p><p>${escapeHtml(item.detail)}</p></li>`)
     .join("\n");
 
   return `
@@ -161,7 +161,7 @@ function renderEncounterCreatePanel(summary, { defaultDateTimeValue = "" } = {})
       <section class="panel">
         <h3>Create Encounter</h3>
         <p class="success-note">
-          Encounter already linked: ${summary.encounterSummary.encounter_id} (${summary.encounterSummary.encounter_status}).
+          Encounter already linked: ${escapeHtml(summary.encounterSummary.encounter_id)} (${escapeHtml(summary.encounterSummary.encounter_status)}).
         </p>
         <p>Use the existing encounter for further clinical actions.</p>
       </section>
@@ -187,11 +187,11 @@ function renderEncounterCreatePanel(summary, { defaultDateTimeValue = "" } = {})
       <form id="createEncounterForm" class="encounter-form">
         <label>
           patient_id
-          <input id="encounterPatientId" name="patient_id" value="${linkedPatientId}" required />
+          <input id="encounterPatientId" name="patient_id" value="${escapeHtml(linkedPatientId)}" required />
         </label>
         <label>
           care_started_at
-          <input id="encounterCareStartedAt" name="care_started_at" type="datetime-local" value="${defaultDateTimeValue}" required />
+          <input id="encounterCareStartedAt" name="care_started_at" type="datetime-local" value="${escapeHtml(defaultDateTimeValue)}" required />
         </label>
         <label>
           crew_ids (comma separated)
@@ -225,7 +225,7 @@ function renderObservationPanel(summary, { defaultDateTimeValue = "" } = {}) {
       <form id="recordObservationForm" class="encounter-form">
         <label>
           recorded_at
-          <input name="recorded_at" type="datetime-local" value="${defaultDateTimeValue}" required />
+          <input name="recorded_at" type="datetime-local" value="${escapeHtml(defaultDateTimeValue)}" required />
         </label>
         <label>
           systolic BP (mmHg)
@@ -301,7 +301,7 @@ function renderInterventionPanel(summary, { defaultDateTimeValue = "" } = {}) {
       <form id="recordInterventionForm" class="encounter-form">
         <label>
           performed_at
-          <input name="performed_at" type="datetime-local" value="${defaultDateTimeValue}" required />
+          <input name="performed_at" type="datetime-local" value="${escapeHtml(defaultDateTimeValue)}" required />
         </label>
         <label>
           type
@@ -683,3 +683,4 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
     }
   `;
 }
+import { escapeHtml } from "./security.mjs";

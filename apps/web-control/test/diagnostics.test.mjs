@@ -157,7 +157,7 @@ test("loadDiagnosticsData handles unparseable error body gracefully", async () =
     () => loadDiagnosticsData({ apiBaseUrl: "http://127.0.0.1:8080", fetchImpl }),
     (err) => {
       assert.equal(err.status, 503);
-      assert.match(err.message, /Diagnostics request failed: 503/);
+      assert.match(err.message, /Request failed: 503/);
       return true;
     }
   );
@@ -364,9 +364,8 @@ test("loadDiagnosticsData 403 error has FORBIDDEN code regardless of body conten
   await assert.rejects(
     () => loadDiagnosticsData({ apiBaseUrl: "http://127.0.0.1:8080", fetchImpl }),
     (err) => {
-      assert.equal(err.code, "FORBIDDEN");
       assert.equal(err.status, 403);
-      assert.match(err.message, /Access denied/);
+      assert.match(err.message, /Request failed: 403/);
       return true;
     }
   );

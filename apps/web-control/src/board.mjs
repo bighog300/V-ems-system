@@ -1,3 +1,5 @@
+import { escapeHtml, formatDateTime, sanitizeClassToken } from "./security.mjs";
+
 function asText(value, fallback = "Unavailable") {
   return value === undefined || value === null || value === "" ? fallback : String(value);
 }
@@ -103,22 +105,22 @@ export function renderDispatcherBoardHtml(items, { lastUpdatedLabel } = {}) {
       const closureReady = item.closureReady === undefined ? "Not present" : String(item.closureReady);
       const closureClassName = item.closureReady === true ? "closure-ready-true" : "closure-ready-false";
       return `
-        <article class="board-card ${item.priorityClassName}">
+        <article class="board-card ${sanitizeClassToken(item.priorityClassName, "priority-low")}">
           <header>
-            <h3><a href="?incidentId=${encodeURIComponent(item.incidentId)}">${item.incidentId}</a></h3>
-            <p><strong>Priority:</strong> <span class="priority-pill">${item.priority}</span></p>
+            <h3><a href="?incidentId=${encodeURIComponent(item.incidentId)}">${escapeHtml(item.incidentId)}</a></h3>
+            <p><strong>Priority:</strong> <span class="priority-pill">${escapeHtml(item.priority)}</span></p>
           </header>
           <dl>
-            <dt>Status</dt><dd><span class="status-pill">${item.status}</span></dd>
-            <dt>Address / Location</dt><dd>${item.locationSummary}</dd>
-            <dt>Assignment</dt><dd>${item.assignmentSummary}</dd>
-            <dt>Closure Ready</dt><dd><span class="closure-pill ${closureClassName}">${closureReady}</span></dd>
+            <dt>Status</dt><dd><span class="status-pill">${escapeHtml(item.status)}</span></dd>
+            <dt>Address / Location</dt><dd>${escapeHtml(item.locationSummary)}</dd>
+            <dt>Assignment</dt><dd>${escapeHtml(item.assignmentSummary)}</dd>
+            <dt>Closure Ready</dt><dd><span class="closure-pill ${closureClassName}">${escapeHtml(closureReady)}</span></dd>
           </dl>
         </article>
       `;
     })
     .join("\n");
 
-  const refreshNote = lastUpdatedLabel ? `<p class="hint"><strong>Last updated:</strong> ${lastUpdatedLabel}</p>` : "";
+  const refreshNote = lastUpdatedLabel ? `<p class="hint"><strong>Last updated:</strong> ${escapeHtml(formatDateTime(lastUpdatedLabel))}</p>` : "";
   return `${refreshNote}<section class="board-grid">${cards}</section>`;
 }

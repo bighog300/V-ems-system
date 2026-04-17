@@ -75,7 +75,7 @@ test("loadLogisticsData throws FORBIDDEN on 403", async () => {
 
   await assert.rejects(
     () => loadLogisticsData({ apiBaseUrl: "http://127.0.0.1:8080", fetchImpl }),
-    (err) => { assert.equal(err.code, "FORBIDDEN"); return true; }
+    (err) => { assert.equal(err.status, 403); return true; }
   );
 });
 

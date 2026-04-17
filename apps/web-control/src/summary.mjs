@@ -127,21 +127,21 @@ export function renderOperationalSummaryHtml(summary) {
 
   return `
     <dl>
-      <dt>Incident ID</dt><dd>${summary.incidentId}</dd>
-      <dt>Priority</dt><dd>${summary.priority}</dd>
-      <dt>Status</dt><dd>${summary.status}</dd>
-      <dt>Address / Location</dt><dd>${summary.locationSummary}</dd>
-      <dt>Assignment Summary</dt><dd>${summary.assignmentSummary.summary}</dd>
-      <dt>Patient Link Summary</dt><dd>${summary.patientLinkSummary.summary}</dd>
-      <dt>Encounter Summary</dt><dd>${encounterSection}</dd>
-      <dt>Closure Ready</dt><dd>${closureReady}</dd>
+      <dt>Incident ID</dt><dd>${escapeHtml(summary.incidentId)}</dd>
+      <dt>Priority</dt><dd>${escapeHtml(summary.priority)}</dd>
+      <dt>Status</dt><dd>${escapeHtml(summary.status)}</dd>
+      <dt>Address / Location</dt><dd>${escapeHtml(summary.locationSummary)}</dd>
+      <dt>Assignment Summary</dt><dd>${escapeHtml(summary.assignmentSummary.summary)}</dd>
+      <dt>Patient Link Summary</dt><dd>${escapeHtml(summary.patientLinkSummary.summary)}</dd>
+      <dt>Encounter Summary</dt><dd>${escapeHtml(encounterSection)}</dd>
+      <dt>Closure Ready</dt><dd>${escapeHtml(closureReady)}</dd>
       <dt>Closure State</dt><dd><span class="closure-state closure-state-${readiness.state}">${readiness.label}</span></dd>
-      <dt>Closure Note</dt><dd>${readiness.description}</dd>
-      <dt>Handover</dt><dd>${handoverSection}</dd>
+      <dt>Closure Note</dt><dd>${escapeHtml(readiness.description)}</dd>
+      <dt>Handover</dt><dd>${escapeHtml(handoverSection)}</dd>
       <dt>Stock Usage</dt><dd>${
         stockUsageSummary.available
-          ? `${stockUsageSummary.stockLinkedInterventions} stock-linked intervention(s); sync statuses: ${JSON.stringify(stockUsageSummary.statusCounts)}`
-          : `No stock-linked interventions yet (${stockUsageSummary.totalInterventions} intervention record(s) loaded).`
+          ? `${escapeHtml(stockUsageSummary.stockLinkedInterventions)} stock-linked intervention(s); sync statuses: ${escapeHtml(JSON.stringify(stockUsageSummary.statusCounts))}`
+          : `No stock-linked interventions yet (${escapeHtml(stockUsageSummary.totalInterventions)} intervention record(s) loaded).`
       }</dd>
     </dl>
   `;
@@ -159,7 +159,7 @@ export function renderIncidentClosePanelHtml({ summary, closeErrorMessage = "", 
 
   const readiness = getClosureReadiness(summary);
   const errorSection = closeErrorMessage
-    ? `<p id="closeIncidentFeedback" class="error-note" aria-live="polite">${closeErrorMessage}</p>`
+    ? `<p id="closeIncidentFeedback" class="error-note" aria-live="polite">${escapeHtml(closeErrorMessage)}</p>`
     : `<p id="closeIncidentFeedback" class="hint" aria-live="polite">Close attempts are validated by backend state-transition rules.</p>`;
   return `
     <section class="panel">
@@ -171,3 +171,4 @@ export function renderIncidentClosePanelHtml({ summary, closeErrorMessage = "", 
     </section>
   `;
 }
+import { escapeHtml } from "./security.mjs";

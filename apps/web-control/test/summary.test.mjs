@@ -111,3 +111,22 @@ test("renderIncidentClosePanelHtml renders backend rejection reason when provide
   assert.match(html, /Not ready to close/);
   assert.match(html, /INVALID_STATUS_TRANSITION/);
 });
+
+test("renderOperationalSummaryHtml escapes untrusted summary fields", () => {
+  const html = renderOperationalSummaryHtml({
+    incidentId: "INC-<script>alert(1)</script>",
+    priority: "<img src=x onerror=alert(1)>",
+    status: "<svg/onload=alert(1)>",
+    locationSummary: "<b>123 Unsafe</b>",
+    closureReady: false,
+    assignmentSummary: { summary: "<iframe src=javascript:alert(1)>" },
+    patientLinkSummary: { summary: "<script>alert(2)</script>" },
+    encounterSummary: { available: false, detail: "<script>alert(3)</script>" },
+    handoverSummary: { available: false, detail: "<script>alert(4)</script>" },
+    stockUsageSummary: { available: false, totalInterventions: 0 }
+  });
+
+  assert.doesNotMatch(html, /<script>/i);
+  assert.match(html, /&lt;svg\/onload=alert\(1\)&gt;/);
+  assert.match(html, /&lt;b&gt;123 Unsafe&lt;\/b&gt;/);
+});
