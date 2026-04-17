@@ -15,9 +15,33 @@ mkdir -p \
 
 touch config.inc.php tabdata.php parent_tabdata.php
 
-chown -R www-data:www-data /var/www/html
-find /var/www/html -type d -exec chmod 775 {} \;
-find /var/www/html -type f -exec chmod 664 {} \;
+chown -R www-data:www-data \
+  /var/www/html/cache \
+  /var/www/html/storage \
+  /var/www/html/user_privileges \
+  /var/www/html/logs \
+  /var/www/html/modules \
+  /var/www/html/cron \
+  /var/www/html/test
+
+chown www-data:www-data \
+  /var/www/html/config.inc.php \
+  /var/www/html/tabdata.php \
+  /var/www/html/parent_tabdata.php
+
+chmod 664 \
+  /var/www/html/config.inc.php \
+  /var/www/html/tabdata.php \
+  /var/www/html/parent_tabdata.php
+
+chmod -R 775 \
+  /var/www/html/cache \
+  /var/www/html/storage \
+  /var/www/html/user_privileges \
+  /var/www/html/logs \
+  /var/www/html/modules \
+  /var/www/html/cron \
+  /var/www/html/test
 
 /opt/vems/init-scripts/init-vtiger.sh
 
