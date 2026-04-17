@@ -1,39 +1,13 @@
-function escHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { requestJson } from "./http.mjs";
+import { escapeHtml as escHtml } from "./security.mjs";
 
 function asText(value, fallback = "—") {
   return value === undefined || value === null || value === "" ? fallback : String(value);
 }
 
-export async function loadLogisticsData({ apiBaseUrl, fetchImpl = fetch, actorId, actorRole }) {
-  const headers = { "content-type": "application/json" };
-  if (actorId) headers["x-actor-id"] = actorId;
-  if (actorRole) headers["x-user-role"] = actorRole;
-
-  const response = await fetchImpl(`${apiBaseUrl}/api/support/diagnostics`, { headers });
-
-  if (response.status === 403) {
-    const body = await response.json().catch(() => ({}));
-    const err = new Error(body?.error?.message ?? "Access denied: insufficient role.");
-    err.code = "FORBIDDEN";
-    err.status = 403;
-    throw err;
-  }
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    const err = new Error(body?.error?.message ?? `Request failed: ${response.status}`);
-    err.code = body?.error?.code ?? "UNKNOWN";
-    err.status = response.status;
-    throw err;
-  }
-
-  return response.json();
+export async function loadLogisticsData({ apiBaseUrl, fetchImpl = fetch, ...config }) {
+  const response = await requestJson(fetchImpl, `${apiBaseUrl}/api/support/diagnostics`, { config });
+  return response.data;
 }
 
 export function buildLogisticsSections(diagnostics) {

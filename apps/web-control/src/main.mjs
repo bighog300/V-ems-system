@@ -21,31 +21,20 @@ import {
   renderCrewIncidentDetailHtml,
   renderCrewJobListHtml
 } from "./crew.mjs";
+import { formatDateTime } from "./security.mjs";
+import { applyProductionUiMode, readSessionFromDom } from "./session.mjs";
+import { handleAppError, startPolling } from "./runtime.mjs";
 
 function readConfig() {
-  const apiBaseInput = document.querySelector("#apiBaseUrl");
-  const incidentInput = document.querySelector("#incidentId");
-  const actorIdInput = selectOptional("#actorId");
-  const actorRoleInput = selectOptional("#actorRole");
-  return {
-    apiBaseUrl: apiBaseInput.value.trim().replace(/\/$/, ""),
-    incidentId: incidentInput.value.trim(),
-    actorId: actorIdInput?.value.trim(),
-    actorRole: actorRoleInput?.value.trim()
-  };
+  return readSessionFromDom();
 }
 
 let closeIncidentFeedback = "";
-let dispatcherPollingIntervalId = null;
-
-function selectOptional(selector) {
-  try {
-    return document.querySelector(selector);
-  } catch {
-    return null;
-  }
-}
-
+const dispatcherPolling = startPolling({
+  enabled: () => Boolean(document.querySelector("#boardAutoRefresh")?.checked),
+  intervalMs: 15000,
+  onTick: () => renderDispatcherBoard({ refreshReason: "auto" })
+});
 
 function readDispatcherBoardControls() {
   const activeOnlyInput = document.querySelector("#boardFilterActive");
@@ -58,22 +47,6 @@ function readDispatcherBoardControls() {
     priority: priorityInput?.value ?? "all",
     sort: sortInput?.value ?? "priority"
   };
-}
-
-function startDispatcherPolling() {
-  stopDispatcherPolling();
-  const autoRefreshToggle = document.querySelector("#boardAutoRefresh");
-  if (!autoRefreshToggle?.checked) return;
-
-  dispatcherPollingIntervalId = window.setInterval(() => {
-    void renderDispatcherBoard({ refreshReason: "auto" });
-  }, 15000);
-}
-
-function stopDispatcherPolling() {
-  if (!dispatcherPollingIntervalId) return;
-  window.clearInterval(dispatcherPollingIntervalId);
-  dispatcherPollingIntervalId = null;
 }
 
 async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
@@ -95,7 +68,7 @@ async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
     const items = buildDispatcherBoardItems(boardData.items);
     const filteredAndSortedItems = filterAndSortDispatcherItems(items, controls);
     output.innerHTML = renderDispatcherBoardHtml(filteredAndSortedItems, {
-      lastUpdatedLabel: new Date().toISOString()
+      lastUpdatedLabel: formatDateTime(new Date())
     });
     if (refreshReason === "manual") {
       status.textContent = "Dispatcher board loaded.";
@@ -104,7 +77,7 @@ async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
     }
   } catch (error) {
     output.innerHTML = "";
-    status.textContent = error.message;
+    handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Dispatcher board failed." });
   }
 }
 
@@ -143,7 +116,7 @@ async function renderIncidentDetail() {
     status.textContent = "Loaded.";
   } catch (error) {
     output.innerHTML = "";
-    status.textContent = error.message;
+    handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Incident detail failed." });
   }
 }
 
@@ -180,7 +153,7 @@ async function renderCrewJobList() {
     status.textContent = "Loaded.";
   } catch (error) {
     output.innerHTML = "";
-    status.textContent = error.message;
+    handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Crew job list failed." });
   }
 }
 
@@ -341,7 +314,7 @@ async function renderCrewIncidentDetail() {
     status.textContent = "Loaded.";
   } catch (error) {
     output.innerHTML = "";
-    status.textContent = error.message;
+    handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Crew incident detail failed." });
   }
 }
 
@@ -367,9 +340,10 @@ document.querySelector("#boardFilterStatus").addEventListener("change", () => vo
 document.querySelector("#boardFilterPriority").addEventListener("change", () => void renderDispatcherBoard());
 document.querySelector("#boardSortBy").addEventListener("change", () => void renderDispatcherBoard());
 document.querySelector("#boardAutoRefresh").addEventListener("change", () => {
-  startDispatcherPolling();
+  dispatcherPolling.start();
   void renderDispatcherBoard();
 });
 
+applyProductionUiMode();
 hydrateInputsFromQuery();
-startDispatcherPolling();
+dispatcherPolling.start();

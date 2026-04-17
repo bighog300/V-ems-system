@@ -1,99 +1,40 @@
-class ApiError extends Error {
-  constructor(message, { status, code, retryable, correlationId, requestId, details } = {}) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-    this.retryable = retryable;
-    this.correlationId = correlationId;
-    this.requestId = requestId;
-    this.details = details;
-  }
+import { ApiError } from "./api-error.mjs";
+import { requestJson } from "./http.mjs";
+
+async function getJson(fetchImpl, url, config, options = {}) {
+  return requestJson(fetchImpl, url, { config, ...options });
 }
 
-function buildApiError(status, body = {}, response = undefined) {
-  const error = body?.error ?? {};
-  return new ApiError(error.message ?? `Request failed: ${status}`, {
-    status,
-    code: error.code,
-    retryable: error.retryable,
-    correlationId: error.correlation_id ?? response?.headers?.get("x-correlation-id") ?? undefined,
-    requestId: response?.headers?.get("x-request-id") ?? undefined,
-    details: error.details
-  });
+async function postJson(fetchImpl, url, payload, config, options = {}) {
+  const result = await requestJson(fetchImpl, url, { method: "POST", payload, config, ...options });
+  return result.data;
 }
 
-function buildRequestHeaders(config, headers = {}) {
-  const actorId = config.actorId?.trim();
-  const actorRole = config.actorRole?.trim();
-  return {
-    "content-type": "application/json",
-    ...(actorId ? { "x-actor-id": actorId } : {}),
-    ...(actorRole ? { "x-user-role": actorRole } : {}),
-    ...headers
-  };
+async function patchJson(fetchImpl, url, payload, config, options = {}) {
+  const result = await requestJson(fetchImpl, url, { method: "PATCH", payload, config, ...options });
+  return result.data;
 }
 
-async function getJson(fetchImpl, url, config, headers = {}) {
-  const response = await fetchImpl(url, { headers: buildRequestHeaders(config, headers) });
-  if (response.status === 404) return { notFound: true, data: null };
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw buildApiError(response.status, body, response);
-  }
-  return { notFound: false, data: await response.json() };
-}
-
-async function postJson(fetchImpl, url, payload, config, headers = {}) {
-  const response = await fetchImpl(url, {
-    method: "POST",
-    headers: buildRequestHeaders(config, headers),
-    body: JSON.stringify(payload)
-  });
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw buildApiError(response.status, body, response);
-  }
-
-  return body;
-}
-
-async function patchJson(fetchImpl, url, payload, config, headers = {}) {
-  const response = await fetchImpl(url, {
-    method: "PATCH",
-    headers: buildRequestHeaders(config, headers),
-    body: JSON.stringify(payload)
-  });
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw buildApiError(response.status, body, response);
-  }
-
-  return body;
-}
-
-export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetchImpl = fetch, ...config }) {
+export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetchImpl = fetch, signal, ...config }) {
   const incidentUrl = `${apiBaseUrl}/api/incidents/${incidentId}`;
-  const incidentResult = await getJson(fetchImpl, incidentUrl, config);
+  const incidentResult = await getJson(fetchImpl, incidentUrl, config, { signal });
   if (incidentResult.notFound) throw new Error(`Incident ${incidentId} not found`);
 
-  const assignmentResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/assignments`, config);
+  const assignmentResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/assignments`, config, { signal });
   const assignmentSummary = assignmentResult.notFound ? null : assignmentResult.data;
 
-  const patientLinkResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-link`, config);
+  const patientLinkResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-link`, config, { signal });
   const patientLink = patientLinkResult.notFound ? null : patientLinkResult.data;
 
-  const encounterResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/encounters`, config);
+  const encounterResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/encounters`, config, { signal });
   const encounterLink = encounterResult.notFound ? null : encounterResult.data;
 
   let handover = null;
   let interventions = [];
   if (encounterLink?.encounter_id) {
-    const handoverResult = await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterLink.encounter_id}/handover`, config);
+    const handoverResult = await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterLink.encounter_id}/handover`, config, { signal });
     handover = handoverResult.notFound ? null : handoverResult.data;
-    const interventionsResult = await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterLink.encounter_id}/interventions`, config);
+    const interventionsResult = await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounterLink.encounter_id}/interventions`, config, { signal });
     interventions = interventionsResult.notFound ? [] : (interventionsResult.data ?? []);
   }
 

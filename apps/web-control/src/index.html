@@ -12,11 +12,17 @@
       <p class="hint">First crew-facing UI slice for operational field visibility and clinical action entry points.</p>
 
 
-      <section class="panel controls">
+      <section class="panel controls" aria-label="Authentication and API">
         <label>
           API Base URL
           <input id="apiBaseUrl" value="http://127.0.0.1:8080" />
         </label>
+        <label>
+          Bearer Token
+          <input id="authToken" type="password" autocomplete="off" placeholder="Paste JWT/OAuth bearer token" />
+        </label>
+        <details data-dev-only>
+          <summary>Development identity headers</summary>
         <label>
           Actor ID
           <input id="actorId" value="STAFF-001" />
@@ -32,6 +38,7 @@
             <option value="sys_admin">sys_admin</option>
           </select>
         </label>
+        </details>
         <button id="loadDispatcherBoard">Load Dispatcher Board</button>
         <button id="loadBoard">Load Crew Job List</button>
       </section>
@@ -91,10 +98,10 @@
       </section>
 
       <p id="status" aria-live="polite"></p>
-      <div id="dispatcherBoardOutput"></div>
-      <div id="crewJobOutput"></div>
-      <div id="crewIncidentOutput"></div>
-      <div id="incidentOutput"></div>
+      <div id="dispatcherBoardOutput" role="region" aria-label="Dispatcher board"></div>
+      <div id="crewJobOutput" role="region" aria-label="Crew job list"></div>
+      <div id="crewIncidentOutput" role="region" aria-label="Crew incident detail"></div>
+      <div id="incidentOutput" role="region" aria-label="Operational summary"></div>
     </main>
 
     <script type="module" src="./main.mjs"></script>

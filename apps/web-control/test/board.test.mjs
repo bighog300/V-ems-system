@@ -76,3 +76,21 @@ test("renderDispatcherBoardHtml shows explicit empty-state messaging", () => {
   const html = renderDispatcherBoardHtml([]);
   assert.match(html, /No incidents currently available for dispatch\./);
 });
+
+test("renderDispatcherBoardHtml escapes incident data to prevent XSS", () => {
+  const html = renderDispatcherBoardHtml([
+    {
+      incidentId: "INC-<script>alert(1)</script>",
+      priority: "<img src=x onerror=alert(1)>",
+      status: "<svg/onload=alert(1)>",
+      locationSummary: "<b>unsafe</b>",
+      assignmentSummary: "<iframe src=javascript:alert(1)>",
+      closureReady: "<script>bad()</script>",
+      priorityClassName: "priority-high"
+    }
+  ]);
+
+  assert.doesNotMatch(html, /<script>/i);
+  assert.match(html, /&lt;svg\/onload=alert\(1\)&gt;/);
+  assert.match(html, /&lt;b&gt;unsafe&lt;\/b&gt;/);
+});

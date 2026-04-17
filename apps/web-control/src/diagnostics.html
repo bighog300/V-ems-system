@@ -36,6 +36,12 @@
           <input id="apiBaseUrl" value="http://127.0.0.1:8080" />
         </label>
         <label>
+          Bearer Token
+          <input id="authToken" type="password" autocomplete="off" placeholder="Paste JWT/OAuth bearer token" />
+        </label>
+        <details data-dev-only>
+          <summary>Development identity headers</summary>
+        <label>
           Actor ID
           <input id="actorId" value="STAFF-OPS-1" />
         </label>
@@ -50,6 +56,7 @@
             <option value="anonymous">anonymous</option>
           </select>
         </label>
+        </details>
         <button id="loadDiagnostics">Load Diagnostics</button>
         <label>
           Auto Refresh (30s)
@@ -64,21 +71,19 @@
 
     <script type="module">
       import { loadDiagnosticsData, buildDiagnosticsSections, renderDiagnosticsHtml } from "./diagnostics.mjs";
+      import { applyProductionUiMode, readSessionFromDom } from "./session.mjs";
+      import { handleAppError, startPolling } from "./runtime.mjs";
 
       const output = document.querySelector("#diagOutput");
       const statusEl = document.querySelector("#diagStatus");
-      let pollingId = null;
-
-      function readConfig() {
-        return {
-          apiBaseUrl: document.querySelector("#apiBaseUrl").value.trim().replace(/\/$/, ""),
-          actorId: document.querySelector("#actorId").value.trim() || undefined,
-          actorRole: document.querySelector("#actorRole").value.trim() || undefined
-        };
-      }
+      const polling = startPolling({
+        enabled: () => Boolean(document.querySelector("#diagAutoRefresh").checked),
+        intervalMs: 30000,
+        onTick: () => renderDiagnostics({ reason: "auto" })
+      });
 
       async function renderDiagnostics({ reason = "manual" } = {}) {
-        const config = readConfig();
+        const config = readSessionFromDom({ includeIncidentId: false });
         if (!config.apiBaseUrl) {
           statusEl.textContent = "API Base URL is required.";
           return;
@@ -93,31 +98,23 @@
             ? `Auto-refreshed at ${new Date().toLocaleTimeString()}.`
             : "Diagnostics loaded.";
         } catch (err) {
-          output.innerHTML = err.code === "FORBIDDEN"
-            ? `<div class="diag-access-denied">Access denied — this view requires supervisor, operations_manager, or sys_admin role.</div>`
-            : `<div class="diag-access-denied">Failed to load diagnostics: ${String(err.message)}</div>`;
-          statusEl.textContent = "Diagnostics load failed.";
+          handleAppError(err, {
+            statusEl,
+            outputEl: output,
+            unauthorizedMessage: "Session expired or unauthorized for diagnostics.",
+            fallbackPrefix: "Diagnostics load failed."
+          });
         }
-      }
-
-      function startPolling() {
-        stopPolling();
-        if (!document.querySelector("#diagAutoRefresh").checked) return;
-        pollingId = window.setInterval(() => void renderDiagnostics({ reason: "auto" }), 30000);
-      }
-
-      function stopPolling() {
-        if (!pollingId) return;
-        window.clearInterval(pollingId);
-        pollingId = null;
       }
 
       document.querySelector("#loadDiagnostics").addEventListener("click", () => void renderDiagnostics());
       document.querySelector("#diagAutoRefresh").addEventListener("change", () => {
-        startPolling();
+        polling.start();
         void renderDiagnostics();
       });
 
+      applyProductionUiMode();
+      polling.start();
       void renderDiagnostics();
     </script>
   </body>

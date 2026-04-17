@@ -1,10 +1,5 @@
-function escHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
+import { requestJson } from "./http.mjs";
+import { escapeHtml as escHtml } from "./security.mjs";
 
 function asText(value, fallback = "—") {
   return value === undefined || value === null || value === "" ? fallback : String(value);
@@ -29,31 +24,18 @@ const CLOSURE_EXPECTED_STATUSES = new Set([
 
 const AGING_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 
-export async function loadSupervisorData({ apiBaseUrl, fetchImpl = fetch, actorId, actorRole }) {
-  const headers = { "content-type": "application/json" };
-  if (actorId) headers["x-actor-id"] = actorId;
-  if (actorRole) headers["x-user-role"] = actorRole;
-
-  const [incidentsRes, diagnosticsRes] = await Promise.all([
-    fetchImpl(`${apiBaseUrl}/api/incidents`, { headers }),
-    fetchImpl(`${apiBaseUrl}/api/support/diagnostics`, { headers })
-  ]);
-
-  if (!incidentsRes.ok) {
-    const body = await incidentsRes.json().catch(() => ({}));
-    const err = new Error(body?.error?.message ?? `Failed to load incidents: ${incidentsRes.status}`);
-    err.status = incidentsRes.status;
-    throw err;
-  }
-
-  const incidentsBody = await incidentsRes.json();
+export async function loadSupervisorData({ apiBaseUrl, fetchImpl = fetch, ...config }) {
+  const incidentsResponse = await requestJson(fetchImpl, `${apiBaseUrl}/api/incidents`, { config });
   let diagnosticsBody = null;
-  if (diagnosticsRes.ok) {
-    diagnosticsBody = await diagnosticsRes.json().catch(() => null);
+  try {
+    const diagnosticsResponse = await requestJson(fetchImpl, `${apiBaseUrl}/api/support/diagnostics`, { config });
+    diagnosticsBody = diagnosticsResponse.data;
+  } catch {
+    diagnosticsBody = null;
   }
 
   return {
-    incidents: incidentsBody.incidents ?? [],
+    incidents: incidentsResponse.data?.incidents ?? [],
     diagnostics: diagnosticsBody
   };
 }
