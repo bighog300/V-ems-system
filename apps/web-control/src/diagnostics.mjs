@@ -72,6 +72,7 @@ export function buildDiagnosticsSections(data) {
           startedAt: metrics.started_at ?? null,
           requestCount: metrics.request_count ?? 0,
           requestFailures: metrics.request_failures ?? 0,
+          rbacDenyCount: metrics.rbac_deny_count ?? 0,
           failureRatePct: metrics.failure_rate_pct ?? 0,
           latency: metrics.latency_ms ?? null
         }
@@ -87,7 +88,9 @@ export function buildDiagnosticsSections(data) {
           enabled: upstream.enabled ?? false,
           lastValidation: upstream.last_validation ?? null
         }
-      : null
+      : null,
+    alertThresholds: data?.alert_thresholds ?? null,
+    alertStates: data?.alert_states ?? null
   };
 }
 
@@ -131,10 +134,32 @@ export function renderMetricsSummaryHtml(metrics) {
       <dt>Metrics started at</dt><dd>${escHtml(asText(metrics.startedAt))}</dd>
       <dt>Request count</dt><dd>${escHtml(metrics.requestCount)}</dd>
       <dt>Request failures</dt><dd>${escHtml(metrics.requestFailures)}</dd>
+      <dt>RBAC denials</dt><dd>${escHtml(metrics.rbacDenyCount ?? 0)}</dd>
       <dt>Failure rate</dt><dd>${escHtml(metrics.failureRatePct)}%</dd>
       <dt>Avg latency (ms)</dt><dd>${escHtml(asText(latency.avg))}</dd>
       <dt>Min latency (ms)</dt><dd>${escHtml(asText(latency.min))}</dd>
       <dt>Max latency (ms)</dt><dd>${escHtml(asText(latency.max))}</dd>
+    </dl>
+  `.trim();
+}
+
+export function renderAlertStatesHtml(alertStates, alertThresholds) {
+  if (!alertStates) {
+    return `<p class="diag-empty">Alert states unavailable.</p>`;
+  }
+
+  function stateRow(label, state, thresholdLabel) {
+    const cls = state === "warn" ? "diag-badge-warn" : "diag-badge-ok";
+    return `<dt>${escHtml(label)}</dt><dd><span class="${cls}">${escHtml(state)}</span>${thresholdLabel ? ` <span class="diag-threshold-hint">(threshold: ${escHtml(thresholdLabel)})</span>` : ""}</dd>`;
+  }
+
+  const t = alertThresholds ?? {};
+  return `
+    <dl class="diag-dl">
+      ${stateRow("RBAC denials", alertStates.rbac_deny_count, t.rbac_deny_count_warn != null ? `≥${t.rbac_deny_count_warn}` : null)}
+      ${stateRow("Dead-lettered intents", alertStates.dead_letter_count, t.dead_letter_count_warn != null ? `≥${t.dead_letter_count_warn}` : null)}
+      ${stateRow("Failure rate", alertStates.failure_rate_pct, t.failure_rate_pct_warn != null ? `≥${t.failure_rate_pct_warn}%` : null)}
+      ${stateRow("Avg latency", alertStates.latency_avg_ms, t.latency_avg_ms_warn != null ? `≥${t.latency_avg_ms_warn}ms` : null)}
     </dl>
   `.trim();
 }
@@ -225,6 +250,10 @@ export function renderDiagnosticsHtml(sections) {
 
   return `
     ${genAt}
+    <section class="panel diag-section">
+      <h2>Alert States</h2>
+      ${renderAlertStatesHtml(sections.alertStates, sections.alertThresholds)}
+    </section>
     <section class="panel diag-section">
       <h2>Readiness Summary</h2>
       ${renderReadinessSummaryHtml(sections.readiness)}

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>V-EMS — Logistics Dashboard</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .log-section { margin-bottom: 1.5rem; }
+      .log-section h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
+      .log-empty { color: #6b7280; font-style: italic; margin: 0.5rem 0; }
+      .log-ok-note { color: #166534; font-style: normal; font-weight: 600; }
+      .log-note { color: #92400e; font-size: 0.875rem; margin: 0 0 0.5rem; }
+      .log-badge-ok { background: #dcfce7; color: #166534; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.9rem; font-weight: 700; display: inline-block; }
+      .log-badge-warn { background: #fef3c7; color: #92400e; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.9rem; font-weight: 700; display: inline-block; }
+      .log-dl { display: grid; grid-template-columns: 240px 1fr; gap: 0.3rem 0.75rem; margin: 0; }
+      .log-dl dt { font-weight: bold; }
+      .log-table-wrap { overflow-x: auto; margin-top: 0.5rem; }
+      .log-table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+      .log-table th, .log-table td { border: 1px solid #d1d5db; padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+      .log-table th { background: #f3f4f6; font-weight: 700; }
+      .log-error-cell { max-width: 260px; word-break: break-word; color: #b91c1c; }
+      .log-kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
+      .log-kpi-card { background: #fff; border: 1px solid #d1d5db; border-radius: 6px; padding: 0.75rem 1rem; }
+      .log-kpi-label { font-size: 0.8rem; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+      .log-kpi-value { font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; }
+      .log-access-denied { background: #fee2e2; border: 1px solid #f87171; border-radius: 6px; padding: 1rem; color: #991b1b; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Logistics Dashboard</h1>
+      <p class="hint">Stock sync visibility and replenishment signal detection. Requires supervisor, operations_manager, or sys_admin role.</p>
+
+      <section class="panel controls">
+        <label>
+          API Base URL
+          <input id="apiBaseUrl" value="http://127.0.0.1:8080" />
+        </label>
+        <label>
+          Actor ID
+          <input id="actorId" value="STAFF-LOG-1" />
+        </label>
+        <label>
+          Actor Role
+          <select id="actorRole">
+            <option value="supervisor">supervisor</option>
+            <option value="operations_manager">operations_manager</option>
+            <option value="sys_admin">sys_admin</option>
+          </select>
+        </label>
+        <button id="loadDashboard">Load Dashboard</button>
+        <label>
+          Auto Refresh (30s)
+          <input id="autoRefresh" type="checkbox" />
+        </label>
+      </section>
+
+      <p id="dashStatus" aria-live="polite"></p>
+      <div id="dashOutput"></div>
+      <p><a href="./index.html">&larr; Back to Web Control</a> &nbsp;|&nbsp; <a href="./supervisor.html">Supervisor Dashboard</a> &nbsp;|&nbsp; <a href="./diagnostics.html">Support Diagnostics</a></p>
+    </main>
+
+    <script type="module">
+      import { loadLogisticsData, buildLogisticsSections, renderLogisticsDashboardHtml } from "./logistics.mjs";
+
+      const output = document.querySelector("#dashOutput");
+      const statusEl = document.querySelector("#dashStatus");
+      let pollingId = null;
+
+      function readConfig() {
+        return {
+          apiBaseUrl: document.querySelector("#apiBaseUrl").value.trim().replace(/\/$/, ""),
+          actorId: document.querySelector("#actorId").value.trim() || undefined,
+          actorRole: document.querySelector("#actorRole").value.trim() || undefined
+        };
+      }
+
+      async function renderDashboard({ reason = "manual" } = {}) {
+        const config = readConfig();
+        if (!config.apiBaseUrl) { statusEl.textContent = "API Base URL is required."; return; }
+        if (reason === "manual") statusEl.textContent = "Loading logistics dashboard...";
+
+        try {
+          const data = await loadLogisticsData(config);
+          const sections = buildLogisticsSections(data);
+          output.innerHTML = renderLogisticsDashboardHtml(sections);
+          statusEl.textContent = reason === "auto"
+            ? `Auto-refreshed at ${new Date().toLocaleTimeString()}.`
+            : "Dashboard loaded.";
+        } catch (err) {
+          output.innerHTML = err.code === "FORBIDDEN"
+            ? `<div class="log-access-denied">Access denied — requires supervisor, operations_manager, or sys_admin role.</div>`
+            : `<div class="log-access-denied">Failed to load dashboard: ${String(err.message)}</div>`;
+          statusEl.textContent = "Dashboard load failed.";
+        }
+      }
+
+      function startPolling() {
+        stopPolling();
+        if (!document.querySelector("#autoRefresh").checked) return;
+        pollingId = window.setInterval(() => void renderDashboard({ reason: "auto" }), 30000);
+      }
+      function stopPolling() {
+        if (!pollingId) return;
+        window.clearInterval(pollingId);
+        pollingId = null;
+      }
+
+      document.querySelector("#loadDashboard").addEventListener("click", () => void renderDashboard());
+      document.querySelector("#autoRefresh").addEventListener("change", () => { startPolling(); void renderDashboard(); });
+
+      void renderDashboard();
+    </script>
+  </body>
+</html>
