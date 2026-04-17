@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
 import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, createLogger } from "@vems/shared";
 import { authenticateRequest } from "./auth.mjs";
+import { RBAC_POLICIES } from "./authorization-policy.mjs";
 
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
@@ -12,27 +13,6 @@ const DEFAULT_JSON_BODY_MAX_BYTES = 1024 * 1024;
 
 const logger = createLogger({ serviceName: "api-gateway" });
 
-const RBAC_POLICIES = [
-  { pattern: /^\/api\/support\/diagnostics$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/support\/sync-intents\/([0-9]+)\/replay$/, method: "POST", roles: ["operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/incidents$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/incidents$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/encounters\/([^/]+)\/interventions$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/encounters\/([^/]+)\/handover$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/assignments\/(ASN-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
-  { pattern: /^\/api\/patients\/search$/, method: "POST", roles: ["dispatcher", "field_crew", "field_crew_lead", "supervisor", "clinical_reviewer", "sys_admin"] },
-  { pattern: /^\/api\/patients$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/, method: "POST", roles: ["dispatcher", "field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/encounters\/([^/]+)\/observations$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/encounters\/([^/]+)\/interventions$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
-  { pattern: /^\/api\/encounters\/([^/]+)\/handover$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] }
-];
 
 function toHeaderValue(value) {
   if (typeof value !== "string") return null;
@@ -519,7 +499,9 @@ export function createApp(orchestration = new OrchestrationService()) {
     trustHeaders: process.env.AUTH_TRUST_HEADERS === "true" || (!process.env.JWT_HS256_SECRET && appEnv !== "production"),
     jwtSecret: process.env.JWT_HS256_SECRET,
     issuer: process.env.JWT_ISSUER,
-    audience: process.env.JWT_AUDIENCE
+    audience: process.env.JWT_AUDIENCE,
+    jwksUri: process.env.JWT_JWKS_URI,
+    jwksCacheTtlMs: Number(process.env.JWT_JWKS_CACHE_TTL_MS ?? 300000)
   };
   const alertThresholds = {
     rbac_deny_count_warn: Number(process.env.ALERT_RBAC_DENY_WARN ?? 10),
@@ -539,7 +521,7 @@ export function createApp(orchestration = new OrchestrationService()) {
 
     let actor;
     try {
-      actor = authenticateRequest(req, authConfig);
+      actor = await authenticateRequest(req, authConfig);
     } catch (error) {
       const context = buildRequestContext(req, { role: "anonymous", actorId: null });
       return okJson(res, 401, errorEnvelope("UNAUTHENTICATED", error.message, false, context), context);

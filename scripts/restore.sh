@@ -13,6 +13,7 @@ if [[ -z "$BACKUP_FILE" || ! -f "$BACKUP_FILE" ]]; then
 fi
 
 load_env "$ENV_NAME"
+validate_required_runtime_secrets
 
 if [[ "${DB_ENGINE:-sqlite}" == "mysql" ]]; then
   require_command mysql
@@ -23,6 +24,7 @@ if [[ "${DB_ENGINE:-sqlite}" == "mysql" ]]; then
   DB_NAME="${DB_NAME:-vems}"
   echo "Restoring MySQL backup $BACKUP_FILE -> $DB_HOST:$DB_PORT/$DB_NAME"
   mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" "$DB_NAME" < "$BACKUP_FILE"
+  mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" -e "SELECT 1" "$DB_NAME" >/dev/null
 else
   require_command sqlite3
   DB_PATH="${VEMS_DB_PATH:-.data/platform.development.sqlite}"
@@ -35,6 +37,11 @@ else
 
   mkdir -p "$(dirname "$DB_PATH")"
   sqlite3 "$BACKUP_FILE" ".backup '$DB_PATH'"
+
+  if ! sqlite3 "$DB_PATH" "PRAGMA integrity_check;" | grep -q "^ok$"; then
+    echo "ERROR: Restored database failed integrity check at $DB_PATH" >&2
+    exit 1
+  fi
 fi
 
-echo "Restore complete."
+echo "Restore complete and validation passed."

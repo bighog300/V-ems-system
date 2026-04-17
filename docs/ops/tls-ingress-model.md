@@ -1,15 +1,21 @@
-# TLS and Ingress Model
+# TLS and Ingress Runtime Model
 
-## Baseline
-- Terminate TLS at ingress/load balancer.
-- Allow only HTTPS on public listeners.
-- Forward `X-Forwarded-Proto`, `X-Request-Id`, and `X-Correlation-Id`.
+## Runtime artifacts
 
-## Certificate Strategy
-- Use ACME-managed certificates for non-prod.
-- Use managed KMS-backed certificates for production.
-- Rotate certificates at least every 90 days.
+- NGINX ingress config: `infra/ingress/nginx.conf`.
+- Staging compose ingress service: `infra/docker-compose.staging.yml` (`ingress`).
 
-## Internal Service Traffic
-- Prefer mTLS between ingress and API gateway in production.
-- Restrict direct pod/container access with network policy.
+## Behavior
+
+- Port 80 listener performs HTTP→HTTPS redirect.
+- Port 443 listener terminates TLS using mounted certificate and key.
+- Security headers are enforced (`HSTS`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`).
+- Proxy forwards `X-Forwarded-Proto`, `X-Request-Id`, and `X-Correlation-Id`.
+
+## Required environment for staging
+
+- `TLS_CERT_PATH`
+- `TLS_KEY_PATH`
+- `API_PORT`
+
+`docker compose -f infra/docker-compose.staging.yml --env-file infra/.env.staging up -d` will fail fast if TLS paths are missing.

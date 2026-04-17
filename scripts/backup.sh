@@ -6,6 +6,7 @@ source "$ROOT_DIR/scripts/lib.sh"
 
 ENV_NAME="${1:-development}"
 load_env "$ENV_NAME"
+validate_required_runtime_secrets
 
 BACKUP_DIR="${VEMS_BACKUP_DIR:-$ROOT_DIR/.backups}"
 mkdir -p "$BACKUP_DIR"

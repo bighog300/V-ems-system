@@ -21,6 +21,8 @@ set -a
 source "$ENV_FILE"
 set +a
 
+validate_required_runtime_secrets
+
 mkdir -p "$ROOT_DIR/.pids" "$ROOT_DIR/.logs"
 
 COMPOSE_FILE="$ROOT_DIR/infra/docker-compose.dev.yml"
