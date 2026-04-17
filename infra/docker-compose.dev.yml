@@ -8,7 +8,7 @@ services:
     ports:
       - "${DB_PORT:-3306}:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
       MYSQL_DATABASE: ${VTIGER_DB_NAME:-vtiger}
     volumes:
       - mysql_data_dev:/var/lib/mysql
@@ -64,10 +64,10 @@ services:
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: 3306
       DB_USER: ${VTIGER_DB_USER:-vtiger}
-      DB_PASSWORD: ${VTIGER_DB_PASSWORD}
+      DB_PASSWORD: ${VTIGER_DB_PASSWORD:?VTIGER_DB_PASSWORD is required}
       DB_NAME: ${VTIGER_DB_NAME:-vtiger}
       VTIGER_ADMIN_USER: ${VTIGER_ADMIN_USER:-admin}
-      VTIGER_ADMIN_PASSWORD: ${VTIGER_ADMIN_PASSWORD}
+      VTIGER_ADMIN_PASSWORD: ${VTIGER_ADMIN_PASSWORD:?VTIGER_ADMIN_PASSWORD is required}
       VTIGER_SITE_URL: ${VTIGER_SITE_URL:-http://localhost:8080}
       RBAC_ENFORCE: ${VTIGER_RBAC_ENFORCE:-false}
     volumes:
@@ -103,10 +103,10 @@ services:
       MYSQL_HOST: ${DB_HOST:-mysql}
       MYSQL_PORT: 3306
       MYSQL_USER: ${OPENEMR_DB_USER:-openemr}
-      MYSQL_PASSWORD: ${OPENEMR_DB_PASSWORD}
+      MYSQL_PASSWORD: ${OPENEMR_DB_PASSWORD:?OPENEMR_DB_PASSWORD is required}
       MYSQL_DATABASE: ${OPENEMR_DB_NAME:-openemr}
       OPENEMR_ADMIN_USER: ${OPENEMR_ADMIN_USER:-admin}
-      OPENEMR_ADMIN_PASSWORD: ${OPENEMR_ADMIN_PASSWORD}
+      OPENEMR_ADMIN_PASSWORD: ${OPENEMR_ADMIN_PASSWORD:?OPENEMR_ADMIN_PASSWORD is required}
       REDIS_HOST: ${REDIS_HOST:-redis}
       RBAC_ENFORCE: ${OPENEMR_RBAC_ENFORCE:-false}
     volumes:

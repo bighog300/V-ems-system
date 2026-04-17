@@ -1,0 +1,21 @@
+export const RBAC_POLICIES = [
+  { pattern: /^\/api\/support\/diagnostics$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/support\/sync-intents\/([0-9]+)\/replay$/, method: "POST", roles: ["operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/assignments$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/interventions$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/handover$/, method: "GET", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/assignments\/(ASN-[0-9]{6})$/, method: "PATCH", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/patients\/search$/, method: "POST", roles: ["dispatcher", "field_crew", "field_crew_lead", "supervisor", "clinical_reviewer", "sys_admin"] },
+  { pattern: /^\/api\/patients$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/, method: "POST", roles: ["dispatcher", "field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/observations$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/interventions$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] },
+  { pattern: /^\/api\/encounters\/([^/]+)\/handover$/, method: "POST", roles: ["field_crew", "field_crew_lead", "clinical_reviewer", "supervisor", "sys_admin"] }
+];

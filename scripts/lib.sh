@@ -90,3 +90,20 @@ wait_for_http_ready() {
     sleep "$poll_interval_seconds"
   done
 }
+
+
+require_non_placeholder_env() {
+  local variable_name="$1"
+  local value="${!variable_name:-}"
+
+  if [[ -z "$value" || "$value" == "__set_in_local_env__" ]]; then
+    echo "Missing required secret: ${variable_name}. Set it in env/<environment>.local.env or the environment." >&2
+    exit 1
+  fi
+}
+
+validate_required_runtime_secrets() {
+  for required_var in DB_ROOT_PASSWORD VTIGER_DB_PASSWORD VTIGER_ADMIN_PASSWORD OPENEMR_DB_PASSWORD OPENEMR_ADMIN_PASSWORD; do
+    require_non_placeholder_env "$required_var"
+  done
+}
