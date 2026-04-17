@@ -24,7 +24,7 @@ done
 echo "✅ MySQL ready"
 
 echo "🗄️ Ensuring database ${DB_NAME} exists..."
-mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS \\`${DB_NAME}\\`;"
+mysql -h"${DB_HOST}" -P"${DB_PORT}" -uroot -p"${DB_ROOT_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
 
 echo "🔍 Checking existing tables in ${DB_NAME}..."
 TABLE_COUNT="$(mysql -N -s -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';")"
