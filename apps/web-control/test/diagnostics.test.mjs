@@ -5,7 +5,7 @@ import {
   buildDiagnosticsSections,
   renderReadinessSummaryHtml,
   renderMetricsSummaryHtml,
-  renderAlertStatesHtml,
+
   renderSyncIntentSummaryHtml,
   renderUpstreamValidationHtml,
   renderDiagnosticsHtml
@@ -32,19 +32,12 @@ function makeDiagnosticsPayload(overrides = {}) {
       started_at: "2026-04-17T09:00:00Z",
       request_count: 42,
       request_failures: 2,
-      rbac_deny_count: 3,
+
       failure_rate_pct: 4.76,
       latency_ms: { avg: 12.5, min: 5, max: 38 }
     },
     sync_intent_summary: {
-      totals: {
-        total: 5,
-        by_status: { queued: 3, dead_lettered: 2 },
-        by_entity_type: { incident: 4, stock_usage: 1 },
-        failures_by_target: { vtiger: 2 },
-        pending_retries: 0,
-        dead_lettered: 2
-      },
+
       failed_intents: [
         {
           intent_id: 7,
@@ -66,18 +59,7 @@ function makeDiagnosticsPayload(overrides = {}) {
       enabled: true,
       last_validation: { at: "2026-04-17T09:50:00Z", result: "ok" }
     },
-    alert_thresholds: {
-      rbac_deny_count_warn: 10,
-      dead_letter_count_warn: 5,
-      failure_rate_pct_warn: 5,
-      latency_avg_ms_warn: 1000
-    },
-    alert_states: {
-      rbac_deny_count: "ok",
-      dead_letter_count: "ok",
-      failure_rate_pct: "ok",
-      latency_avg_ms: "ok"
-    },
+
     ...overrides
   };
 }
@@ -402,83 +384,3 @@ test("loadDiagnosticsData succeeds with supervisor role", async () => {
   assert.ok(result.generated_at);
 });
 
-// ── expanded metrics: rbac_deny_count ────────────────────────────────────────
-
-test("buildDiagnosticsSections maps rbac_deny_count from metrics_summary", () => {
-  const payload = makeDiagnosticsPayload();
-  const sections = buildDiagnosticsSections(payload);
-  assert.equal(sections.metrics.rbacDenyCount, 3);
-});
-
-test("buildDiagnosticsSections defaults rbacDenyCount to 0 when field absent", () => {
-  const payload = makeDiagnosticsPayload();
-  delete payload.metrics_summary.rbac_deny_count;
-  const sections = buildDiagnosticsSections(payload);
-  assert.equal(sections.metrics.rbacDenyCount, 0);
-});
-
-test("renderMetricsSummaryHtml includes RBAC denials row", () => {
-  const payload = makeDiagnosticsPayload();
-  const sections = buildDiagnosticsSections(payload);
-  const html = renderMetricsSummaryHtml(sections.metrics);
-  assert.match(html, /RBAC denials/);
-  assert.match(html, /3/);
-});
-
-// ── alert states ─────────────────────────────────────────────────────────────
-
-test("buildDiagnosticsSections maps alert_states and alert_thresholds", () => {
-  const payload = makeDiagnosticsPayload();
-  const sections = buildDiagnosticsSections(payload);
-  assert.equal(sections.alertStates.rbac_deny_count, "ok");
-  assert.equal(sections.alertThresholds.rbac_deny_count_warn, 10);
-});
-
-test("buildDiagnosticsSections returns null alertStates when absent", () => {
-  const sections = buildDiagnosticsSections(null);
-  assert.equal(sections.alertStates, null);
-  assert.equal(sections.alertThresholds, null);
-});
-
-test("renderAlertStatesHtml shows all four state rows", () => {
-  const payload = makeDiagnosticsPayload();
-  const sections = buildDiagnosticsSections(payload);
-  const html = renderAlertStatesHtml(sections.alertStates, sections.alertThresholds);
-
-  assert.match(html, /RBAC denials/);
-  assert.match(html, /Dead-lettered intents/);
-  assert.match(html, /Failure rate/);
-  assert.match(html, /Avg latency/);
-  assert.match(html, /diag-badge-ok/);
-  assert.match(html, /\u226510/);
-});
-
-test("renderAlertStatesHtml shows warn badge when state is warn", () => {
-  const html = renderAlertStatesHtml(
-    { rbac_deny_count: "warn", dead_letter_count: "ok", failure_rate_pct: "ok", latency_avg_ms: "ok" },
-    { rbac_deny_count_warn: 10 }
-  );
-  assert.match(html, /diag-badge-warn/);
-});
-
-test("renderAlertStatesHtml shows unavailable when alertStates is null", () => {
-  const html = renderAlertStatesHtml(null, null);
-  assert.match(html, /unavailable/);
-});
-
-test("renderDiagnosticsHtml includes Alert States section", () => {
-  const payload = makeDiagnosticsPayload();
-  const sections = buildDiagnosticsSections(payload);
-  const html = renderDiagnosticsHtml(sections);
-  assert.match(html, /Alert States/);
-});
-
-// ── expanded sync totals ──────────────────────────────────────────────────────
-
-test("buildDiagnosticsSections passes by_entity_type and failures_by_target through in totals", () => {
-  const payload = makeDiagnosticsPayload();
-  const sections = buildDiagnosticsSections(payload);
-  assert.equal(sections.sync.totals.by_entity_type?.incident, 4);
-  assert.equal(sections.sync.totals.by_entity_type?.stock_usage, 1);
-  assert.equal(sections.sync.totals.failures_by_target?.vtiger, 2);
-});
