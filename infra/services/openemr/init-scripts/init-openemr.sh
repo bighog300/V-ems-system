@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 set -e
 
 MYSQL_HOST="${MYSQL_HOST:-mysql}"
