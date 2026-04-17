@@ -7,6 +7,13 @@ export class UnauthorizedError extends ApiError {
   }
 }
 
+export class ForbiddenError extends ApiError {
+  constructor(message, details = {}) {
+    super(message, details);
+    this.name = "ForbiddenError";
+  }
+}
+
 function mergeAbortSignals(signals = []) {
   const valid = signals.filter(Boolean);
   if (valid.length === 0) return undefined;
@@ -29,8 +36,11 @@ function buildApiError(status, body = {}, response = undefined) {
     requestId: response?.headers?.get("x-request-id") ?? undefined,
     details: error.details
   };
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return new UnauthorizedError(message, details);
+  }
+  if (status === 403) {
+    return new ForbiddenError(message, details);
   }
   return new ApiError(message, details);
 }

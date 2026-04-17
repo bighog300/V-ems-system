@@ -77,7 +77,10 @@ async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
     }
   } catch (error) {
     output.innerHTML = "";
-    handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Dispatcher board failed." });
+    const errorResult = handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Dispatcher board failed." });
+    if (errorResult.authFailure) {
+      dispatcherPolling.stop();
+    }
   }
 }
 

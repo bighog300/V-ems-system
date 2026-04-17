@@ -94,12 +94,14 @@
             ? `Auto-refreshed at ${new Date().toLocaleTimeString()}.`
             : "Dashboard loaded.";
         } catch (err) {
-          handleAppError(err, {
+          const errorResult = handleAppError(err, {
             statusEl,
             outputEl: output,
-            unauthorizedMessage: "Session expired or unauthorized for logistics dashboard.",
             fallbackPrefix: "Dashboard load failed."
           });
+          if (errorResult.authFailure) {
+            polling.stop();
+          }
         }
       }
 

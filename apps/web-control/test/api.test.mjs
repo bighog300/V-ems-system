@@ -368,6 +368,34 @@ test("API requests fail when bearer token is missing in production mode", async 
   );
 });
 
+test("API requests classify 403 as ForbiddenError", async () => {
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 403,
+    async json() {
+      return {
+        error: {
+          code: "FORBIDDEN",
+          message: "Access denied"
+        }
+      };
+    }
+  });
+
+  await assert.rejects(
+    () => loadDispatcherBoardData({
+      apiBaseUrl: "http://127.0.0.1:8080",
+      fetchImpl
+    }),
+    (error) => {
+      assert.equal(error.name, "ForbiddenError");
+      assert.equal(error.status, 403);
+      assert.equal(error.code, "FORBIDDEN");
+      return true;
+    }
+  );
+});
+
 
 test("createEncounterObservation submits to POST /api/encounters/{encounterId}/observations", async () => {
   const calls = [];
