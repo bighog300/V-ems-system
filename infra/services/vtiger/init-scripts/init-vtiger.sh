@@ -32,7 +32,7 @@ TABLE_COUNT="$(mysql -N -s -h"${DB_HOST}" -P"${DB_PORT}" -uroot -p"${DB_ROOT_PAS
 
 if [ "${TABLE_COUNT}" = "0" ]; then
   echo "📥 No tables found; applying seed data"
-  mysql -h"${DB_HOST}" -P"${DB_PORT}" -u"${DB_USER}" -p"${DB_PASSWORD}" "${DB_NAME}" < /opt/vems/init-scripts/seed-data.sql
+  mysql -h"${DB_HOST}" -P"${DB_PORT}" -uroot -p"${DB_ROOT_PASSWORD}" "${DB_NAME}" < /opt/vems/init-scripts/seed-data.sql
   echo "✅ Seed data applied"
 else
   echo "✅ Existing schema detected (${TABLE_COUNT} tables); skipping seed"
