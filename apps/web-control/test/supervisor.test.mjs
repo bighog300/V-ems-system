@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { ForbiddenError, UnauthorizedError } from "../src/http.mjs";
 import {
   loadSupervisorData,
   buildSupervisorSections,
@@ -83,7 +84,7 @@ test("loadSupervisorData fetches incidents and diagnostics in parallel", async (
   assert.deepEqual(result.incidents, []);
 });
 
-test("loadSupervisorData still returns incidents when diagnostics 403s", async () => {
+test("loadSupervisorData throws ForbiddenError when diagnostics endpoint 403s", async () => {
   const fetchImpl = async (url) => {
     if (url.includes("/api/incidents")) {
       return { ok: true, status: 200, async json() { return { incidents: [{ incident_id: "INC-000001" }] }; } };
@@ -91,9 +92,32 @@ test("loadSupervisorData still returns incidents when diagnostics 403s", async (
     return { ok: false, status: 403, async json() { return { error: { code: "FORBIDDEN" } }; } };
   };
 
-  const result = await loadSupervisorData({ apiBaseUrl: "http://127.0.0.1:8080", fetchImpl });
-  assert.equal(result.incidents.length, 1);
-  assert.equal(result.diagnostics, null);
+  await assert.rejects(
+    () => loadSupervisorData({ apiBaseUrl: "http://127.0.0.1:8080", fetchImpl }),
+    (err) => {
+      assert.ok(err instanceof ForbiddenError);
+      assert.equal(err.status, 403);
+      return true;
+    }
+  );
+});
+
+test("loadSupervisorData throws UnauthorizedError when diagnostics endpoint 401s", async () => {
+  const fetchImpl = async (url) => {
+    if (url.includes("/api/incidents")) {
+      return { ok: true, status: 200, async json() { return { incidents: [{ incident_id: "INC-000001" }] }; } };
+    }
+    return { ok: false, status: 401, async json() { return { error: { code: "UNAUTHORIZED" } }; } };
+  };
+
+  await assert.rejects(
+    () => loadSupervisorData({ apiBaseUrl: "http://127.0.0.1:8080", fetchImpl }),
+    (err) => {
+      assert.ok(err instanceof UnauthorizedError);
+      assert.equal(err.status, 401);
+      return true;
+    }
+  );
 });
 
 test("loadSupervisorData throws when incidents endpoint fails", async () => {

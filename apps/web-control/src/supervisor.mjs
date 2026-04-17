@@ -1,4 +1,4 @@
-import { requestJson } from "./http.mjs";
+import { ForbiddenError, UnauthorizedError, requestJson } from "./http.mjs";
 import { escapeHtml as escHtml } from "./security.mjs";
 
 function asText(value, fallback = "—") {
@@ -30,7 +30,10 @@ export async function loadSupervisorData({ apiBaseUrl, fetchImpl = fetch, ...con
   try {
     const diagnosticsResponse = await requestJson(fetchImpl, `${apiBaseUrl}/api/support/diagnostics`, { config });
     diagnosticsBody = diagnosticsResponse.data;
-  } catch {
+  } catch (error) {
+    if (error instanceof UnauthorizedError || error instanceof ForbiddenError) {
+      throw error;
+    }
     diagnosticsBody = null;
   }
 
