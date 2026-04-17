@@ -23,12 +23,22 @@ export class IncidentRepository {
   }
 
   nextIncidentId() {
-    const row = this.db.queryOne("SELECT COALESCE(MAX(CAST(SUBSTR(incident_id, 5) AS INTEGER)), 0) + 1 AS next_id FROM incidents;");
+    const row = this.db.queryOne(`
+      INSERT INTO id_sequences (name, next_value)
+      VALUES ('incident', 2)
+      ON CONFLICT(name) DO UPDATE SET next_value = id_sequences.next_value + 1
+      RETURNING next_value - 1 AS next_id;
+    `);
     return `INC-${String(row.next_id).padStart(6, "0")}`;
   }
 
   nextCallId() {
-    const row = this.db.queryOne("SELECT COALESCE(MAX(CAST(SUBSTR(call_id, 6) AS INTEGER)), 0) + 1 AS next_id FROM incidents;");
+    const row = this.db.queryOne(`
+      INSERT INTO id_sequences (name, next_value)
+      VALUES ('call', 2)
+      ON CONFLICT(name) DO UPDATE SET next_value = id_sequences.next_value + 1
+      RETURNING next_value - 1 AS next_id;
+    `);
     return `CALL-${String(row.next_id).padStart(6, "0")}`;
   }
 

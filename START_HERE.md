@@ -1,26 +1,46 @@
 # START HERE
 
-## Authoritative reading order
-1. `docs/specs/*`
-2. `docs/build-pack/*`
-3. `docs/AI-HANDOFF.md`
-4. `START_HERE.md`
+## 1) Install dependencies
 
-## Contract priority
-1. OpenAPI
-2. State machines
-3. Canonical data model
-4. Event contracts
-5. Build-pack docs
+```bash
+npm install
+```
 
-## Build sequence
-1. shared types and config
-2. api-gateway skeleton and health endpoints
-3. orchestration service and state transition guards
-4. incident endpoints
-5. assignment endpoints
-6. adapter scaffolding
-7. patient + encounter + handover
-8. stock usage
-9. frontend shells
-10. tests and hardening
+## 2) Read the core contracts/docs
+
+1. `docs/specs/README.md`
+2. `docs/specs/openapi.yaml`
+3. `docs/specs/state-machines.yaml`
+4. `docs/specs/canonical-data-model.yaml`
+5. `docs/README.md`
+
+## 3) Run tests first
+
+```bash
+npm test
+```
+
+## 4) Start the local stack (script-driven)
+
+```bash
+npm run init-db
+npm run start:env
+```
+
+Stop when done:
+
+```bash
+npm run stop:env
+```
+
+## 5) Useful focused commands
+
+```bash
+npm run test -w @vems/api-gateway
+npm run test -w @vems/orchestration
+npm run test -w @vems/web-control
+```
+
+## Local auth model
+
+The API currently uses header-based actor context for development/testing. Use `x-user-role` and `x-actor-id` in requests. RBAC checks are enforced when `RBAC_ENFORCE=true`.

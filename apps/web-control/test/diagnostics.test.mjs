@@ -37,6 +37,7 @@ function makeDiagnosticsPayload(overrides = {}) {
       latency_ms: { avg: 12.5, min: 5, max: 38 }
     },
     sync_intent_summary: {
+      totals: { dead_lettered: 2 },
 
       failed_intents: [
         {
@@ -383,4 +384,3 @@ test("loadDiagnosticsData succeeds with supervisor role", async () => {
 
   assert.ok(result.generated_at);
 });
-

@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS assignments (
   FOREIGN KEY (incident_id) REFERENCES incidents(incident_id)
 );
 
+CREATE TABLE IF NOT EXISTS id_sequences (
+  name TEXT PRIMARY KEY,
+  next_value INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   timestamp TEXT NOT NULL,

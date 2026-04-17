@@ -88,6 +88,7 @@ export function buildDiagnosticsSections(data) {
           enabled: upstream.enabled ?? false,
           lastValidation: upstream.last_validation ?? null
         }
+      : null
 
   };
 }
