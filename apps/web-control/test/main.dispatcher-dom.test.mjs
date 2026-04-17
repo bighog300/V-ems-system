@@ -27,6 +27,7 @@ class FakeElement {
 function createTestDocument() {
   const elements = new Map([
     ["apiBaseUrl", new FakeElement({ value: "http://example.test" })],
+    ["authToken", new FakeElement({ value: "test-token" })],
     ["incidentId", new FakeElement({ value: "INC-000001" })],
     ["status", new FakeElement()],
     ["dispatcherBoardOutput", new FakeElement()],

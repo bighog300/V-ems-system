@@ -39,12 +39,22 @@ export function buildRequestHeaders(config, headers = {}) {
   const authToken = config.authToken?.trim();
   const actorId = config.actorId?.trim();
   const actorRole = config.actorRole?.trim();
+  const isProductionAuthMode = config.authMode === "production" || config.enforceProductionAuth === true;
+  const allowLegacyAuthHeaders = !isProductionAuthMode && config.allowLegacyAuthHeaders !== false;
+
+  if (!authToken && isProductionAuthMode) {
+    throw new UnauthorizedError("Authentication token is required in production mode.", {
+      status: 401,
+      code: "AUTH_TOKEN_REQUIRED",
+      retryable: false
+    });
+  }
 
   return {
     "content-type": "application/json",
     ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
-    ...(!authToken && actorId ? { "x-actor-id": actorId } : {}),
-    ...(!authToken && actorRole ? { "x-user-role": actorRole } : {}),
+    ...(!authToken && allowLegacyAuthHeaders && actorId ? { "x-actor-id": actorId } : {}),
+    ...(!authToken && allowLegacyAuthHeaders && actorRole ? { "x-user-role": actorRole } : {}),
     ...headers
   };
 }

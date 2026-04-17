@@ -318,7 +318,7 @@ test("API requests prefer bearer token auth when provided", async () => {
   assert.equal(calls[0].options.headers["x-user-role"], undefined);
 });
 
-test("API requests fallback to actor headers when bearer token missing", async () => {
+test("API requests fallback to actor headers only in explicit dev mode", async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {
     calls.push({ url, options });
@@ -335,12 +335,37 @@ test("API requests fallback to actor headers when bearer token missing", async (
     apiBaseUrl: "http://127.0.0.1:8080",
     actorId: "STAFF-001",
     actorRole: "dispatcher",
+    authMode: "dev",
+    allowLegacyAuthHeaders: true,
     fetchImpl
   });
 
   assert.equal(calls[0].options.headers.authorization, undefined);
   assert.equal(calls[0].options.headers["x-actor-id"], "STAFF-001");
   assert.equal(calls[0].options.headers["x-user-role"], "dispatcher");
+});
+
+test("API requests fail when bearer token is missing in production mode", async () => {
+  const fetchImpl = async () => {
+    throw new Error("fetch should not be called without token in production mode");
+  };
+
+  await assert.rejects(
+    () => loadDispatcherBoardData({
+      apiBaseUrl: "http://127.0.0.1:8080",
+      actorId: "STAFF-001",
+      actorRole: "dispatcher",
+      authMode: "production",
+      fetchImpl
+    }),
+    (error) => {
+      assert.equal(error.name, "UnauthorizedError");
+      assert.equal(error.code, "AUTH_TOKEN_REQUIRED");
+      assert.equal(error.status, 401);
+      assert.match(error.message, /token is required in production mode/i);
+      return true;
+    }
+  );
 });
 
 

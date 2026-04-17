@@ -1,4 +1,6 @@
 const SESSION_KEY = "vems.web.session";
+const AUTH_MODE_DEV = "dev";
+const AUTH_MODE_PRODUCTION = "production";
 
 function readStoredSession() {
   try {
@@ -30,15 +32,24 @@ export function readSessionFromDom({ includeIncidentId = true } = {}) {
   const actorId = query("#actorId")?.value?.trim() || stored.actorId || "";
   const actorRole = query("#actorRole")?.value?.trim() || stored.actorRole || "";
   const incidentId = includeIncidentId ? (query("#incidentId")?.value?.trim() || "") : undefined;
+  const authMode = resolveAuthMode(window.location.search);
+  const allowLegacyAuthHeaders = authMode === AUTH_MODE_DEV;
 
-  const next = { apiBaseUrl, authToken, actorId, actorRole, ...(includeIncidentId ? { incidentId } : {}) };
+  const next = { apiBaseUrl, authToken, actorId, actorRole, authMode, allowLegacyAuthHeaders, ...(includeIncidentId ? { incidentId } : {}) };
   persistSession(next);
   return next;
 }
 
+function resolveAuthMode(search) {
+  const params = new URLSearchParams(search);
+  if (params.get("authMode") === AUTH_MODE_DEV) return AUTH_MODE_DEV;
+  if (params.get("authMode") === AUTH_MODE_PRODUCTION) return AUTH_MODE_PRODUCTION;
+  if (params.get("debug") === "1") return AUTH_MODE_DEV;
+  return AUTH_MODE_PRODUCTION;
+}
+
 export function isProductionUiMode() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("debug") === "1") return false;
+  if (resolveAuthMode(window.location.search) === AUTH_MODE_DEV) return false;
   const host = window.location.hostname ?? "localhost";
   return host !== "localhost" && host !== "127.0.0.1";
 }

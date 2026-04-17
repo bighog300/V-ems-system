@@ -12,8 +12,8 @@ function renderAction(actionLabel, endpointPath, enabled = true) {
   const note = enabled ? "Backend write path available. UI flow pending." : "Requires encounter linkage first.";
   return `
     <li>
-      <button type="button"${disabledAttribute}>${actionLabel}</button>
-      <small>${endpointPath} — ${note}</small>
+      <button type="button"${disabledAttribute}>${escapeHtml(actionLabel)}</button>
+      <small>${escapeHtml(endpointPath)} — ${escapeHtml(note)}</small>
     </li>
   `;
 }
@@ -546,7 +546,7 @@ function renderHandoverPanel(summary, { defaultDateTimeValue = "" } = {}) {
       <section class="panel">
         <h3>Record Handover</h3>
         <p class="success-note">
-          Handover already recorded: ${summary.handoverSummary.handover_status} / ${summary.handoverSummary.disposition}.
+          Handover already recorded: ${escapeHtml(summary.handoverSummary.handover_status)} / ${escapeHtml(summary.handoverSummary.disposition)}.
         </p>
         <p>Use this summary for operational confirmation. Duplicate create is disabled for this encounter.</p>
       </section>
@@ -559,7 +559,7 @@ function renderHandoverPanel(summary, { defaultDateTimeValue = "" } = {}) {
       <form id="recordHandoverForm" class="encounter-form">
         <label>
           handover_time
-          <input name="handover_time" type="datetime-local" value="${defaultDateTimeValue}" required />
+          <input name="handover_time" type="datetime-local" value="${escapeHtml(defaultDateTimeValue)}" required />
         </label>
         <label>
           destination_facility
@@ -610,14 +610,14 @@ export function renderCrewJobListHtml(items) {
 
   const listItems = items
     .map((item) => {
-      const closureReady = item.closureReady === undefined ? "" : `<p><strong>Closure Ready:</strong> ${item.closureReady}</p>`;
+      const closureReady = item.closureReady === undefined ? "" : `<p><strong>Closure Ready:</strong> ${escapeHtml(item.closureReady)}</p>`;
       return `
         <li class="crew-job-card">
-          <h3><a href="?view=crew&incidentId=${encodeURIComponent(item.incidentId)}">${item.incidentId}</a></h3>
-          <p><strong>Priority:</strong> ${item.priority}</p>
-          <p><strong>Status:</strong> ${item.status}</p>
-          <p><strong>Location:</strong> ${item.locationSummary}</p>
-          <p><strong>Assignment:</strong> ${item.assignmentSummary}</p>
+          <h3><a href="?view=crew&incidentId=${encodeURIComponent(item.incidentId)}">${escapeHtml(item.incidentId)}</a></h3>
+          <p><strong>Priority:</strong> ${escapeHtml(item.priority)}</p>
+          <p><strong>Status:</strong> ${escapeHtml(item.status)}</p>
+          <p><strong>Location:</strong> ${escapeHtml(item.locationSummary)}</p>
+          <p><strong>Assignment:</strong> ${escapeHtml(item.assignmentSummary)}</p>
           ${closureReady}
         </li>
       `;
@@ -640,14 +640,14 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
     <section class="panel">
       <h2>Crew Incident Detail</h2>
       <dl>
-        <dt>Incident ID</dt><dd>${summary.incidentId}</dd>
-        <dt>Incident Header</dt><dd>${summary.priority} priority • ${summary.status}</dd>
-        <dt>Address / Location</dt><dd>${summary.locationSummary}</dd>
-        <dt>Assignment Summary</dt><dd>${summary.assignmentSummary.summary}</dd>
-        <dt>Patient Link Summary</dt><dd>${summary.patientLinkSummary.summary}</dd>
-        <dt>Encounter Summary</dt><dd>${encounterSummary}</dd>
-        <dt>Handover Summary</dt><dd>${handoverSummary}</dd>
-        <dt>Closure Ready</dt><dd>${closureReady}</dd>
+        <dt>Incident ID</dt><dd>${escapeHtml(summary.incidentId)}</dd>
+        <dt>Incident Header</dt><dd>${escapeHtml(summary.priority)} priority • ${escapeHtml(summary.status)}</dd>
+        <dt>Address / Location</dt><dd>${escapeHtml(summary.locationSummary)}</dd>
+        <dt>Assignment Summary</dt><dd>${escapeHtml(summary.assignmentSummary.summary)}</dd>
+        <dt>Patient Link Summary</dt><dd>${escapeHtml(summary.patientLinkSummary.summary)}</dd>
+        <dt>Encounter Summary</dt><dd>${escapeHtml(encounterSummary)}</dd>
+        <dt>Handover Summary</dt><dd>${escapeHtml(handoverSummary)}</dd>
+        <dt>Closure Ready</dt><dd>${escapeHtml(closureReady)}</dd>
       </dl>
     </section>
     ${renderCareTimeline(summary)}
