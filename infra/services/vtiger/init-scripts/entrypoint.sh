@@ -16,7 +16,9 @@ if [ -f composer.json ] && [ ! -f vendor/autoload.php ]; then
 fi
 
 /opt/vems/init-scripts/init-vtiger.sh
-
+mkdir -p /var/www/html/templates_c/v7
+chown -R www-data:www-data /var/www/html
+chmod -R 775 /var/www/html/templates_c
 if command -v apache2-foreground >/dev/null 2>&1; then
   exec apache2-foreground
 elif command -v httpd >/dev/null 2>&1; then
