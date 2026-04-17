@@ -17,7 +17,8 @@ RUN mkdir -p /opt/vtiger-dist /opt/vems/init-scripts /opt/vems/templates \
 COPY init-scripts/ /opt/vems/init-scripts/
 COPY config/config.inc.php.tpl /opt/vems/templates/config.inc.php.tpl
 
-RUN chmod +x /opt/vems/init-scripts/*.sh
+RUN chmod +x /opt/vems/init-scripts/*.sh \
+    && chmod +r /opt/vems/init-scripts/vtiger-install-cli.php
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
   CMD curl -fsS http://localhost/ >/dev/null || exit 1
