@@ -1,58 +1,7 @@
-version: '3.9'
-
-services:
-  mysql:
-    image: mysql:8.0
-    container_name: vems-mysql-dev
-    restart: unless-stopped
-    ports:
-      - "${DB_PORT:-3306}:3306"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
-      MYSQL_DATABASE: ${VTIGER_DB_NAME:-vtiger}
-    volumes:
-      - mysql_data_dev:/var/lib/mysql
-      - ./services/mysql/init-scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
-    networks:
-      - vems-network
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 40s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  redis:
-    image: redis:7-alpine
-    container_name: vems-redis-dev
-    restart: unless-stopped
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data_dev:/data
-    networks:
-      - vems-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
   vtiger:
     build:
-      context: .
-      dockerfile: services/vtiger/Dockerfile
+      context: ./services/vtiger
+      dockerfile: Dockerfile
     container_name: vems-vtiger-dev
     restart: unless-stopped
     depends_on:
@@ -88,8 +37,8 @@ services:
 
   openemr:
     build:
-      context: .
-      dockerfile: services/openemr/Dockerfile
+      context: ./services/openemr
+      dockerfile: Dockerfile
     container_name: vems-openemr-dev
     restart: unless-stopped
     depends_on:
@@ -124,13 +73,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-networks:
-  vems-network:
-    name: vems-network
-
-volumes:
-  mysql_data_dev:
-  redis_data_dev:
-  vtiger_data_dev:
-  openemr_data_dev:
