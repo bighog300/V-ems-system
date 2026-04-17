@@ -1,0 +1,18 @@
+# Drop-in Docs README
+
+Copy these files into your repo `docs/` directory before running Codex:
+
+- `01-REMAINING-ISSUES-STATUS-MATRIX.md`
+- `02-CODEX-EXECUTION-BRIEF-REMAINING.md`
+- `03-CODEX-TASK-CHECKLIST-REMAINING.md`
+- `04-CODEX-VALIDATION-RUNBOOK-REMAINING.md`
+- `05-CODEX-PROMPT-REMAINING.md`
+
+Recommended placement:
+- `docs/01-REMAINING-ISSUES-STATUS-MATRIX.md`
+- `docs/02-CODEX-EXECUTION-BRIEF-REMAINING.md`
+- `docs/03-CODEX-TASK-CHECKLIST-REMAINING.md`
+- `docs/04-CODEX-VALIDATION-RUNBOOK-REMAINING.md`
+- `docs/05-CODEX-PROMPT-REMAINING.md`
+
+Then paste the prompt from `05-CODEX-PROMPT-REMAINING.md` into Codex from the repo root.
