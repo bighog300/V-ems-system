@@ -4,3 +4,16 @@ node_modules/
 .logs/
 .pids/
 env/*.local.env
+
+# Docker volumes and data
+infra/.env
+mysql_data_dev/
+mysql_data_staging/
+vtiger_data_dev/
+vtiger_data_staging/
+openemr_data_dev/
+openemr_data_staging/
+
+# Docker container logs
+.logs/
+.pids/

@@ -1,0 +1,116 @@
+version: '3.9'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: vems-mysql-staging
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpass}
+      MYSQL_DATABASE: ${VTIGER_DB_NAME:-vtiger}
+    volumes:
+      - mysql_data_staging:/var/lib/mysql
+      - ./services/mysql/init-scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    networks:
+      - vems-network-staging
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  redis:
+    image: redis:7-alpine
+    container_name: vems-redis-staging
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data_staging:/data
+    networks:
+      - vems-network-staging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  vtiger:
+    build:
+      context: .
+      dockerfile: services/vtiger/Dockerfile
+    container_name: vems-vtiger-staging
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8082:80"
+    environment:
+      DB_HOST: ${DB_HOST:-mysql}
+      DB_PORT: 3306
+      DB_USER: ${VTIGER_DB_USER:-vtiger}
+      DB_PASSWORD: ${VTIGER_DB_PASSWORD:-vtigerpass}
+      DB_NAME: ${VTIGER_DB_NAME:-vtiger}
+      VTIGER_ADMIN_USER: ${VTIGER_ADMIN_USER:-admin}
+      VTIGER_ADMIN_PASSWORD: ${VTIGER_ADMIN_PASSWORD:-admin123}
+      VTIGER_SITE_URL: ${VTIGER_SITE_URL_STAGING:-http://localhost:8082}
+      RBAC_ENFORCE: "true"
+    volumes:
+      - vtiger_data_staging:/var/www/html
+    networks:
+      - vems-network-staging
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  openemr:
+    build:
+      context: .
+      dockerfile: services/openemr/Dockerfile
+    container_name: vems-openemr-staging
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8083:80"
+    environment:
+      MYSQL_HOST: ${DB_HOST:-mysql}
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${OPENEMR_DB_USER:-openemr}
+      MYSQL_PASSWORD: ${OPENEMR_DB_PASSWORD:-openemrpass}
+      MYSQL_DATABASE: ${OPENEMR_DB_NAME:-openemr}
+      OPENEMR_ADMIN_USER: ${OPENEMR_ADMIN_USER:-admin}
+      OPENEMR_ADMIN_PASSWORD: ${OPENEMR_ADMIN_PASSWORD:-admin123}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      RBAC_ENFORCE: "true"
+    volumes:
+      - openemr_data_staging:/var/www/localhost/htdocs/openemr
+    networks:
+      - vems-network-staging
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  vems-network-staging:
+    name: vems-network-staging
+
+volumes:
+  mysql_data_staging:
+  redis_data_staging:
+  vtiger_data_staging:
+  openemr_data_staging:
