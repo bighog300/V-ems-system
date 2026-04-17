@@ -182,3 +182,44 @@ test("dispatcher controls and polling lifecycle behave correctly at DOM-event le
   assert.ok(fetchCalls.length >= 7, "each control interaction should re-render and fetch board data");
   assert.match(fakeDocument.elements.get("status").textContent, /Dispatcher board loaded\./);
 });
+
+test("dispatcher polling stops and renders auth-specific messaging on 401 and 403 failures", async () => {
+  for (const scenario of [
+    { status: 401, expectedStatus: "Session expired. Sign in again." },
+    { status: 403, expectedStatus: "Access denied. You do not have permission to view this." }
+  ]) {
+    const fakeDocument = createTestDocument();
+    const intervals = [];
+    const clearedIntervals = [];
+    let intervalIdSeed = 0;
+
+    global.document = fakeDocument;
+    global.fetch = async () => ({
+      ok: false,
+      status: scenario.status,
+      async json() {
+        return { error: { message: "Auth failure" } };
+      }
+    });
+    global.window = {
+      location: { search: "" },
+      setInterval(handler, timeoutMs) {
+        const id = ++intervalIdSeed;
+        intervals.push({ id, handler, timeoutMs });
+        return id;
+      },
+      clearInterval(id) {
+        clearedIntervals.push(id);
+      }
+    };
+
+    await import(`../src/main.mjs?auth-status=${scenario.status}-${Date.now()}`);
+    fakeDocument.elements.get("loadDispatcherBoard").dispatch("click");
+    await nextTick();
+
+    assert.equal(intervals.length, 1, `scenario ${scenario.status}: polling should be started once`);
+    assert.deepEqual(clearedIntervals, [1], `scenario ${scenario.status}: polling should stop on auth failure`);
+    assert.equal(fakeDocument.elements.get("status").textContent, scenario.expectedStatus);
+    assert.match(fakeDocument.elements.get("dispatcherBoardOutput").innerHTML, /error-note/);
+  }
+});

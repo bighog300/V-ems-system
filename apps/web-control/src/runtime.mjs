@@ -1,4 +1,4 @@
-import { UnauthorizedError } from "./http.mjs";
+import { ForbiddenError, UnauthorizedError } from "./http.mjs";
 
 export function startPolling({ enabled, intervalMs, onTick, setTimer = window.setInterval, clearTimer = window.clearInterval }) {
   let pollId = null;
@@ -22,7 +22,14 @@ export function handleAppError(error, { statusEl, outputEl, unauthorizedMessage 
   if (error instanceof UnauthorizedError) {
     if (statusEl) statusEl.textContent = unauthorizedMessage;
     if (outputEl) outputEl.innerHTML = `<div class="error-note">${unauthorizedMessage}</div>`;
-    return;
+    return { handled: true, authFailure: true, code: "UNAUTHORIZED" };
+  }
+  if (error instanceof ForbiddenError) {
+    const forbiddenMessage = "Access denied. You do not have permission to view this.";
+    if (statusEl) statusEl.textContent = forbiddenMessage;
+    if (outputEl) outputEl.innerHTML = `<div class="error-note">${forbiddenMessage}</div>`;
+    return { handled: true, authFailure: true, code: "FORBIDDEN" };
   }
   if (statusEl) statusEl.textContent = `${fallbackPrefix} ${error.message}`;
+  return { handled: false, authFailure: false, code: "GENERIC" };
 }
