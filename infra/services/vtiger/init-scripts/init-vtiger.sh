@@ -1,41 +1,58 @@
-#!/bin/sh
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
 DB_HOST="${DB_HOST:-mysql}"
 DB_PORT="${DB_PORT:-3306}"
+DB_NAME="${DB_NAME:-vtiger}"
 DB_USER="${DB_USER:-vtiger}"
 DB_PASSWORD="${DB_PASSWORD:-vtigerpass}"
-DB_NAME="${DB_NAME:-vtiger}"
-DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}"
+DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-}"
+MAX_ATTEMPTS="${DB_WAIT_ATTEMPTS:-60}"
+SLEEP_SECONDS="${DB_WAIT_SLEEP_SECONDS:-2}"
 
-MAX_ATTEMPTS=30
-ATTEMPT=1
+log() {
+  echo "[vems-vtiger-db-init] $*"
+}
 
-echo "⏳ Waiting for MySQL at ${DB_HOST}:${DB_PORT}..."
-until mysqladmin ping -h"${DB_HOST}" -P"${DB_PORT}" -uroot -p"${DB_ROOT_PASSWORD}" --silent; do
-  if [ "$ATTEMPT" -ge "$MAX_ATTEMPTS" ]; then
-    echo "❌ MySQL did not become ready after ${MAX_ATTEMPTS} attempts"
-    exit 1
-  fi
-  echo "⌛ MySQL not ready yet (attempt ${ATTEMPT}/${MAX_ATTEMPTS})"
-  ATTEMPT=$((ATTEMPT + 1))
-  sleep 2
-done
-
-echo "✅ MySQL ready"
-
-echo "🗄️ Ensuring database ${DB_NAME} exists..."
-mysql -h"${DB_HOST}" -P"${DB_PORT}" -uroot -p"${DB_ROOT_PASSWORD}" -e "CREATE DATABASE IF NOT EXISTS ${DB_NAME};"
-
-echo "🔍 Checking existing tables in ${DB_NAME}..."
-TABLE_COUNT="$(mysql -N -s -h"${DB_HOST}" -P"${DB_PORT}" -uroot -p"${DB_ROOT_PASSWORD}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';")"
-
-if [ "${TABLE_COUNT}" = "0" ]; then
-  echo "📥 No tables found; applying seed data"
-  mysql -h"${DB_HOST}" -P"${DB_PORT}" -uroot -p"${DB_ROOT_PASSWORD}" "${DB_NAME}" < /opt/vems/init-scripts/seed-data.sql
-  echo "✅ Seed data applied"
+if [ -n "${DB_ROOT_PASSWORD}" ]; then
+  MYSQL_AUTH=(-uroot "-p${DB_ROOT_PASSWORD}")
+  MYSQLADMIN_AUTH=(-uroot "-p${DB_ROOT_PASSWORD}")
+  DB_ACTOR="root"
 else
-  echo "✅ Existing schema detected (${TABLE_COUNT} tables); skipping seed"
+  MYSQL_AUTH=(-u"${DB_USER}" "-p${DB_PASSWORD}")
+  MYSQLADMIN_AUTH=(-u"${DB_USER}" "-p${DB_PASSWORD}")
+  DB_ACTOR="${DB_USER}"
+  log "DB_ROOT_PASSWORD is not set; using application DB user for readiness and DB checks."
 fi
 
-echo "✅ Vtiger initialization complete"
+attempt=1
+log "Waiting for MySQL at ${DB_HOST}:${DB_PORT} as ${DB_ACTOR}."
+until mysqladmin ping -h"${DB_HOST}" -P"${DB_PORT}" "${MYSQLADMIN_AUTH[@]}" --silent >/dev/null 2>&1; do
+  if [ "${attempt}" -ge "${MAX_ATTEMPTS}" ]; then
+    log "FATAL: MySQL did not become ready after ${MAX_ATTEMPTS} attempts."
+    exit 1
+  fi
+  log "MySQL not ready yet (attempt ${attempt}/${MAX_ATTEMPTS}); retrying in ${SLEEP_SECONDS}s."
+  attempt=$((attempt + 1))
+  sleep "${SLEEP_SECONDS}"
+done
+log "MySQL is reachable."
+
+log "Ensuring database '${DB_NAME}' exists."
+mysql -h"${DB_HOST}" -P"${DB_PORT}" "${MYSQL_AUTH[@]}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+if [ -n "${DB_ROOT_PASSWORD}" ] && [ "${DB_USER}" != "root" ]; then
+  log "Ensuring database user '${DB_USER}' exists and has privileges on '${DB_NAME}'."
+  mysql -h"${DB_HOST}" -P"${DB_PORT}" "${MYSQL_AUTH[@]}" <<SQL
+CREATE USER IF NOT EXISTS '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
+ALTER USER '${DB_USER}'@'%' IDENTIFIED BY '${DB_PASSWORD}';
+GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'%';
+FLUSH PRIVILEGES;
+SQL
+else
+  log "Skipping DB user create/grant step (root password unavailable or DB_USER is root)."
+fi
+
+TABLE_COUNT="$(mysql -N -s -h"${DB_HOST}" -P"${DB_PORT}" "${MYSQL_AUTH[@]}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';")"
+log "Database '${DB_NAME}' currently has ${TABLE_COUNT} table(s)."
+log "Database readiness and existence checks complete."
