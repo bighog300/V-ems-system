@@ -1,0 +1,18 @@
+# Frontend P0 Closure README
+
+Copy these files into your repo `docs/` directory:
+
+- `01-FRONTEND-P0-CLOSURE-STATUS.md`
+- `02-FRONTEND-P0-CLOSURE-EXECUTION-BRIEF.md`
+- `03-FRONTEND-P0-CLOSURE-CHECKLIST.md`
+- `04-FRONTEND-P0-CLOSURE-VALIDATION.md`
+- `05-FRONTEND-P0-CLOSURE-CODEX-PROMPT.md`
+
+Recommended destination paths:
+- `docs/01-FRONTEND-P0-CLOSURE-STATUS.md`
+- `docs/02-FRONTEND-P0-CLOSURE-EXECUTION-BRIEF.md`
+- `docs/03-FRONTEND-P0-CLOSURE-CHECKLIST.md`
+- `docs/04-FRONTEND-P0-CLOSURE-VALIDATION.md`
+- `docs/05-FRONTEND-P0-CLOSURE-CODEX-PROMPT.md`
+
+Then paste the prompt from `05-FRONTEND-P0-CLOSURE-CODEX-PROMPT.md` into Codex from the repo root.
