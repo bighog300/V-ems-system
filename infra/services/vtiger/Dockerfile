@@ -1,4 +1,4 @@
-FROM vtiger/vtigercrm:latest
+FROM vtigercrm/vtigercrm-8.3.0:latest
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends default-mysql-client curl wget git \
