@@ -1,35 +1,31 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
-const PYTHON_SQLITE_CLIENT = `
-import json, sqlite3, sys
-
-db_path = sys.argv[1]
-mode = sys.argv[2]
-sql = sys.argv[3]
-
-conn = sqlite3.connect(db_path)
-conn.row_factory = sqlite3.Row
-conn.execute("PRAGMA foreign_keys = ON;")
-
-if mode == "query":
-  cur = conn.execute(sql)
-  rows = [dict(row) for row in cur.fetchall()]
-  conn.commit()
-  print(json.dumps(rows))
-elif mode == "exec":
-  conn.executescript(sql)
-  conn.commit()
-  print("ok")
-else:
-  raise SystemExit("unknown mode")
-`;
+function runSqlite(dbPath, args, input = undefined) {
+  const baseArgs = [dbPath, ...args];
+  return execFileSync("sqlite3", baseArgs, {
+    encoding: "utf8",
+    input
+  });
+}
 
 function sqlValue(value) {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "number") return String(value);
   return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function migrationFiles() {
+  const dir = new URL("./migrations/", import.meta.url);
+  const filePath = resolve(dir.pathname);
+  return readdirSync(filePath)
+    .filter((name) => name.endsWith(".sql"))
+    .sort((a, b) => a.localeCompare(b))
+    .map((name) => ({
+      id: name.replace(/\.sql$/, ""),
+      file: new URL(`./migrations/${name}`, import.meta.url)
+    }));
 }
 
 export class SqliteClient {
@@ -40,13 +36,24 @@ export class SqliteClient {
   }
 
   bootstrap() {
-    const schemaPath = new URL("./schema.sql", import.meta.url);
-    const sql = readFileSync(schemaPath, "utf8");
-    this.execute(sql);
+    this.execute(`CREATE TABLE IF NOT EXISTS schema_migrations (
+      id TEXT PRIMARY KEY,
+      applied_at TEXT NOT NULL
+    );`);
+
+    for (const migration of migrationFiles()) {
+      const existing = this.queryOne(`SELECT id FROM schema_migrations WHERE id = ${sqlValue(migration.id)};`);
+      if (existing) continue;
+      const sql = readFileSync(migration.file, "utf8");
+      this.transaction([
+        sql,
+        `INSERT INTO schema_migrations (id, applied_at) VALUES (${sqlValue(migration.id)}, ${sqlValue(new Date().toISOString())});`
+      ]);
+    }
   }
 
   queryAll(sql) {
-    const output = execFileSync("python3", ["-c", PYTHON_SQLITE_CLIENT, this.dbPath, "query", sql], { encoding: "utf8" });
+    const output = runSqlite(this.dbPath, ["-json"], sql);
     return output.trim() ? JSON.parse(output) : [];
   }
 
@@ -55,7 +62,7 @@ export class SqliteClient {
   }
 
   execute(sql) {
-    execFileSync("python3", ["-c", PYTHON_SQLITE_CLIENT, this.dbPath, "exec", sql], { encoding: "utf8" });
+    runSqlite(this.dbPath, [], sql);
   }
 
   transaction(statements) {
@@ -65,7 +72,9 @@ export class SqliteClient {
     } catch (error) {
       try {
         this.execute("ROLLBACK;");
-      } catch {}
+      } catch {
+        // no-op
+      }
       throw error;
     }
   }

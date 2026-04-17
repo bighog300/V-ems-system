@@ -3,8 +3,28 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createHmac } from "node:crypto";
 import { createApp } from "../src/server.mjs";
 import { OrchestrationService } from "../../orchestration/src/index.mjs";
+
+
+
+function base64UrlEncode(input) {
+  return Buffer.from(input).toString("base64url");
+}
+
+function signToken({ role = "dispatcher", actorId = "STAFF-TEST" } = {}) {
+  const header = base64UrlEncode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = base64UrlEncode(JSON.stringify({
+    sub: actorId,
+    role,
+    iss: "vems-tests",
+    aud: "vems-platform",
+    exp: Math.floor(Date.now() / 1000) + 3600
+  }));
+  const signature = createHmac("sha256", process.env.JWT_HS256_SECRET).update(`${header}.${payload}`).digest("base64url");
+  return `${header}.${payload}.${signature}`;
+}
 
 function createDbPath() {
   const dir = mkdtempSync(join(tmpdir(), "vems-prf-test-"));
@@ -12,6 +32,9 @@ function createDbPath() {
 }
 
 async function startServer() {
+  process.env.JWT_HS256_SECRET = "test-secret";
+  process.env.JWT_ISSUER = "vems-tests";
+  process.env.JWT_AUDIENCE = "vems-platform";
   const orchestration = new OrchestrationService({ dbPath: createDbPath() });
   const server = createApp(orchestration);
   await new Promise((resolve) => server.listen(0, resolve));
@@ -20,9 +43,19 @@ async function startServer() {
 }
 
 async function jsonFetch(base, path, options = {}) {
+  const rawHeaders = { ...(options.headers ?? {}) };
+  const role = rawHeaders["x-user-role"] ?? "dispatcher";
+  const actorId = rawHeaders["x-actor-id"] ?? "STAFF-TEST";
+  delete rawHeaders["x-user-role"];
+  delete rawHeaders["x-actor-id"];
+
   const response = await fetch(`${base}${path}`, {
     ...options,
-    headers: { "content-type": "application/json", ...(options.headers ?? {}) }
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${signToken({ role, actorId })}`,
+      ...rawHeaders
+    }
   });
 
   return {
@@ -128,7 +161,7 @@ test("json endpoints reject unsupported content types with 415", async () => {
   try {
     const response = await fetch(`${base}/api/incidents`, {
       method: "POST",
-      headers: { "content-type": "text/plain", "x-user-role": "dispatcher", "x-actor-id": "STAFF-904" },
+      headers: { "content-type": "text/plain", authorization: `Bearer ${signToken({ role: "dispatcher", actorId: "STAFF-904" })}` },
       body: "not-json"
     });
     const body = await response.json();
@@ -145,7 +178,7 @@ test("json endpoints reject oversized payloads with 413", async () => {
   try {
     const response = await fetch(`${base}/api/incidents`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-user-role": "dispatcher", "x-actor-id": "STAFF-905" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${signToken({ role: "dispatcher", actorId: "STAFF-905" })}` },
       body: JSON.stringify({
         call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
         incident: { category: "medical_emergency", priority: "critical", description: "x".repeat(200), address: "Main St", patient_count: 1 }
@@ -165,7 +198,7 @@ test("json endpoints preserve malformed JSON behavior with 400", async () => {
   try {
     const response = await fetch(`${base}/api/incidents`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-user-role": "dispatcher", "x-actor-id": "STAFF-906" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${signToken({ role: "dispatcher", actorId: "STAFF-906" })}` },
       body: "{\"call\":"
     });
     const body = await response.json();

@@ -1,6 +1,7 @@
 import { SqliteClient } from "./db.mjs";
 import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
 import { SyncWorker } from "./sync-worker.mjs";
+import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv } from "./adapters/transports.mjs";
 
 function parsePositiveInt(value, fallback) {
   if (value === undefined) return fallback;
@@ -14,7 +15,9 @@ export function loadSyncWorkerConfig(env = process.env) {
     dbPath: env.VEMS_DB_PATH ?? ".data/platform.sqlite",
     pollIntervalMs: parsePositiveInt(env.SYNC_WORKER_POLL_INTERVAL_MS, 2000),
     batchSize: parsePositiveInt(env.SYNC_WORKER_BATCH_SIZE, 100),
-    maxAttempts: parsePositiveInt(env.SYNC_WORKER_MAX_ATTEMPTS, 3)
+    maxAttempts: parsePositiveInt(env.SYNC_WORKER_MAX_ATTEMPTS, 3),
+    baseBackoffMs: parsePositiveInt(env.SYNC_WORKER_BACKOFF_BASE_MS, 0),
+    maxBackoffMs: parsePositiveInt(env.SYNC_WORKER_BACKOFF_MAX_MS, 60000)
   };
 }
 
@@ -45,23 +48,27 @@ export async function runSyncWorkerService(options = {}) {
   const db = options.db ?? new SqliteClient(config.dbPath);
   const syncIntents = options.syncIntents ?? new SyncIntentRepository(db);
   const transport = options.transport ?? unsupportedTransport;
+  const openemrTransport = options.openemrTransport ?? createOpenEmrTransportFromEnv() ?? transport;
+  const vtigerTransport = options.vtigerTransport ?? createVtigerTransportFromEnv() ?? transport;
 
   const worker = options.worker ?? new SyncWorker({
     syncIntents,
     maxAttempts: config.maxAttempts,
+    baseBackoffMs: config.baseBackoffMs,
+    maxBackoffMs: config.maxBackoffMs,
     vtiger: options.vtiger ?? createAdapterProxy("vtiger", [
       "createIncidentMirror",
       "updateIncidentMirror",
       "createAssignmentMirror",
       "updateAssignmentMirror"
-    ], transport),
+    ], vtigerTransport),
     openemr: options.openemr ?? createAdapterProxy("openemr", [
       "createPatient",
       "createEncounter",
       "createObservation",
       "createIntervention",
       "createHandover"
-    ], transport)
+    ], openemrTransport)
   });
 
   let stopping = false;

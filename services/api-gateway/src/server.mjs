@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
 import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, createLogger } from "@vems/shared";
+import { authenticateRequest } from "./auth.mjs";
 
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
@@ -13,6 +14,7 @@ const logger = createLogger({ serviceName: "api-gateway" });
 
 const RBAC_POLICIES = [
   { pattern: /^\/api\/support\/diagnostics$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/support\/sync-intents\/([0-9]+)\/replay$/, method: "POST", roles: ["operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents$/, method: "POST", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents\/(INC-[0-9]{6})$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },
@@ -38,12 +40,12 @@ function toHeaderValue(value) {
   return normalized.length > 0 ? normalized : null;
 }
 
-function buildRequestContext(req) {
+function buildRequestContext(req, actor = {}) {
   return {
     requestId: toHeaderValue(req.headers["x-request-id"]) ?? randomUUID(),
     correlationId: toHeaderValue(req.headers["x-correlation-id"]) ?? randomUUID(),
-    actorId: toHeaderValue(req.headers["x-actor-id"]),
-    role: (toHeaderValue(req.headers["x-user-role"]) ?? "anonymous").toLowerCase(),
+    actorId: actor.actorId ?? null,
+    role: (actor.role ?? "anonymous").toLowerCase(),
     startedAt: Date.now()
   };
 }
@@ -513,6 +515,12 @@ export function createApp(orchestration = new OrchestrationService()) {
   };
   const metrics = createApiMetricsCollector();
   const metricsExposureEnabled = appEnv !== "production" || process.env.INTERNAL_METRICS_ENABLED === "true";
+  const authConfig = {
+    trustHeaders: process.env.AUTH_TRUST_HEADERS === "true" || (!process.env.JWT_HS256_SECRET && appEnv !== "production"),
+    jwtSecret: process.env.JWT_HS256_SECRET,
+    issuer: process.env.JWT_ISSUER,
+    audience: process.env.JWT_AUDIENCE
+  };
   const alertThresholds = {
     rbac_deny_count_warn: Number(process.env.ALERT_RBAC_DENY_WARN ?? 10),
     dead_letter_count_warn: Number(process.env.ALERT_DEAD_LETTER_WARN ?? 5),
@@ -523,7 +531,21 @@ export function createApp(orchestration = new OrchestrationService()) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const method = req.method ?? "GET";
-    const context = buildRequestContext(req);
+
+    if (method === "GET" && url.pathname === "/health") {
+      const context = buildRequestContext(req, { role: "system", actorId: "health-check" });
+      return okJson(res, 200, { status: "ok" }, context);
+    }
+
+    let actor;
+    try {
+      actor = authenticateRequest(req, authConfig);
+    } catch (error) {
+      const context = buildRequestContext(req, { role: "anonymous", actorId: null });
+      return okJson(res, 401, errorEnvelope("UNAUTHENTICATED", error.message, false, context), context);
+    }
+
+    const context = buildRequestContext(req, actor);
     const idempotencyKey = req.headers["idempotency-key"];
     let requestFailed = false;
 
@@ -559,8 +581,6 @@ export function createApp(orchestration = new OrchestrationService()) {
     }
 
     try {
-      if (method === "GET" && url.pathname === "/health") return okJson(res, 200, { status: "ok" }, context);
-
       if (method === "GET" && url.pathname === "/api/support/readiness") {
         return okJson(res, 200, readinessReport(orchestration, diagnostics), context);
       }
@@ -578,6 +598,13 @@ export function createApp(orchestration = new OrchestrationService()) {
 
       if (method === "GET" && url.pathname === "/api/support/diagnostics") {
         return okJson(res, 200, supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds), context);
+      }
+
+      const replayMatch = url.pathname.match(/^\/api\/support\/sync-intents\/([0-9]+)\/replay$/);
+      if (replayMatch && method === "POST") {
+        const replayed = orchestration.replayDeadLetterIntent(Number(replayMatch[1]));
+        if (!replayed) throw new ApiError("NOT_FOUND", `Sync intent ${replayMatch[1]} not found`, 404);
+        return okJson(res, 200, { replayed: true, intent: replayed }, context);
       }
 
       if (method === "GET" && url.pathname === "/api/incidents") {
