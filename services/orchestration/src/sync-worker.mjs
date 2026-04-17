@@ -21,6 +21,8 @@ export class SyncWorker {
     this.vtiger = options.vtiger;
     this.openemr = options.openemr;
     this.maxAttempts = options.maxAttempts ?? 3;
+    this.baseBackoffMs = options.baseBackoffMs ?? 0;
+    this.maxBackoffMs = options.maxBackoffMs ?? 60000;
     this.metrics = options.metrics ?? createSyncWorkerMetrics();
   }
 
@@ -87,12 +89,17 @@ export class SyncWorker {
       `[sync-worker] intent failed intent_id=${intent.intent_id} target=${intent.target_system} method=${intent.intent_type ?? intent.operation} attempt=${attemptCount}/${this.maxAttempts} classification=${classification} dead_lettered=${deadLettered} message=${error?.message ?? "Unknown sync failure"}`
     );
 
+    const nextAttemptAt = deadLettered
+      ? null
+      : new Date(Date.now() + Math.min(this.maxBackoffMs, this.baseBackoffMs * (2 ** Math.max(0, attemptCount - 1)))).toISOString();
+
     this.syncIntents.markFailed(intent.intent_id, {
       status: deadLettered ? "dead_lettered" : "pending",
       attempt_count: attemptCount,
       last_error: error?.message ?? "Unknown sync failure",
       last_error_classification: classification,
-      dead_lettered_at: deadLettered ? new Date().toISOString() : null
+      dead_lettered_at: deadLettered ? new Date().toISOString() : null,
+      next_attempt_at: nextAttemptAt
     });
 
     this.metrics.failed_intents += 1;

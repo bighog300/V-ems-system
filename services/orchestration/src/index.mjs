@@ -9,6 +9,7 @@ import { IdempotencyKeyRepository } from "./repositories/idempotency-key-reposit
 import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
 import { VtigerPayloadMapper } from "./adapters/vtiger/vtiger-payload-mapper.mjs";
 import { OpenEmrAdapterClient } from "./adapters/openemr/openemr-adapter-client.mjs";
+import { createOpenEmrTransportFromEnv } from "./adapters/transports.mjs";
 import { PatientLinkRepository } from "./repositories/patient-link-repository.mjs";
 import { EncounterLinkRepository } from "./repositories/encounter-link-repository.mjs";
 
@@ -26,7 +27,7 @@ export class OrchestrationService {
     this.patientLinks = new PatientLinkRepository(this.db);
     this.encounterLinks = new EncounterLinkRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper();
-    this.openemr = options.openemr ?? new OpenEmrAdapterClient();
+    this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
 
   createIncident(payload, meta) {
@@ -599,5 +600,10 @@ export class OrchestrationService {
 
   listSyncIntents() {
     return this.syncIntents.listAll();
+  }
+
+  replayDeadLetterIntent(intentId) {
+    this.syncIntents.replayDeadLetter(intentId);
+    return this.syncIntents.listAll().find((intent) => intent.intent_id === Number(intentId)) ?? null;
   }
 }

@@ -14,4 +14,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 EXPOSE 80 443
 
-ENTRYPOINT ["apache2-foreground"]
+ENTRYPOINT ["/opt/vems/init-scripts/entrypoint.sh"]
