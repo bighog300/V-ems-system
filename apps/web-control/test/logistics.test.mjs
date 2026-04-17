@@ -57,7 +57,9 @@ test("loadLogisticsData fetches /api/support/diagnostics with role headers", asy
     apiBaseUrl: "http://127.0.0.1:8080",
     fetchImpl,
     actorId: "STAFF-LOG-1",
-    actorRole: "supervisor"
+    actorRole: "supervisor",
+    authMode: "dev",
+    allowLegacyAuthHeaders: true
   });
 
   assert.equal(calls.length, 1);

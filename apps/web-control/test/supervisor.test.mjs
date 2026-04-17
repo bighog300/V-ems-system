@@ -72,7 +72,9 @@ test("loadSupervisorData fetches incidents and diagnostics in parallel", async (
     apiBaseUrl: "http://127.0.0.1:8080",
     fetchImpl,
     actorId: "STAFF-SUP-1",
-    actorRole: "supervisor"
+    actorRole: "supervisor",
+    authMode: "dev",
+    allowLegacyAuthHeaders: true
   });
 
   assert.ok(calls.some((c) => c.url.includes("/api/incidents")));

@@ -49,6 +49,23 @@ test("renderCrewJobListHtml includes drill-in link to crew incident detail", () 
   assert.doesNotMatch(html, /Closure Ready:/);
 });
 
+test("renderCrewJobListHtml escapes dynamic incident fields to prevent XSS", () => {
+  const html = renderCrewJobListHtml([
+    {
+      incidentId: `INC-<img src=x onerror=alert(1)>`,
+      priority: `<script>alert(1)</script>`,
+      status: `" onmouseover="alert(1)`,
+      locationSummary: `<img src=x onerror=alert(1)>`,
+      assignmentSummary: `<svg onload=alert(1)>`,
+      closureReady: `<script>alert(2)</script>`
+    }
+  ]);
+
+  assert.doesNotMatch(html, /<script>/i);
+  assert.doesNotMatch(html, /<img\s|<svg\s/i);
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/);
+});
+
 test("renderCrewIncidentDetailHtml renders create encounter form when patient is linked and no encounter exists", () => {
   const html = renderCrewIncidentDetailHtml({
     incidentId: "INC-000123",
@@ -241,6 +258,29 @@ test("renderCrewIncidentDetailHtml applies datetime defaults from now option", (
   assert.match(html, /name="recorded_at" type="datetime-local" value="2026-04-16T10:45"/);
   assert.match(html, /name="performed_at" type="datetime-local" value="2026-04-16T10:45"/);
   assert.match(html, /name="handover_time" type="datetime-local" value="2026-04-16T10:45"/);
+});
+
+test("renderCrewIncidentDetailHtml escapes untrusted dynamic content in heavy renderer paths", () => {
+  const html = renderCrewIncidentDetailHtml({
+    incidentId: `<script>alert(1)</script>`,
+    priority: `<img src=x onerror=alert(2)>`,
+    status: `" onclick="alert(3)`,
+    locationSummary: `<svg onload=alert(4)>`,
+    closureReady: `<script>alert(5)</script>`,
+    assignmentSummary: { summary: `<img src=x onerror=alert(6)>` },
+    patientLinkSummary: { summary: `<script>alert(7)</script>`, openemrPatientId: `OE-" /><img src=x onerror=alert(8)>` },
+    encounterSummary: { available: true, encounter_id: `<b onclick="alert(9)">ENC-1</b>`, encounter_status: `<script>alert(10)</script>` },
+    handoverSummary: {
+      available: true,
+      handover_status: `<img src=x onerror=alert(11)>`,
+      disposition: `<script>alert(12)</script>`
+    }
+  });
+
+  assert.doesNotMatch(html, /<script>/i);
+  assert.doesNotMatch(html, /<img\s|<svg\s|<b\s/i);
+  assert.match(html, /&lt;img src=x onerror=alert\(2\)&gt;/);
+  assert.match(html, /&lt;b onclick=&quot;alert\(9\)&quot;&gt;ENC-1&lt;\/b&gt;/);
 });
 
 test("buildCreateEncounterPayload validates and normalizes required fields", () => {
