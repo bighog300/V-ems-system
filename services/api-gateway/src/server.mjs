@@ -113,6 +113,7 @@ function metricsSummary(metrics) {
     started_at: metrics.started_at,
     request_count: metrics.request_count,
     request_failures: metrics.request_failures,
+    rbac_deny_count: metrics.rbac_deny_count,
     failure_rate_pct: metrics.request_count === 0
       ? 0
       : Number(((metrics.request_failures / metrics.request_count) * 100).toFixed(2)),
@@ -130,6 +131,20 @@ function syncIntentSummary(orchestration) {
     acc[intent.status] = (acc[intent.status] ?? 0) + 1;
     return acc;
   }, {});
+
+  const byEntityType = intents.reduce((acc, intent) => {
+    const key = intent.entity_type ?? "unknown";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const failuresByTarget = intents
+    .filter((intent) => intent.status === "dead_lettered" || (intent.status === "pending" && intent.attempt_count > 0))
+    .reduce((acc, intent) => {
+      const key = intent.target_system ?? "unknown";
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
 
   const pendingRetries = intents
     .filter((intent) => intent.status === "pending" && intent.attempt_count > 0)
@@ -159,6 +174,8 @@ function syncIntentSummary(orchestration) {
     totals: {
       total: intents.length,
       by_status: byStatus,
+      by_entity_type: byEntityType,
+      failures_by_target: failuresByTarget,
       pending_retries: pendingRetries.length,
       dead_lettered: byStatus.dead_lettered ?? 0
     },
@@ -166,16 +183,29 @@ function syncIntentSummary(orchestration) {
   };
 }
 
-function supportDiagnosticsReport(orchestration, diagnostics, metrics) {
+function evaluateAlertStates(metricsSum, syncSum, thresholds) {
+  return {
+    rbac_deny_count: (metricsSum.rbac_deny_count ?? 0) >= thresholds.rbac_deny_count_warn ? "warn" : "ok",
+    dead_letter_count: (syncSum.totals.dead_lettered ?? 0) >= thresholds.dead_letter_count_warn ? "warn" : "ok",
+    failure_rate_pct: (metricsSum.failure_rate_pct ?? 0) >= thresholds.failure_rate_pct_warn ? "warn" : "ok",
+    latency_avg_ms: (metricsSum.latency_ms.avg ?? 0) >= thresholds.latency_avg_ms_warn ? "warn" : "ok"
+  };
+}
+
+function supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds) {
+  const metricsSum = metricsSummary(metrics);
+  const syncSum = syncIntentSummary(orchestration);
   return {
     generated_at: new Date().toISOString(),
     readiness_summary: readinessReport(orchestration, diagnostics),
-    metrics_summary: metricsSummary(metrics),
-    sync_intent_summary: syncIntentSummary(orchestration),
+    metrics_summary: metricsSum,
+    sync_intent_summary: syncSum,
     upstream_validation_status: {
       enabled: diagnostics.upstreamConnectivityValidationEnabled,
       last_validation: diagnostics.lastValidation
-    }
+    },
+    alert_thresholds: alertThresholds,
+    alert_states: evaluateAlertStates(metricsSum, syncSum, alertThresholds)
   };
 }
 
@@ -184,6 +214,7 @@ function createApiMetricsCollector() {
     started_at: new Date().toISOString(),
     request_count: 0,
     request_failures: 0,
+    rbac_deny_count: 0,
     latency_ms: {
       count: 0,
       total: 0,
@@ -458,6 +489,12 @@ export function createApp(orchestration = new OrchestrationService()) {
   };
   const metrics = createApiMetricsCollector();
   const metricsExposureEnabled = appEnv !== "production" || process.env.INTERNAL_METRICS_ENABLED === "true";
+  const alertThresholds = {
+    rbac_deny_count_warn: Number(process.env.ALERT_RBAC_DENY_WARN ?? 10),
+    dead_letter_count_warn: Number(process.env.ALERT_DEAD_LETTER_WARN ?? 5),
+    failure_rate_pct_warn: Number(process.env.ALERT_FAILURE_RATE_PCT_WARN ?? 5),
+    latency_avg_ms_warn: Number(process.env.ALERT_LATENCY_AVG_MS_WARN ?? 1000)
+  };
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -490,6 +527,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       });
       if (!rbac.allowed) {
         requestFailed = true;
+        metrics.rbac_deny_count += 1;
         return okJson(res, 403, errorEnvelope("FORBIDDEN", "Role is not authorized for this action", false, context, {
           required_roles: rbac.requiredRoles
         }), context);
@@ -515,7 +553,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       if (method === "GET" && url.pathname === "/api/support/diagnostics") {
-        return okJson(res, 200, supportDiagnosticsReport(orchestration, diagnostics, metrics), context);
+        return okJson(res, 200, supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds), context);
       }
 
       if (method === "GET" && url.pathname === "/api/incidents") {

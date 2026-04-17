@@ -72,6 +72,7 @@ export function buildDiagnosticsSections(data) {
           startedAt: metrics.started_at ?? null,
           requestCount: metrics.request_count ?? 0,
           requestFailures: metrics.request_failures ?? 0,
+
           failureRatePct: metrics.failure_rate_pct ?? 0,
           latency: metrics.latency_ms ?? null
         }
@@ -87,7 +88,7 @@ export function buildDiagnosticsSections(data) {
           enabled: upstream.enabled ?? false,
           lastValidation: upstream.last_validation ?? null
         }
-      : null
+
   };
 }
 
@@ -131,6 +132,7 @@ export function renderMetricsSummaryHtml(metrics) {
       <dt>Metrics started at</dt><dd>${escHtml(asText(metrics.startedAt))}</dd>
       <dt>Request count</dt><dd>${escHtml(metrics.requestCount)}</dd>
       <dt>Request failures</dt><dd>${escHtml(metrics.requestFailures)}</dd>
+
       <dt>Failure rate</dt><dd>${escHtml(metrics.failureRatePct)}%</dd>
       <dt>Avg latency (ms)</dt><dd>${escHtml(asText(latency.avg))}</dd>
       <dt>Min latency (ms)</dt><dd>${escHtml(asText(latency.min))}</dd>
@@ -138,6 +140,7 @@ export function renderMetricsSummaryHtml(metrics) {
     </dl>
   `.trim();
 }
+
 
 export function renderSyncIntentSummaryHtml(sync) {
   if (!sync) {
@@ -226,6 +229,7 @@ export function renderDiagnosticsHtml(sections) {
   return `
     ${genAt}
     <section class="panel diag-section">
+
       <h2>Readiness Summary</h2>
       ${renderReadinessSummaryHtml(sections.readiness)}
     </section>

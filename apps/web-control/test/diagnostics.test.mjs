@@ -5,6 +5,7 @@ import {
   buildDiagnosticsSections,
   renderReadinessSummaryHtml,
   renderMetricsSummaryHtml,
+
   renderSyncIntentSummaryHtml,
   renderUpstreamValidationHtml,
   renderDiagnosticsHtml
@@ -31,11 +32,12 @@ function makeDiagnosticsPayload(overrides = {}) {
       started_at: "2026-04-17T09:00:00Z",
       request_count: 42,
       request_failures: 2,
+
       failure_rate_pct: 4.76,
       latency_ms: { avg: 12.5, min: 5, max: 38 }
     },
     sync_intent_summary: {
-      totals: { total: 5, by_status: { queued: 3, dead_lettered: 2 }, pending_retries: 0, dead_lettered: 2 },
+
       failed_intents: [
         {
           intent_id: 7,
@@ -57,6 +59,7 @@ function makeDiagnosticsPayload(overrides = {}) {
       enabled: true,
       last_validation: { at: "2026-04-17T09:50:00Z", result: "ok" }
     },
+
     ...overrides
   };
 }
@@ -380,3 +383,4 @@ test("loadDiagnosticsData succeeds with supervisor role", async () => {
 
   assert.ok(result.generated_at);
 });
+
