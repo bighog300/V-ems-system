@@ -54,6 +54,83 @@ export async function runCloseIncidentAction({
   }
 }
 
+export async function runAssignIncidentAction({
+  button,
+  vehicleIdInput,
+  status,
+  setAssignFeedback,
+  config,
+  assignIncident,
+  refreshIncidentDetail,
+  formatError
+}) {
+  if (!config.apiBaseUrl || !config.incidentId) {
+    setAssignFeedback("API Base URL and Incident ID are required.");
+    return;
+  }
+
+  const vehicleId = vehicleIdInput?.value?.trim() ?? "";
+  if (!vehicleId) {
+    setAssignFeedback("Vehicle ID is required to assign.");
+    return;
+  }
+
+  if (lockSubmission(button)) {
+    status.textContent = "Assignment already in progress...";
+    return;
+  }
+
+  try {
+    setAssignFeedback("");
+    status.textContent = "Assigning vehicle...";
+    await assignIncident({ apiBaseUrl: config.apiBaseUrl, incidentId: config.incidentId, payload: { vehicle_id: vehicleId } });
+    setAssignFeedback("");
+    await refreshIncidentDetail();
+    status.textContent = "Vehicle assigned and incident detail refreshed.";
+  } catch (error) {
+    setAssignFeedback(formatError(error));
+    await refreshIncidentDetail();
+    status.textContent = "Assignment failed.";
+  } finally {
+    unlockSubmission(button);
+  }
+}
+
+export async function runEscalateIncidentAction({
+  button,
+  status,
+  setEscalateFeedback,
+  config,
+  escalateIncident,
+  refreshIncidentDetail,
+  formatError
+}) {
+  if (!config.apiBaseUrl || !config.incidentId) {
+    setEscalateFeedback("API Base URL and Incident ID are required.");
+    return;
+  }
+
+  if (lockSubmission(button)) {
+    status.textContent = "Escalation already in progress...";
+    return;
+  }
+
+  try {
+    setEscalateFeedback("");
+    status.textContent = "Escalating priority...";
+    await escalateIncident({ apiBaseUrl: config.apiBaseUrl, incidentId: config.incidentId });
+    setEscalateFeedback("");
+    await refreshIncidentDetail();
+    status.textContent = "Priority escalated and incident detail refreshed.";
+  } catch (error) {
+    setEscalateFeedback(formatError(error));
+    await refreshIncidentDetail();
+    status.textContent = "Escalation failed.";
+  } finally {
+    unlockSubmission(button);
+  }
+}
+
 export async function runCrewFormAction({
   form,
   feedback,

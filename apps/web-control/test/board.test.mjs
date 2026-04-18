@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildDispatcherBoardItems, filterAndSortDispatcherItems, renderDispatcherBoardHtml } from "../src/board.mjs";
+import { buildDispatcherBoardItems, filterAndSortDispatcherItems, filterClosedItems, renderClosedIncidentsSectionHtml, renderDispatcherBoardHtml } from "../src/board.mjs";
 
 test("buildDispatcherBoardItems maps minimum operational fields", () => {
   const items = buildDispatcherBoardItems([
@@ -75,6 +75,61 @@ test("filterAndSortDispatcherItems supports recency sorting", () => {
 test("renderDispatcherBoardHtml shows explicit empty-state messaging", () => {
   const html = renderDispatcherBoardHtml([]);
   assert.match(html, /No incidents currently available for dispatch\./);
+});
+
+test("filterClosedItems separates non-active incidents from the active set", () => {
+  const items = [
+    { incidentId: "INC-001", status: "Closed", priority: "high" },
+    { incidentId: "INC-002", status: "Awaiting Dispatch", priority: "critical" },
+    { incidentId: "INC-003", status: "resolved", priority: "low" },
+    { incidentId: "INC-004", status: "Assigned", priority: "medium" }
+  ];
+
+  const closed = filterClosedItems(items);
+  assert.deepEqual(closed.map((i) => i.incidentId), ["INC-001", "INC-003"]);
+});
+
+test("renderClosedIncidentsSectionHtml returns empty string when no closed items", () => {
+  const html = renderClosedIncidentsSectionHtml([]);
+  assert.equal(html, "");
+});
+
+test("renderClosedIncidentsSectionHtml wraps closed incidents in a collapsible details element", () => {
+  const html = renderClosedIncidentsSectionHtml([
+    {
+      incidentId: "INC-999",
+      priority: "low",
+      status: "Closed",
+      locationSummary: "Resolved scene",
+      assignmentSummary: "ASN-001 • Completed • AMB-001",
+      closureReady: true,
+      priorityClassName: "priority-low"
+    }
+  ]);
+
+  assert.match(html, /<details/);
+  assert.match(html, /<summary/);
+  assert.match(html, /Closed \/ Recently Resolved \(1\)/);
+  assert.match(html, /INC-999/);
+  assert.match(html, /board-grid/);
+});
+
+test("renderClosedIncidentsSectionHtml escapes incident data to prevent XSS", () => {
+  const html = renderClosedIncidentsSectionHtml([
+    {
+      incidentId: "INC-<script>bad()</script>",
+      priority: "<b>low</b>",
+      status: "Closed",
+      locationSummary: "<img src=x>",
+      assignmentSummary: "safe",
+      closureReady: false,
+      priorityClassName: "priority-low"
+    }
+  ]);
+
+  assert.doesNotMatch(html, /<script>/i);
+  assert.doesNotMatch(html, /<b>/);
+  assert.match(html, /&lt;script&gt;/);
 });
 
 test("renderDispatcherBoardHtml escapes incident data to prevent XSS", () => {

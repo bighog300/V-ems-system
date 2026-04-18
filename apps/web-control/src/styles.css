@@ -236,3 +236,27 @@ dt {
 .closure-state-unknown {
   color: #b91c1c;
 }
+
+.closed-incidents-section {
+  margin-top: 1rem;
+}
+
+.closed-incidents-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 0.5rem 0;
+  user-select: none;
+}
+
+.closed-incidents-section[open] .closed-incidents-summary {
+  color: #374151;
+}
+
+.closed-incidents-section .board-grid {
+  margin-top: 0.75rem;
+}
+
+.closed-incidents-section .board-card {
+  opacity: 0.75;
+}

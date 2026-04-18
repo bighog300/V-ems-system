@@ -1,17 +1,19 @@
 import {
   ApiError,
+  assignIncident,
   closeIncident,
   createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
   createIncidentEncounter,
+  escalateIncident,
   loadCrewJobListData,
   loadDispatcherBoardData,
   loadIncidentOperationalData
 } from "./api.mjs";
-import { runCloseIncidentAction, runCrewFormAction } from "./workflow-actions.mjs";
-import { buildDispatcherBoardItems, filterAndSortDispatcherItems, renderDispatcherBoardHtml } from "./board.mjs";
-import { buildIncidentOperationalSummary, renderIncidentClosePanelHtml, renderOperationalSummaryHtml } from "./summary.mjs";
+import { runAssignIncidentAction, runCloseIncidentAction, runCrewFormAction, runEscalateIncidentAction } from "./workflow-actions.mjs";
+import { buildDispatcherBoardItems, filterAndSortDispatcherItems, filterClosedItems, renderClosedIncidentsSectionHtml, renderDispatcherBoardHtml } from "./board.mjs";
+import { buildIncidentOperationalSummary, renderIncidentAssignPanelHtml, renderIncidentClosePanelHtml, renderIncidentEscalatePanelHtml, renderOperationalSummaryHtml } from "./summary.mjs";
 import {
   buildCreateEncounterPayload,
   buildCreateHandoverPayload,
@@ -30,6 +32,8 @@ function readConfig() {
 }
 
 let closeIncidentFeedback = "";
+let assignIncidentFeedback = "";
+let escalateIncidentFeedback = "";
 const dispatcherPolling = startPolling({
   enabled: () => Boolean(document.querySelector("#boardAutoRefresh")?.checked),
   intervalMs: 15000,
@@ -65,11 +69,16 @@ async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
 
   try {
     const boardData = await loadDispatcherBoardData(config);
-    const items = buildDispatcherBoardItems(boardData.items);
-    const filteredAndSortedItems = filterAndSortDispatcherItems(items, controls);
-    output.innerHTML = renderDispatcherBoardHtml(filteredAndSortedItems, {
-      lastUpdatedLabel: formatDateTime(new Date())
-    });
+    const allItems = buildDispatcherBoardItems(boardData.items);
+    // Active items respect all filter controls; closed items are always excluded from the main grid.
+    const activeItems = filterAndSortDispatcherItems(allItems, { ...controls, activeOnly: true });
+    // Closed section shown only when the active-only filter is not in effect.
+    const closedItems = controls.activeOnly
+      ? []
+      : filterAndSortDispatcherItems(filterClosedItems(allItems), { sort: "recency" });
+    output.innerHTML =
+      renderDispatcherBoardHtml(activeItems, { lastUpdatedLabel: formatDateTime(new Date()) }) +
+      renderClosedIncidentsSectionHtml(closedItems);
     if (refreshReason === "manual") {
       status.textContent = "Dispatcher board loaded.";
     } else {
@@ -103,6 +112,8 @@ async function renderIncidentDetail() {
         <h2>Incident Detail / Operational Summary</h2>
         ${renderOperationalSummaryHtml(summary)}
       </section>
+      ${renderIncidentAssignPanelHtml({ summary, assignErrorMessage: assignIncidentFeedback })}
+      ${renderIncidentEscalatePanelHtml({ summary, escalateErrorMessage: escalateIncidentFeedback })}
       ${renderIncidentClosePanelHtml({ summary, closeErrorMessage: closeIncidentFeedback })}
       <section class="panel">
         <h3>Read-Path Notes</h3>
@@ -112,6 +123,14 @@ async function renderIncidentDetail() {
         </ul>
       </section>
     `;
+    const assignButton = document.querySelector("#assignIncidentAction");
+    if (assignButton) {
+      assignButton.addEventListener("click", onAssignIncidentClick);
+    }
+    const escalateButton = document.querySelector("#escalateIncidentAction");
+    if (escalateButton) {
+      escalateButton.addEventListener("click", onEscalateIncidentClick);
+    }
     const closeButton = document.querySelector("#closeIncidentAction");
     if (closeButton) {
       closeButton.addEventListener("click", onCloseIncidentClick);
@@ -136,6 +155,42 @@ async function onCloseIncidentClick(event) {
     formatError: formatApiError,
     setCloseFeedback: (message) => {
       closeIncidentFeedback = message;
+    }
+  });
+}
+
+async function onAssignIncidentClick(event) {
+  const button = event.currentTarget;
+  const vehicleIdInput = document.querySelector("#assignVehicleId");
+  const status = document.querySelector("#status");
+  const config = readConfig();
+  await runAssignIncidentAction({
+    button,
+    vehicleIdInput,
+    status,
+    config,
+    assignIncident,
+    refreshIncidentDetail: renderIncidentDetail,
+    formatError: formatApiError,
+    setAssignFeedback: (message) => {
+      assignIncidentFeedback = message;
+    }
+  });
+}
+
+async function onEscalateIncidentClick(event) {
+  const button = event.currentTarget;
+  const status = document.querySelector("#status");
+  const config = readConfig();
+  await runEscalateIncidentAction({
+    button,
+    status,
+    config,
+    escalateIncident,
+    refreshIncidentDetail: renderIncidentDetail,
+    formatError: formatApiError,
+    setEscalateFeedback: (message) => {
+      escalateIncidentFeedback = message;
     }
   });
 }

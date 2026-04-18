@@ -95,16 +95,10 @@ export function filterAndSortDispatcherItems(items, {
   });
 }
 
-export function renderDispatcherBoardHtml(items, { lastUpdatedLabel } = {}) {
-  if (items.length === 0) {
-    return `<p>No incidents currently available for dispatch.</p>`;
-  }
-
-  const cards = items
-    .map((item) => {
-      const closureReady = item.closureReady === undefined ? "Not present" : String(item.closureReady);
-      const closureClassName = item.closureReady === true ? "closure-ready-true" : "closure-ready-false";
-      return `
+function buildBoardCardHtml(item) {
+  const closureReady = item.closureReady === undefined ? "Not present" : String(item.closureReady);
+  const closureClassName = item.closureReady === true ? "closure-ready-true" : "closure-ready-false";
+  return `
         <article class="board-card ${sanitizeClassToken(item.priorityClassName, "priority-low")}">
           <header>
             <h3><a href="?incidentId=${encodeURIComponent(item.incidentId)}">${escapeHtml(item.incidentId)}</a></h3>
@@ -118,9 +112,29 @@ export function renderDispatcherBoardHtml(items, { lastUpdatedLabel } = {}) {
           </dl>
         </article>
       `;
-    })
-    .join("\n");
+}
 
+export function renderDispatcherBoardHtml(items, { lastUpdatedLabel } = {}) {
+  if (items.length === 0) {
+    return `<p>No incidents currently available for dispatch.</p>`;
+  }
+
+  const cards = items.map(buildBoardCardHtml).join("\n");
   const refreshNote = lastUpdatedLabel ? `<p class="hint"><strong>Last updated:</strong> ${escapeHtml(formatDateTime(lastUpdatedLabel))}</p>` : "";
   return `${refreshNote}<section class="board-grid">${cards}</section>`;
+}
+
+export function filterClosedItems(items) {
+  return items.filter((item) => !isActiveIncident(item.status));
+}
+
+export function renderClosedIncidentsSectionHtml(items) {
+  if (items.length === 0) return "";
+  const cards = items.map(buildBoardCardHtml).join("\n");
+  return `
+    <details class="closed-incidents-section">
+      <summary class="closed-incidents-summary">Closed / Recently Resolved (${items.length})</summary>
+      <section class="board-grid">${cards}</section>
+    </details>
+  `;
 }

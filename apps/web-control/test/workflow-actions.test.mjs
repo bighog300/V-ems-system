@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runCloseIncidentAction, runCrewFormAction } from "../src/workflow-actions.mjs";
+import { runAssignIncidentAction, runCloseIncidentAction, runCrewFormAction, runEscalateIncidentAction } from "../src/workflow-actions.mjs";
 
 class FakeControl {
   constructor() {
@@ -34,6 +34,199 @@ global.FormData = class {
     return this.form.fields[key];
   }
 };
+
+test("runAssignIncidentAction assigns vehicle and refreshes on success", async () => {
+  const button = new FakeControl();
+  const vehicleIdInput = { value: "AMB-201" };
+  const status = new FakeControl();
+  let assignFeedback = "";
+  const assignments = [];
+  let refreshCalls = 0;
+
+  await runAssignIncidentAction({
+    button,
+    vehicleIdInput,
+    status,
+    setAssignFeedback: (msg) => { assignFeedback = msg; },
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000010" },
+    assignIncident: async ({ payload }) => { assignments.push(payload); },
+    refreshIncidentDetail: async () => { refreshCalls += 1; },
+    formatError: (err) => err.message
+  });
+
+  assert.equal(assignments.length, 1);
+  assert.deepEqual(assignments[0], { vehicle_id: "AMB-201" });
+  assert.equal(refreshCalls, 1);
+  assert.equal(assignFeedback, "");
+  assert.equal(status.textContent, "Vehicle assigned and incident detail refreshed.");
+  assert.equal(button.disabled, false);
+});
+
+test("runAssignIncidentAction rejects empty vehicle ID without locking button", async () => {
+  const button = new FakeControl();
+  const vehicleIdInput = { value: "   " };
+  const status = new FakeControl();
+  let assignFeedback = "";
+  let assignCalls = 0;
+
+  await runAssignIncidentAction({
+    button,
+    vehicleIdInput,
+    status,
+    setAssignFeedback: (msg) => { assignFeedback = msg; },
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000011" },
+    assignIncident: async () => { assignCalls += 1; },
+    refreshIncidentDetail: async () => {},
+    formatError: (err) => err.message
+  });
+
+  assert.equal(assignCalls, 0);
+  assert.equal(assignFeedback, "Vehicle ID is required to assign.");
+  assert.equal(button.disabled, false);
+});
+
+test("runAssignIncidentAction handles backend error and sets feedback", async () => {
+  const button = new FakeControl();
+  const vehicleIdInput = { value: "AMB-999" };
+  const status = new FakeControl();
+  let assignFeedback = "";
+
+  await runAssignIncidentAction({
+    button,
+    vehicleIdInput,
+    status,
+    setAssignFeedback: (msg) => { assignFeedback = msg; },
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000012" },
+    assignIncident: async () => { throw new Error("VEHICLE_NOT_AVAILABLE"); },
+    refreshIncidentDetail: async () => {},
+    formatError: (err) => `formatted:${err.message}`
+  });
+
+  assert.equal(assignFeedback, "formatted:VEHICLE_NOT_AVAILABLE");
+  assert.equal(status.textContent, "Assignment failed.");
+  assert.equal(button.disabled, false);
+});
+
+test("runAssignIncidentAction prevents duplicate in-flight submissions", async () => {
+  const button = new FakeControl();
+  const vehicleIdInput = { value: "AMB-300" };
+  const status = new FakeControl();
+  let callCount = 0;
+  let resolveFirst;
+
+  const first = runAssignIncidentAction({
+    button,
+    vehicleIdInput,
+    status,
+    setAssignFeedback: () => {},
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000013" },
+    assignIncident: async () => {
+      callCount += 1;
+      await new Promise((resolve) => { resolveFirst = resolve; });
+    },
+    refreshIncidentDetail: async () => {},
+    formatError: (err) => err.message
+  });
+
+  const second = runAssignIncidentAction({
+    button,
+    vehicleIdInput,
+    status,
+    setAssignFeedback: () => {},
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000013" },
+    assignIncident: async () => { callCount += 1; },
+    refreshIncidentDetail: async () => {},
+    formatError: (err) => err.message
+  });
+
+  await Promise.resolve();
+  assert.equal(callCount, 1);
+  assert.equal(status.textContent, "Assignment already in progress...");
+  resolveFirst();
+  await Promise.all([first, second]);
+  assert.equal(button.dataset.submitting, "false");
+});
+
+test("runEscalateIncidentAction escalates priority and refreshes on success", async () => {
+  const button = new FakeControl();
+  const status = new FakeControl();
+  let escalateFeedback = "";
+  let escalateCalls = 0;
+  let refreshCalls = 0;
+
+  await runEscalateIncidentAction({
+    button,
+    status,
+    setEscalateFeedback: (msg) => { escalateFeedback = msg; },
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000020" },
+    escalateIncident: async () => { escalateCalls += 1; },
+    refreshIncidentDetail: async () => { refreshCalls += 1; },
+    formatError: (err) => err.message
+  });
+
+  assert.equal(escalateCalls, 1);
+  assert.equal(refreshCalls, 1);
+  assert.equal(escalateFeedback, "");
+  assert.equal(status.textContent, "Priority escalated and incident detail refreshed.");
+  assert.equal(button.disabled, false);
+});
+
+test("runEscalateIncidentAction handles backend error and sets feedback", async () => {
+  const button = new FakeControl();
+  const status = new FakeControl();
+  let escalateFeedback = "";
+
+  await runEscalateIncidentAction({
+    button,
+    status,
+    setEscalateFeedback: (msg) => { escalateFeedback = msg; },
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000021" },
+    escalateIncident: async () => { throw new Error("ALREADY_CRITICAL"); },
+    refreshIncidentDetail: async () => {},
+    formatError: (err) => `formatted:${err.message}`
+  });
+
+  assert.equal(escalateFeedback, "formatted:ALREADY_CRITICAL");
+  assert.equal(status.textContent, "Escalation failed.");
+  assert.equal(button.disabled, false);
+});
+
+test("runEscalateIncidentAction prevents duplicate in-flight submissions", async () => {
+  const button = new FakeControl();
+  const status = new FakeControl();
+  let callCount = 0;
+  let resolveFirst;
+
+  const first = runEscalateIncidentAction({
+    button,
+    status,
+    setEscalateFeedback: () => {},
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000022" },
+    escalateIncident: async () => {
+      callCount += 1;
+      await new Promise((resolve) => { resolveFirst = resolve; });
+    },
+    refreshIncidentDetail: async () => {},
+    formatError: (err) => err.message
+  });
+
+  const second = runEscalateIncidentAction({
+    button,
+    status,
+    setEscalateFeedback: () => {},
+    config: { apiBaseUrl: "http://example.test", incidentId: "INC-000022" },
+    escalateIncident: async () => { callCount += 1; },
+    refreshIncidentDetail: async () => {},
+    formatError: (err) => err.message
+  });
+
+  await Promise.resolve();
+  assert.equal(callCount, 1);
+  assert.equal(status.textContent, "Escalation already in progress...");
+  resolveFirst();
+  await Promise.all([first, second]);
+  assert.equal(button.dataset.submitting, "false");
+});
 
 test("runCrewFormAction submits create encounter flow with loading and success feedback", async () => {
   const form = new FakeForm(

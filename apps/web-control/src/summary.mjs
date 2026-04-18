@@ -147,6 +147,40 @@ export function renderOperationalSummaryHtml(summary) {
   `;
 }
 
+export function renderIncidentAssignPanelHtml({ summary, assignErrorMessage = "" }) {
+  if (summary.status === "Closed") return "";
+  const errorSection = assignErrorMessage
+    ? `<p id="assignIncidentFeedback" class="error-note" aria-live="polite">${escapeHtml(assignErrorMessage)}</p>`
+    : `<p id="assignIncidentFeedback" class="hint" aria-live="polite">Enter a vehicle ID to assign this incident to a crew unit.</p>`;
+  return `
+    <section class="panel">
+      <h3>Assign Vehicle</h3>
+      <div class="controls">
+        <label>Vehicle ID
+          <input id="assignVehicleId" type="text" placeholder="e.g. AMB-201" autocomplete="off">
+        </label>
+        <button id="assignIncidentAction" type="button">Assign vehicle</button>
+      </div>
+      ${errorSection}
+    </section>
+  `;
+}
+
+export function renderIncidentEscalatePanelHtml({ summary, escalateErrorMessage = "" }) {
+  if (summary.status === "Closed") return "";
+  const errorSection = escalateErrorMessage
+    ? `<p id="escalateIncidentFeedback" class="error-note" aria-live="polite">${escapeHtml(escalateErrorMessage)}</p>`
+    : `<p id="escalateIncidentFeedback" class="hint" aria-live="polite">Escalation is validated by backend priority rules.</p>`;
+  return `
+    <section class="panel">
+      <h3>Escalate Priority</h3>
+      <p><strong>Current priority:</strong> ${escapeHtml(summary.priority)}</p>
+      <button id="escalateIncidentAction" type="button">Escalate priority</button>
+      ${errorSection}
+    </section>
+  `;
+}
+
 export function renderIncidentClosePanelHtml({ summary, closeErrorMessage = "", closing = false }) {
   if (summary.status === "Closed") {
     return `

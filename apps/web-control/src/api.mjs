@@ -68,6 +68,14 @@ export async function closeIncident({ apiBaseUrl, incidentId, fetchImpl = fetch,
   return patchJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}`, { action: "close_incident" }, config);
 }
 
+export async function assignIncident({ apiBaseUrl, incidentId, payload, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/assignments`, payload, config);
+}
+
+export async function escalateIncident({ apiBaseUrl, incidentId, fetchImpl = fetch, ...config }) {
+  return patchJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}`, { action: "escalate_priority" }, config);
+}
+
 export async function loadDispatcherBoardData({ apiBaseUrl, fetchImpl = fetch, ...config }) {
   const boardList = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents`, config);
   return {
