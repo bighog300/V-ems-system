@@ -28,7 +28,7 @@ test("buildDispatcherBoardItems maps minimum operational fields", () => {
   assert.equal(items[0].priorityClassName, "priority-critical");
 });
 
-test("renderDispatcherBoardHtml includes drill-down incident link", () => {
+test("renderDispatcherBoardHtml renders grouped board and side panel", () => {
   const html = renderDispatcherBoardHtml([
     {
       incidentId: "INC-000222",
@@ -42,8 +42,9 @@ test("renderDispatcherBoardHtml includes drill-down incident link", () => {
   ]);
 
   assert.match(html, /\?incidentId=INC-000222/);
-  assert.match(html, /Priority:/);
-  assert.match(html, /Closure Ready/);
+  assert.match(html, /Pending Assignment/);
+  assert.match(html, /Incident Details \/ Actions/);
+  assert.match(html, /Review Summary/);
 });
 
 test("filterAndSortDispatcherItems supports active, status, priority filters", () => {
@@ -75,6 +76,7 @@ test("filterAndSortDispatcherItems supports recency sorting", () => {
 test("renderDispatcherBoardHtml shows explicit empty-state messaging", () => {
   const html = renderDispatcherBoardHtml([]);
   assert.match(html, /No incidents currently available for dispatch\./);
+  assert.match(html, /VEMS Dispatcher Board/);
 });
 
 test("renderDispatcherBoardHtml escapes incident data to prevent XSS", () => {

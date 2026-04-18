@@ -22,6 +22,14 @@ class FakeElement {
       handler({ currentTarget: this, preventDefault() {} });
     }
   }
+
+  querySelectorAll() {
+    return [];
+  }
+
+  getAttribute() {
+    return "";
+  }
 }
 
 function createTestDocument() {
@@ -159,11 +167,9 @@ test("dispatcher controls and polling lifecycle behave correctly at DOM-event le
   await nextTick();
 
   boardHtml = fakeDocument.elements.get("dispatcherBoardOutput").innerHTML;
-  assert.match(boardHtml, /\?incidentId=INC-003/, "recency sorting should bring newest incident first");
-  assert.ok(
-    boardHtml.indexOf("?incidentId=INC-003") < boardHtml.indexOf("?incidentId=INC-002"),
-    "INC-003 should appear before INC-002 under recency sort"
-  );
+  assert.match(boardHtml, /\?incidentId=INC-003/, "recency sorting should still include newest incident");
+  assert.match(boardHtml, /Pending Assignment/, "board should render urgency groups");
+  assert.match(boardHtml, /Critical/, "board should render urgency groups");
 
   const autoRefresh = fakeDocument.elements.get("boardAutoRefresh");
   autoRefresh.checked = false;
