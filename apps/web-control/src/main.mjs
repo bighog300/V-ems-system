@@ -21,7 +21,6 @@ import {
   renderCrewIncidentDetailHtml,
   renderCrewJobListHtml
 } from "./crew.mjs";
-import { formatDateTime } from "./security.mjs";
 import { applyProductionUiMode, readSessionFromDom } from "./session.mjs";
 import { handleAppError, startPolling } from "./runtime.mjs";
 
@@ -30,6 +29,9 @@ function readConfig() {
 }
 
 let closeIncidentFeedback = "";
+let selectedDispatcherIncidentId = "";
+let previousDispatcherSnapshot = new Map();
+
 const dispatcherPolling = startPolling({
   enabled: () => Boolean(document.querySelector("#boardAutoRefresh")?.checked),
   intervalMs: 15000,
@@ -47,6 +49,48 @@ function readDispatcherBoardControls() {
     priority: priorityInput?.value ?? "all",
     sort: sortInput?.value ?? "priority"
   };
+}
+
+function bindDispatcherBoardActions() {
+  const boardOutput = document.querySelector("#dispatcherBoardOutput");
+  boardOutput.querySelectorAll("[data-select-incident]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const incidentId = event.currentTarget.getAttribute("data-select-incident") ?? "";
+      if (!incidentId) return;
+      selectedDispatcherIncidentId = incidentId;
+      void renderDispatcherBoard({ refreshReason: "manual" });
+    });
+  });
+
+  boardOutput.querySelectorAll("[data-quick-action]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      const incidentId = event.currentTarget.getAttribute("data-incident-id") ?? "";
+      const incidentInput = document.querySelector("#incidentId");
+      if (incidentInput && incidentId) {
+        incidentInput.value = incidentId;
+      }
+      const action = event.currentTarget.getAttribute("data-quick-action");
+      if (action === "load-incident") {
+        void renderIncidentDetail();
+        return;
+      }
+      if (action === "load-crew-incident") {
+        void renderCrewIncidentDetail();
+      }
+    });
+  });
+}
+
+function buildChangedIncidentIds(items) {
+  const changed = new Set();
+  for (const item of items) {
+    const snapshot = `${item.status}|${item.assignmentSummary}|${item.updatedAt ?? ""}|${item.priority}`;
+    if (previousDispatcherSnapshot.has(item.incidentId) && previousDispatcherSnapshot.get(item.incidentId) !== snapshot) {
+      changed.add(item.incidentId);
+    }
+    previousDispatcherSnapshot.set(item.incidentId, snapshot);
+  }
+  return changed;
 }
 
 async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
@@ -67,9 +111,18 @@ async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
     const boardData = await loadDispatcherBoardData(config);
     const items = buildDispatcherBoardItems(boardData.items);
     const filteredAndSortedItems = filterAndSortDispatcherItems(items, controls);
+    const changedIncidentIds = buildChangedIncidentIds(filteredAndSortedItems);
+    if (!selectedDispatcherIncidentId && filteredAndSortedItems.length > 0) {
+      selectedDispatcherIncidentId = filteredAndSortedItems[0].incidentId;
+    }
     output.innerHTML = renderDispatcherBoardHtml(filteredAndSortedItems, {
-      lastUpdatedLabel: formatDateTime(new Date())
+      lastUpdatedLabel: new Date(),
+      refreshReason,
+      paused: !document.querySelector("#boardAutoRefresh")?.checked,
+      selectedIncidentId: selectedDispatcherIncidentId,
+      changedIncidentIds
     });
+    bindDispatcherBoardActions();
     if (refreshReason === "manual") {
       status.textContent = "Dispatcher board loaded.";
     } else {
@@ -77,6 +130,7 @@ async function renderDispatcherBoard({ refreshReason = "manual" } = {}) {
     }
   } catch (error) {
     output.innerHTML = "";
+    previousDispatcherSnapshot = new Map();
     const errorResult = handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Dispatcher board failed." });
     if (errorResult.authFailure) {
       dispatcherPolling.stop();

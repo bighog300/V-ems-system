@@ -236,3 +236,138 @@ dt {
 .closure-state-unknown {
   color: #b91c1c;
 }
+
+.link-button {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  text-decoration: underline;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dispatcher-board-header {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dispatcher-board-header h2 {
+  margin: 0;
+}
+
+.board-refresh {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: #4b5563;
+}
+
+.kpi-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.kpi-chip {
+  display: inline-flex;
+  gap: 0.45rem;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.kpi-chip-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.kpi-chip-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.dispatcher-board-main {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+}
+
+.dispatcher-side-panel h3 {
+  margin-top: 0;
+}
+
+.board-group h3 {
+  margin: 1rem 0 0.6rem;
+}
+
+.board-grid.collapsed {
+  opacity: 0.75;
+}
+
+.incident-card-meta,
+.incident-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0.6rem;
+}
+
+.age-pill,
+.escalation-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.age-pill {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.age-pill-overdue,
+.escalation-pill {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.board-card.selected {
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.board-card.is-overdue {
+  border-color: #f97316;
+}
+
+.board-card.is-blocked {
+  border-left-width: 8px;
+}
+
+.board-card.is-changed {
+  animation: cardPulse 1.6s ease-in-out 1;
+}
+
+@keyframes cardPulse {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+  100% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+}
+
+.incident-card-actions,
+.side-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 980px) {
+  .dispatcher-board-main {
+    grid-template-columns: 1fr;
+  }
+}
