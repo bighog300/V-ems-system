@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+
+// These fixtures describe a browser configured for UTC. Other browser zones
+// (including DST) are exercised in crew-timezones.test.mjs in isolated processes.
+process.env.TZ = "UTC";
 import {
   buildCreateEncounterPayload,
   buildCreateHandoverPayload,

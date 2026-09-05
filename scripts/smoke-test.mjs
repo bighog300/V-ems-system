@@ -1,15 +1,30 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 
 const baseUrl = process.env.SMOKE_BASE_URL ?? "http://localhost:8080";
 const enforceRbac = process.env.RBAC_ENFORCE === "true";
 
 async function request(path, options = {}) {
+  const headers = { "content-type": "application/json", ...(options.headers ?? {}) };
+  // Match the gateway's configured authentication mode. Keep credentials in
+  // memory and sign each request's actor/role so RBAC smoke cases stay meaningful.
+  if (process.env.AUTH_TRUST_HEADERS !== "true" && process.env.JWT_HS256_SECRET) {
+    const now = Math.floor(Date.now() / 1000);
+    const encode = value => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const input = `${encode({ alg: "HS256", typ: "JWT" })}.${encode({
+      sub: headers["x-actor-id"] ?? "smoke-test",
+      role: headers["x-user-role"] ?? "dispatcher",
+      iss: process.env.JWT_ISSUER,
+      aud: process.env.JWT_AUDIENCE,
+      iat: now,
+      exp: now + 60
+    })}`;
+    const signature = createHmac("sha256", process.env.JWT_HS256_SECRET).update(input).digest("base64url");
+    headers.authorization = `Bearer ${input}.${signature}`;
+  }
   const response = await fetch(`${baseUrl}${path}`, {
     ...options,
-    headers: {
-      "content-type": "application/json",
-      ...(options.headers ?? {})
-    }
+    headers
   });
 
   const text = await response.text();
