@@ -702,5 +702,11 @@ export function renderPatientCasesPanel(cases, selectedId) {
     <pre id="patientSearchResults"></pre>
     <form id="patientLinkForm"><label>OpenEMR patient ID <input name="openemr_patient_id" required></label>
     <label>Verification <select name="verification_status"><option value="verified">Verified</option><option value="provisional">Provisional / unidentified</option></select></label>
-    <button>Link patient</button></form>` : '<p>Create or select a patient case to begin care.</p>'}</section>`;
+    <button>Link patient</button></form>
+    <section class="clinical-record-panel"><h3>Clinical record</h3>
+      <form id="demographicsForm"><label>First name <input name="first_name"></label><label>Last name <input name="last_name"></label><label>DOB unknown <input type="checkbox" name="dob_unknown"></label><button>Save demographics</button></form>
+      <form id="assessmentForm"><label>Assessment section <select name="section_type"><option>chief_complaint</option><option>hpi</option><option>sample</option><option>primary_survey</option><option>secondary_survey</option><option>clinical_impression</option></select></label><textarea name="payload" placeholder="Structured assessment JSON"></textarea><button>Record assessment</button></form>
+      <form id="dispositionForm"><label>Disposition <select name="outcome"><option value="transported">Transported</option><option value="treated_not_transported">Treated and not transported</option><option value="refusal_transport">Refusal of transport</option><option value="transfer_other_provider">Transfer to another provider</option><option value="no_patient_found">No patient found</option></select></label><button>Save disposition</button></form>
+      <p>Observations, medications, procedures and the unified timeline are available through the Patient Case API and remain scoped to the selected case.</p>
+    </section>` : '<p>Create or select a patient case to begin care.</p>'}</section>`;
 }

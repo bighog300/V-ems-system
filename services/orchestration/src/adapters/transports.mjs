@@ -1,6 +1,9 @@
 import { PROVISIONAL_IDENTITY_LABEL, PROVISIONAL_IDENTITY_NOTE } from "../provisional-identity.mjs";
 
 const DEFAULT_TIMEOUT_MS = 5000;
+// OpenEMR Standard API tokens need the API scope plus resource CRUD scopes.
+// Deployments may narrow/override this with OPENEMR_SCOPE.
+const DEFAULT_STANDARD_API_SCOPE = "openid api:oemr user/patient.crus user/encounter.crus user/vital.crus user/soap_note.crus";
 
 function createDownstreamError(target, method, status, bodyText = "") {
   const messageSuffix = bodyText ? `: ${bodyText.slice(0, 300)}` : "";
@@ -83,7 +86,7 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
         grant_type: env.OPENEMR_GRANT_TYPE ?? (env.OPENEMR_USERNAME && env.OPENEMR_PASSWORD ? "password" : "client_credentials"),
         client_id: env.OPENEMR_CLIENT_ID,
         client_secret: env.OPENEMR_CLIENT_SECRET,
-        ...(env.OPENEMR_SCOPE ? { scope: env.OPENEMR_SCOPE } : {})
+        scope: env.OPENEMR_SCOPE ?? DEFAULT_STANDARD_API_SCOPE
       };
       if (form.grant_type === "password") {
         form.username = env.OPENEMR_USERNAME;

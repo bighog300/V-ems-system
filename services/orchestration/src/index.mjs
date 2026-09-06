@@ -27,6 +27,8 @@ import { VehicleStockRepository, normalizeDecimal, normalizeSignedDecimal, addDe
 import { VehicleStockVtigerLinkRepository } from "./repositories/vehicle-stock-vtiger-link-repository.mjs";
 import { StockUsageRepository } from "./repositories/stock-usage-repository.mjs";
 import { StockUsageVtigerLinkRepository } from "./repositories/stock-usage-vtiger-link-repository.mjs";
+import { PatientCaseDemographicsRepository, PatientCaseAssessmentRepository, ClinicalObservationRepository, MedicationAdministrationRepository, ClinicalProcedureRepository, PatientCaseDispositionRepository, PatientCaseTimelineRepository } from "./repositories/clinical-record-repository.mjs";
+import { clinicalRecordMethods } from "./clinical-record.mjs";
 
 const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
@@ -60,6 +62,13 @@ export class OrchestrationService {
     this.vehicleStockVtigerLinks = new VehicleStockVtigerLinkRepository(this.db);
     this.stockUsage = new StockUsageRepository(this.db);
     this.stockUsageVtigerLinks = new StockUsageVtigerLinkRepository(this.db);
+    this.clinicalDemographics = new PatientCaseDemographicsRepository(this.db);
+    this.clinicalAssessments = new PatientCaseAssessmentRepository(this.db);
+    this.clinicalObservations = new ClinicalObservationRepository(this.db);
+    this.clinicalMedications = new MedicationAdministrationRepository(this.db);
+    this.clinicalProcedures = new ClinicalProcedureRepository(this.db);
+    this.clinicalDispositions = new PatientCaseDispositionRepository(this.db);
+    this.clinicalTimeline = new PatientCaseTimelineRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
@@ -728,3 +737,4 @@ export class OrchestrationService {
 }
 
 Object.assign(OrchestrationService.prototype, patientCaseMethods);
+Object.assign(OrchestrationService.prototype, clinicalRecordMethods);

@@ -17,11 +17,13 @@ export const patientCaseMethods = {
     if (!record) throw new ApiError('NOT_FOUND', `Patient case ${id} not found`, 404);
     const patient = this.patientLinks.findByPatientCaseId(id);
     const encounter = this.encounterLinks.findByPatientCaseId(id);
+    const disposition = this.clinicalDispositions?.find(id);
+    const dispositionReady = Boolean(disposition?.outcome);
     return { ...record, openemr_patient_id: patient?.openemr_patient_id ?? null,
       verification_status: patient?.verification_status ?? 'unknown',
       openemr_encounter_id: encounter?.openemr_encounter_id ?? null,
       encounter_status: encounter?.encounter_status ?? null,
-      closure_ready: Boolean(encounter?.closure_ready && encounter.handover_status === 'Handover Completed' && encounter.handover_time && encounter.disposition),
+      closure_ready: dispositionReady || Boolean(encounter?.closure_ready && encounter.handover_status === 'Handover Completed' && encounter.handover_time && encounter.disposition),
       provisional_identity: this.db.queryOne(`SELECT status FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`) ? { dob_unknown: true, native_dob_placeholder: PROVISIONAL_DOB_SENTINEL } : null,
       identity_reconciliations: this.db.queryAll(`SELECT * FROM patient_case_identity_reconciliations WHERE patient_case_id=${sqlValue(id)} ORDER BY created_at;`) };
   },

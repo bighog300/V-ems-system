@@ -113,6 +113,15 @@ export async function createPatientCase({ apiBaseUrl, incidentId, payload, fetch
 export async function patientCaseWrite({ apiBaseUrl, patientCaseId, action, payload, fetchImpl = fetch, ...config }) {
   return postJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/${action}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
 }
+export async function getPatientCaseClinicalSection({ apiBaseUrl, patientCaseId, section, fetchImpl = fetch, ...config }) {
+  return (await getJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/${section}`, config)).data;
+}
+export async function savePatientCaseDemographics({ apiBaseUrl, patientCaseId, payload, fetchImpl = fetch, ...config }) {
+  return (await requestJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/demographics`, { method: "PUT", payload, config })).data;
+}
+export async function createPatientCaseClinicalRecord({ apiBaseUrl, patientCaseId, section, payload, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/${section}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
+}
 export async function patientIdentityWrite({ apiBaseUrl, action, payload, fetchImpl = fetch, ...config }) {
   return postJson(fetchImpl, `${apiBaseUrl}/api/patients${action === 'search' ? '/search' : ''}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
 }

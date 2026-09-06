@@ -18,6 +18,8 @@ An incident has zero or more cases, each identified by a permanent `PCR-000001`-
 
 Patient search and creation remain `POST /api/patients/search` and `POST /api/patients`. Clinical observations, interventions and handover remain encounter-scoped.
 
+Stage 7 adds case-scoped clinical record endpoints: `GET|PUT .../demographics`, `POST|GET .../assessments`, `POST|GET .../observations`, `POST|GET .../medications`, `POST|GET .../procedures`, `POST .../disposition`, and `GET .../timeline`. Assessments, observations, medications and procedures are append-only records; observations are retained in V-EMS before any downstream OpenEMR write. Dispositions such as treated-not-transported and refusal outcomes complete a case without requiring hospital handover. Provisional demographics retain `dob_unknown=true`; the technical OpenEMR DOB placeholder is never a verified identity value.
+
 Active assignment means Assigned, Accepted, Mobilised or Active, following the existing assignment repository. A sole active assignment is inherited; multiple require explicit selection. Proposed and terminal assignments do not establish current clinical responsibility. Crew IDs must exist in personnel master data; an explicitly selected lead must belong to that crew. No lead is inferred.
 
 New case routes allow dispatcher list/view/create, assigned field crew list/view/create/link/encounter, clinical reviewer reads, crew lead responsibility/status actions, and supervisor/admin management. Field crew access to these routes also checks the authenticated actor's assignment membership. Existing role conventions remain in force for global patient and encounter routes.
