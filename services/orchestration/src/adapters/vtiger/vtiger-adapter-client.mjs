@@ -38,11 +38,11 @@ export class VtigerAdapterClient {
   }
 
   createAssignmentMirror(assignment) {
-    return this.invoke("createAssignmentMirror", this.mapper.mapAssignmentCreate(assignment));
+    return this.invoke("createAssignmentMirror", assignment?.vems_assignment_id ? assignment : this.mapper.mapAssignmentCreate(assignment));
   }
 
   updateAssignmentMirror(assignment) {
-    return this.invoke("updateAssignmentMirror", this.mapper.mapAssignmentUpdate(assignment));
+    return this.invoke("updateAssignmentMirror", assignment?.vems_assignment_id ? assignment : this.mapper.mapAssignmentUpdate(assignment));
   }
 
   recordStockUsageMirror(stockUsage) {

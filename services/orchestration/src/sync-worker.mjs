@@ -89,6 +89,21 @@ export class SyncWorker {
   }
 
   handleFailure(intent, error) {
+    if (error?.code === "VTIGER_DEPENDENCY_PENDING") {
+      const nextAttemptAt = new Date(Date.now() + Math.max(1000, this.baseBackoffMs || 1000)).toISOString();
+      this.syncIntents.markFailed(intent.intent_id, {
+        status: "pending",
+        attempt_count: intent.attempt_count,
+        last_error: error.message,
+        last_error_classification: "VTIGER_DEPENDENCY_PENDING",
+        dead_lettered_at: null,
+        next_attempt_at: nextAttemptAt,
+        retryable: true,
+        outcome_unknown: false
+      });
+      if (this.onFailure) this.onFailure(intent, error, { status: "pending", attemptCount: intent.attempt_count, retryable: true, nextAttemptAt });
+      return { intent_id: intent.intent_id, status: "pending" };
+    }
     const attemptCount = intent.attempt_count + 1;
     const classification = classifyError(error);
     const retryable = error?.retryable ?? !NON_RETRYABLE.has(classification);

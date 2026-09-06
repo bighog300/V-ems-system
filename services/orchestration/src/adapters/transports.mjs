@@ -119,17 +119,40 @@ export function createVtigerTransportFromEnv(env = process.env) {
   return async ({ method, payload }) => {
     const client = await getClient();
     const externalKey = payload.vems_external_key;
-    const query = `select id,ticket_no,vems_external_key from HelpDesk where vems_external_key='${String(externalKey).replaceAll("'", "''")}';`;
+    const module = payload.elementType ?? (method.includes("Assignment") ? "VEMSAssignments" : "HelpDesk");
+    const esc = (value) => String(value ?? "").replaceAll("'", "''");
+    const query = `select id,${module === "VEMSAssignments" ? "vems_assignment_no" : "ticket_no"},vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
+    if (module === "VEMSAssignments" && !payload.vems_incident_remote_id) {
+      const error = new Error("Vtiger incident linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
+    }
+    if (module === "VEMSAssignments" && method === "createAssignmentMirror" && payload.incident_remote_id) payload.vems_incident_remote_id = payload.incident_remote_id;
     if (method === "createIncidentMirror") {
       const matches = await client.query(query);
       if (matches.length > 1) {
         const error = new Error("Multiple Vtiger records match the incident external key"); error.code = "VTIGER_DUPLICATE_CONFLICT"; error.classification = error.code; throw error;
       }
       if (matches.length === 1) return { remote_id: matches[0].id, remote_number: matches[0].ticket_no, external_key: externalKey, outcome: "existing" };
-      const element = { ...payload }; delete element.elementType; delete element.incident_id;
+      const element = { ...payload }; delete element.elementType; delete element.incident_id; delete element.status;
       const created = await client.create(element);
       if (!created?.id) { const error = new Error("Vtiger create response did not include a record ID"); error.code = "VTIGER_PROTOCOL_ERROR"; error.classification = error.code; throw error; }
       return { remote_id: created.id, remote_number: created.ticket_no ?? null, external_key: externalKey, outcome: "created" };
+    }
+    if (method === "createAssignmentMirror") {
+      const matches = await client.query(query);
+      if (matches.length > 1) { const error = new Error("Multiple Vtiger assignment records match the external key"); error.code = "VTIGER_DUPLICATE_CONFLICT"; error.classification = error.code; throw error; }
+      if (matches.length === 1) return { remote_id: matches[0].id, remote_number: matches[0].vems_assignment_no ?? null, external_key: externalKey, incident_remote_id: payload.vems_incident_remote_id, outcome: "existing" };
+      const element = { ...payload }; delete element.elementType; delete element.assignment_id; delete element.incident_id; delete element.status;
+      const created = await client.create(element, "VEMSAssignments");
+      if (!created?.id) { const error = new Error("Vtiger assignment create response did not include a record ID"); error.code = "VTIGER_PROTOCOL_ERROR"; error.classification = error.code; throw error; }
+      return { remote_id: created.id, remote_number: created.vems_assignment_no ?? null, external_key: externalKey, incident_remote_id: payload.vems_incident_remote_id, outcome: "created" };
+    }
+    if (method === "updateAssignmentMirror") {
+      const remoteId = payload.id;
+      if (!remoteId) { const error = new Error("Vtiger assignment update requires a remote record ID"); error.code = "VTIGER_REMOTE_NOT_FOUND"; error.classification = error.code; throw error; }
+      const current = await client.retrieve(remoteId, "VEMSAssignments");
+      const merged = { ...current, ...payload, id: remoteId }; delete merged.elementType; delete merged.assignment_id; delete merged.incident_id; delete merged.status;
+      const updated = await client.update(merged, "VEMSAssignments");
+      return { remote_id: updated?.id ?? remoteId, remote_number: updated?.vems_assignment_no ?? current.vems_assignment_no ?? null, external_key: externalKey, incident_remote_id: payload.vems_incident_remote_id, outcome: "updated" };
     }
     if (method === "updateIncidentMirror") {
       const remoteId = payload.id;
@@ -138,6 +161,7 @@ export function createVtigerTransportFromEnv(env = process.env) {
       const updateElement = { ...current, ...payload, id: remoteId };
       delete updateElement.elementType;
       delete updateElement.incident_id;
+      delete updateElement.status;
       const updated = await client.update(updateElement);
       return { remote_id: updated?.id ?? remoteId, remote_number: updated?.ticket_no ?? current.ticket_no ?? null, external_key: externalKey, outcome: "updated" };
     }

@@ -13,6 +13,7 @@ import { createOpenEmrTransportFromEnv } from "./adapters/transports.mjs";
 import { PatientLinkRepository } from "./repositories/patient-link-repository.mjs";
 import { EncounterLinkRepository } from "./repositories/encounter-link-repository.mjs";
 import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
+import { AssignmentVtigerLinkRepository } from "./repositories/assignment-vtiger-link-repository.mjs";
 
 const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
 
@@ -28,6 +29,7 @@ export class OrchestrationService {
     this.patientLinks = new PatientLinkRepository(this.db);
     this.encounterLinks = new EncounterLinkRepository(this.db);
     this.vtigerLinks = new VtigerLinkRepository(this.db);
+    this.assignmentVtigerLinks = new AssignmentVtigerLinkRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
@@ -56,6 +58,13 @@ export class OrchestrationService {
       }
     }
     return this.db.withTransaction(() => {
+      if (meta.idempotencyKey) {
+        const existing = this.idempotency.get("assignment", meta.idempotencyKey);
+        if (existing) {
+          if (existing.request_fingerprint && existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
+          return this.getAssignment(existing.resource_id);
+        }
+      }
       const now = new Date().toISOString();
       const callId = this.incidents.nextCallId();
       const incidentId = this.incidents.nextIncidentId();
@@ -162,35 +171,37 @@ export class OrchestrationService {
   }
 
   createAssignment(incidentId, payload, meta) {
-    if (meta.idempotencyKey) {
-      const existingId = this.idempotency.getResourceId("assignment", meta.idempotencyKey);
-      if (existingId) return this.assignments.findById(existingId);
-    }
-
     this.getIncident(incidentId);
+    const normalized = { vehicle_id: payload.vehicle_id, crew_ids: [...new Set(payload.crew_ids)].sort(), reason: payload.reason };
+    const fingerprint = JSON.stringify(normalized);
+    if (meta.idempotencyKey) {
+      const existing = this.idempotency.get("assignment", meta.idempotencyKey);
+      if (existing) {
+        if (existing.request_fingerprint && existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
+        return this.getAssignment(existing.resource_id);
+      }
+    }
+    return this.db.withTransaction(() => {
+      const now = new Date().toISOString();
+      const assignmentId = this.assignments.nextAssignmentId();
+      const record = { assignment_id: assignmentId, incident_id: incidentId, status: "Proposed", vehicle_status: "Assigned", ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
+      this.assignments.create(record);
+      this.audit("assignment", assignmentId, "create_assignment", meta.correlationId, undefined, record);
+      this.event("AssignmentCreated", meta.correlationId, { assignment_id: assignmentId, incident_id: incidentId, status: record.status });
+      this.syncIntent("assignment", "createAssignmentMirror", meta.correlationId, { ...this.vtigerMapper.mapAssignmentCreate(record), incident_id: incidentId, assignment_id: assignmentId });
+      this.assignmentVtigerLinks.upsert({ assignment_id: assignmentId, incident_id: incidentId, external_key: `${this.vtigerMapper.sourceNamespace}:assignment:${assignmentId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, incident_remote_id: null, created_at: now, updated_at: now });
+      if (meta.idempotencyKey) this.idempotency.save("assignment", meta.idempotencyKey, assignmentId, now, fingerprint);
+      return record;
+    });
+  }
 
-    const now = new Date().toISOString();
-    const assignmentId = this.assignments.nextAssignmentId();
-    const record = {
-      assignment_id: assignmentId,
-      incident_id: incidentId,
-      status: "Proposed",
-      vehicle_status: "Assigned",
-      vehicle_id: payload.vehicle_id,
-      crew_ids: payload.crew_ids,
-      reason: payload.reason,
-      created_at: now,
-      updated_at: now,
-      correlation_id: meta.correlationId
-    };
-
-    this.assignments.create(record);
-    this.audit("assignment", assignmentId, "create_assignment", meta.correlationId, undefined, record);
-    this.event("AssignmentCreated", meta.correlationId, { assignment_id: assignmentId, incident_id: incidentId, status: record.status });
-    this.syncIntent("assignment", "createAssignmentMirror", meta.correlationId, this.vtigerMapper.mapAssignmentCreate(record));
-
-    if (meta.idempotencyKey) this.idempotency.save("assignment", meta.idempotencyKey, assignmentId, now);
-    return record;
+  getAssignment(assignmentId) {
+    const assignment = this.assignments.findById(assignmentId);
+    if (!assignment) throw new ApiError("NOT_FOUND", `Assignment ${assignmentId} not found`, 404);
+    const link = this.assignmentVtigerLinks.findByAssignmentId(assignmentId);
+    const intents = this.syncIntents.listAll().filter((item) => item.entity_type === "assignment" && item.payload?.assignment_id === assignmentId);
+    const intent = intents.at(-1);
+    return { ...assignment, vtiger: { record_id: link?.remote_id ?? null, record_number: link?.remote_number ?? null, external_key: link?.external_key ?? `${this.vtigerMapper.sourceNamespace}:assignment:${assignmentId}`, incident_record_id: link?.incident_remote_id ?? null, sync_status: link?.sync_status ?? intent?.status ?? "pending", attempt_count: intent?.attempt_count ?? 0, last_error_code: link?.last_error_code ?? intent?.last_error_classification ?? null, last_synced_at: link?.last_synced_at ?? null } };
   }
 
   updateAssignment(assignmentId, payload, meta) {
@@ -213,8 +224,9 @@ export class OrchestrationService {
       old_status: current.status,
       new_status: nextStatus
     });
-    this.syncIntent("assignment", "updateAssignmentMirror", meta.correlationId, this.vtigerMapper.mapAssignmentUpdate(updated));
-    return updated;
+    const link = this.assignmentVtigerLinks.findByAssignmentId(assignmentId);
+    this.syncIntent("assignment", "updateAssignmentMirror", meta.correlationId, { ...this.vtigerMapper.mapAssignmentUpdate({ ...updated, remote_id: link?.remote_id, incident_remote_id: link?.incident_remote_id }), incident_id: current.incident_id, assignment_id: assignmentId });
+    return this.getAssignment(assignmentId);
   }
 
   audit(entityType, entityId, action, correlationId, beforeJson, afterJson) {
@@ -325,10 +337,13 @@ export class OrchestrationService {
         vehicle_id: assignment.vehicle_id,
         crew_ids: assignment.crew_ids,
         reason: assignment.reason,
-        updated_at: assignment.updated_at
+        updated_at: assignment.updated_at,
+        vtiger: this.getAssignment(assignment.assignment_id).vtiger
       }))
     };
   }
+
+  getAssignmentById(assignmentId) { return this.getAssignment(assignmentId); }
 
 
   async createEncounterForIncident(incidentId, payload, meta) {

@@ -293,10 +293,14 @@ function validateCreateIncident(payload) {
 }
 
 function validateCreateAssignment(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Assignment payload is required", 400);
+  const allowed = new Set(["vehicle_id", "crew_ids", "reason"]);
+  const unknown = Object.keys(payload ?? {}).filter((field) => !allowed.has(field));
+  if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown assignment fields: ${unknown.join(", ")}`, 400);
   if (!/^AMB-[0-9]{3,}$/.test(payload.vehicle_id)) throw new ApiError("INVALID_PAYLOAD", "Invalid vehicle_id", 400);
   if (!Array.isArray(payload.crew_ids) || payload.crew_ids.length === 0) throw new ApiError("INVALID_PAYLOAD", "crew_ids required", 400);
   if (!payload.crew_ids.every((id) => /^STAFF-[0-9]{3,}$/.test(id))) throw new ApiError("INVALID_PAYLOAD", "Invalid crew_ids format", 400);
-  if (!payload.reason) throw new ApiError("INVALID_PAYLOAD", "reason is required", 400);
+  if (!payload.reason || typeof payload.reason !== "string") throw new ApiError("INVALID_PAYLOAD", "reason is required", 400);
 }
 
 function validateAction(payload) {
@@ -721,6 +725,9 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const assignmentPatchMatch = url.pathname.match(/^\/api\/assignments\/(ASN-[0-9]{6})$/);
+      if (assignmentPatchMatch && method === "GET") {
+        return okJson(res, 200, orchestration.getAssignmentById(assignmentPatchMatch[1]), context);
+      }
       if (assignmentPatchMatch && method === "PATCH") {
         const payload = await parseJson(req);
         validateAction(payload);

@@ -30,6 +30,7 @@ export class VtigerPayloadMapper {
       vems_created_at_utc: incident.created_at,
       vems_updated_at_utc: incident.updated_at,
       vems_closed_at_utc: incident.status === "Closed" ? incident.updated_at : ""
+      ,status: incident.status
     };
   }
 
@@ -44,28 +45,37 @@ export class VtigerPayloadMapper {
   }
 
   mapAssignmentCreate(assignment) {
+    const externalKey = assignment.external_key ?? `${this.sourceNamespace}:assignment:${assignment.assignment_id}`;
+    const crewIds = Array.isArray(assignment.crew_ids) ? [...new Set(assignment.crew_ids)].sort().join(",") : (assignment.crew_ids ?? "");
     return {
-      assignment_id: assignment.assignment_id,
-      incident_id: assignment.incident_id,
-      status: assignment.status,
-      vehicle_status: assignment.vehicle_status,
-      vehicle_id: assignment.vehicle_id,
-      crew_ids: assignment.crew_ids,
-      reason: assignment.reason,
-      created_at: assignment.created_at,
-      updated_at: assignment.updated_at,
-      correlation_id: assignment.correlation_id
+      elementType: "VEMSAssignments",
+      vems_assignment_id: assignment.assignment_id,
+      vems_external_key: externalKey,
+      vems_incident_id: assignment.incident_id,
+      vems_incident_remote_id: assignment.incident_remote_id,
+      incident_ref: assignment.incident_remote_id,
+      vems_vehicle_id: assignment.vehicle_id,
+      vems_crew_ids: crewIds,
+      vems_status: assignment.status,
+      vems_vehicle_status: assignment.vehicle_status,
+      vems_reason: assignment.reason ?? "",
+      vems_correlation_id: assignment.correlation_id,
+      vems_last_correlation_id: assignment.correlation_id,
+      vems_created_at_utc: assignment.created_at,
+      vems_updated_at_utc: assignment.updated_at,
+      assigned_user_id: assignment.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID
+      ,assignment_id: assignment.assignment_id
+      ,incident_id: assignment.incident_id
+      ,status: assignment.status
     };
   }
 
   mapAssignmentUpdate(assignment) {
-    return {
-      assignment_id: assignment.assignment_id,
-      incident_id: assignment.incident_id,
-      status: assignment.status,
-      updated_at: assignment.updated_at,
-      correlation_id: assignment.correlation_id
-    };
+    const mapped = this.mapAssignmentCreate(assignment);
+    delete mapped.elementType;
+    mapped.vems_last_correlation_id = assignment.correlation_id;
+    mapped.status = assignment.status;
+    return { ...mapped, id: assignment.remote_id ?? assignment.vtiger?.record_id };
   }
 
   mapStockUsageRecord(stockUsage) {
