@@ -46,7 +46,10 @@ export class PatientCaseDemographicsRepository {
 
 export class PatientCaseAssessmentRepository {
   constructor(db) { this.db = db; }
-  create(record) { insert(this.db, "patient_case_assessments", { ...record, payload_json: record.payload }, ["payload_json"]); }
+  create(record) {
+    const { payload, ...rest } = record;
+    insert(this.db, "patient_case_assessments", { ...rest, payload_json: payload ?? {} }, ["payload_json"]);
+  }
   list(patientCaseId) {
     return this.db.queryAll(`SELECT * FROM patient_case_assessments WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY performed_at, assessment_id;`)
       .map((row) => ({ ...row, payload: parseJson(row.payload_json, {}) }));
@@ -55,7 +58,10 @@ export class PatientCaseAssessmentRepository {
 
 export class ClinicalObservationRepository {
   constructor(db) { this.db = db; }
-  create(record) { insert(this.db, "clinical_observations", { ...record, observations_json: record.observations }, ["observations_json"]); }
+  create(record) {
+    const { observations, ...rest } = record;
+    insert(this.db, "clinical_observations", { ...rest, observations_json: observations ?? {} }, ["observations_json"]);
+  }
   list(patientCaseId) {
     return this.db.queryAll(`SELECT * FROM clinical_observations WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY performed_at, observation_event_id;`)
       .map((row) => ({ ...row, observations: parseJson(row.observations_json, {}) }));
@@ -64,15 +70,34 @@ export class ClinicalObservationRepository {
 
 export class MedicationAdministrationRepository {
   constructor(db) { this.db = db; }
-  create(record) { insert(this.db, "medication_administrations", { ...record, authorization_json: record.authorization ?? null }, ["authorization_json"]); }
-  find(id) { return this.db.queryOne(`SELECT * FROM medication_administrations WHERE medication_administration_id=${sqlValue(id)};`); }
-  list(patientCaseId) { return this.db.queryAll(`SELECT * FROM medication_administrations WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY performed_at, medication_administration_id;`); }
+  create(record) {
+    const { authorization, ...rest } = record;
+    insert(this.db, "medication_administrations", { ...rest, authorization_json: authorization ?? null }, ["authorization_json"]);
+  }
+  find(id) {
+    const row = this.db.queryOne(`SELECT * FROM medication_administrations WHERE medication_administration_id=${sqlValue(id)};`);
+    if (!row) return undefined;
+    return { ...row, authorization: parseJson(row.authorization_json, null) };
+  }
+  list(patientCaseId) {
+    return this.db.queryAll(`SELECT * FROM medication_administrations WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY performed_at, medication_administration_id;`)
+      .map((row) => ({ ...row, authorization: parseJson(row.authorization_json, null) }));
+  }
 }
 
 export class ClinicalProcedureRepository {
   constructor(db) { this.db = db; }
-  create(record) { insert(this.db, "clinical_procedures", { ...record, success: record.success === undefined || record.success === null ? null : record.success ? 1 : 0 }); }
-  find(id) { return this.db.queryOne(`SELECT * FROM clinical_procedures WHERE procedure_id=${sqlValue(id)};`); }
+  create(record) {
+    insert(this.db, "clinical_procedures", {
+      ...record,
+      success: record.success === undefined || record.success === null ? null : record.success ? 1 : 0
+    });
+  }
+  find(id) {
+    const row = this.db.queryOne(`SELECT * FROM clinical_procedures WHERE procedure_id=${sqlValue(id)};`);
+    if (!row) return undefined;
+    return { ...row, success: row.success === null ? null : Boolean(row.success) };
+  }
   list(patientCaseId) {
     return this.db.queryAll(`SELECT * FROM clinical_procedures WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY performed_at, procedure_id;`)
       .map((row) => ({ ...row, success: row.success === null ? null : Boolean(row.success) }));
@@ -91,7 +116,10 @@ export class PatientCaseDispositionRepository {
 
 export class PatientCaseTimelineRepository {
   constructor(db) { this.db = db; }
-  create(record) { insert(this.db, "patient_case_timeline_events", { ...record, payload_json: record.payload ?? {} }, ["payload_json"]); }
+  create(record) {
+    const { payload, ...rest } = record;
+    insert(this.db, "patient_case_timeline_events", { ...rest, payload_json: payload ?? {} }, ["payload_json"]);
+  }
   list(patientCaseId) {
     return this.db.queryAll(`SELECT * FROM patient_case_timeline_events WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY occurred_at, timeline_event_id;`)
       .map((row) => ({ ...row, payload: parseJson(row.payload_json, {}) }));
