@@ -35,7 +35,7 @@ test("incomplete ePCR returns exact readiness requirements", () => {
   assert.equal(service.listEpcrVersions(incomplete.patient_case_id).length, 0);
 });
 
-test("finalization flow preserves signed hash and locks clinical mutation", () => {
+test("finalization flow preserves signed hash and locks clinical mutation", async () => {
   const { service, patientCase, meta } = setup();
   const id = patientCase.patient_case_id;
   const complete = service.completeEpcr(id, meta);
@@ -48,7 +48,15 @@ test("finalization flow preserves signed hash and locks clinical mutation", () =
   service.reviewEpcr(id, { action: "accept", comment: "Reviewed" }, { ...meta, actorRole: "clinical_reviewer", actorId: "STAFF-002" });
   service.reviewEpcr(id, { action: "finalize", comment: "Final" }, { ...meta, actorRole: "supervisor", actorId: "STAFF-003" });
   assert.equal(service.getEpcrLifecycle(id).current_state, "final");
-  assert.throws(() => service.createPatientCaseAssessment(id, { section_type: "late", payload: {} }, meta), error => error.code === "EPCR_LOCKED");
+  const lockedWrites = [
+    () => service.savePatientCaseDemographics(id, { first_name: "Changed" }, meta),
+    () => service.createPatientCaseAssessment(id, { section_type: "late", payload: {} }, meta),
+    () => service.setPatientCaseDisposition(id, { outcome: "treated_not_transported" }, meta)
+  ];
+  for (const write of lockedWrites) assert.throws(write, error => error.code === "EPCR_LOCKED");
+  await assert.rejects(() => service.createPatientCaseObservation(id, { observations: { hr: 80 } }, meta), error => error.code === "EPCR_LOCKED");
+  await assert.rejects(() => service.createPatientCaseMedication(id, { medication_name: "Late", dose: "1", dose_unit: "mg", route: "IV" }, meta), error => error.code === "EPCR_LOCKED");
+  await assert.rejects(() => service.createPatientCaseProcedure(id, { procedure_type: "late", procedure_name: "Late" }, meta), error => error.code === "EPCR_LOCKED");
   const amendment = service.createEpcrAmendment(id, { reason: "Corrected refusal detail", affected_path: "assessment.refusal", before_value: "old", after_value: "corrected" }, { ...meta, actorRole: "supervisor" });
   assert.equal(amendment.version.version_number, 2);
   assert.notEqual(amendment.version.content_hash, complete.version.content_hash);
