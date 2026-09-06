@@ -156,16 +156,56 @@ export class VtigerPayloadMapper {
   }
 
   mapStockUsageRecord(stockUsage) {
+    const interventionId = stockUsage.intervention_id ?? stockUsage.vems_intervention_id;
+    const incidentId = stockUsage.incident_id ?? stockUsage.vems_incident_id;
+    const encounterId = stockUsage.encounter_id ?? stockUsage.vems_encounter_id;
+    const stockItemId = stockUsage.stock_item_id ?? stockUsage.vems_stock_item_id;
+    const vehicleId = stockUsage.vehicle_id ?? stockUsage.vems_vehicle_id;
+    const quantityUsed = stockUsage.quantity_used ?? stockUsage.vems_quantity_used ?? "1.000";
+    const usageSource = stockUsage.usage_source ?? stockUsage.vems_usage_source ?? "clinical_event";
+    const performedAt = stockUsage.performed_at ?? stockUsage.vems_performed_at_utc;
+    const correlationId = stockUsage.correlation_id ?? stockUsage.vems_correlation_id;
     return {
-      stock_usage_ref: stockUsage.intervention_id ?? null,
-      incident_id: stockUsage.incident_id,
-      encounter_id: stockUsage.encounter_id ?? null,
-      stock_item_id: stockUsage.stock_item_id,
-      quantity_used: stockUsage.quantity_used ?? 1,
-      usage_source: stockUsage.usage_source ?? "clinical_event",
-      performed_at: stockUsage.performed_at,
+      elementType: "VEMSStockUsage",
+      vems_stock_usage_id: stockUsage.stock_usage_id ?? stockUsage.vems_stock_usage_id ?? `${this.sourceNamespace}:stock-usage:${interventionId}:${stockItemId}`,
+      vems_external_key: stockUsage.external_key ?? stockUsage.vems_external_key ?? `${this.sourceNamespace}:stock-usage:${stockUsage.stock_usage_id ?? stockUsage.vems_stock_usage_id ?? `${interventionId}:${stockItemId}`}`,
+      vems_intervention_id: interventionId,
+      vems_incident_id: incidentId,
+      vems_encounter_id: encounterId ?? "",
+      vems_stock_item_id: stockItemId,
+      vems_vehicle_id: vehicleId ?? "",
+      stock_item_ref: stockUsage.stock_item_remote_id ?? null,
+      vehicle_ref: stockUsage.vehicle_remote_id ?? null,
+      vems_quantity_used: quantityUsed,
+      vems_usage_source: usageSource,
+      vems_performed_at_utc: performedAt,
+      vems_intervention_type: stockUsage.intervention_type ?? stockUsage.vems_intervention_type,
+      vems_correlation_id: correlationId,
+      vems_last_correlation_id: stockUsage.last_correlation_id ?? stockUsage.vems_last_correlation_id ?? correlationId,
+      vems_created_at_utc: stockUsage.created_at ?? stockUsage.vems_created_at_utc ?? performedAt,
+      assigned_user_id: stockUsage.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID,
+      stock_usage_id: stockUsage.stock_usage_id ?? stockUsage.vems_stock_usage_id,
+      stock_item_id: stockItemId,
+      quantity_used: quantityUsed,
+      usage_source: usageSource,
+      performed_at: performedAt,
       intervention_type: stockUsage.intervention_type,
       intervention_name: stockUsage.intervention_name
     };
   }
+
+  mapStockItemCreate(item) {
+    if (item?.vems_stock_item_id) return { ...item, assigned_user_id: item.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID };
+    return { elementType: "VEMSStockItems", vems_stock_item_id: item.stock_item_id, vems_external_key: item.external_key ?? `${this.sourceNamespace}:stock-item:${item.stock_item_id}`, vems_name: item.name, vems_category: item.category, vems_unit_of_measure: item.unit_of_measure, vems_item_type: item.item_type, vems_active_status: item.active_status, vems_description: item.description ?? "", vems_correlation_id: item.correlation_id, vems_last_correlation_id: item.correlation_id, vems_created_at_utc: item.created_at, vems_updated_at_utc: item.updated_at, assigned_user_id: item.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID, stock_item_id: item.stock_item_id };
+  }
+
+  mapStockItemUpdate(item) { const mapped = this.mapStockItemCreate(item); delete mapped.elementType; delete mapped.stock_item_id; mapped.id = item.remote_id ?? item.vtiger?.record_id; mapped.vems_last_correlation_id = item.correlation_id; return mapped; }
+
+  mapVehicleStockCreate(row) {
+    if (row?.vems_vehicle_stock_id) return { ...row, elementType: "VEMSVehicleStock", vems_vehicle_id: row.vems_vehicle_id ?? row.vehicle_id, vems_stock_item_id: row.vems_stock_item_id ?? row.stock_item_id, vehicle_ref: row.vehicle_ref ?? row.vehicle_remote_id, stock_item_ref: row.stock_item_ref ?? row.stock_item_remote_id, assigned_user_id: row.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID };
+    const key = row.external_key ?? `${this.sourceNamespace}:vehicle-stock:${row.vehicle_id}:${row.stock_item_id}`;
+    return { elementType: "VEMSVehicleStock", vems_vehicle_stock_id: row.vehicle_stock_id ?? `${row.vehicle_id}:${row.stock_item_id}`, vems_external_key: key, vems_vehicle_id: row.vehicle_id, vems_stock_item_id: row.stock_item_id, vehicle_ref: row.vehicle_remote_id, stock_item_ref: row.stock_item_remote_id, vems_quantity_on_hand: row.quantity_on_hand, vems_minimum_quantity: row.minimum_quantity, vems_target_quantity: row.target_quantity, vems_correlation_id: row.correlation_id, vems_last_correlation_id: row.correlation_id, vems_created_at_utc: row.created_at, vems_updated_at_utc: row.updated_at, assigned_user_id: row.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID, vehicle_stock_id: row.vehicle_stock_id ?? `${row.vehicle_id}:${row.stock_item_id}` };
+  }
+
+  mapVehicleStockUpdate(row) { const mapped=this.mapVehicleStockCreate(row); delete mapped.elementType; delete mapped.vehicle_stock_id; mapped.id=row.remote_id ?? row.vtiger?.record_id; mapped.vems_last_correlation_id=row.correlation_id; return mapped; }
 }

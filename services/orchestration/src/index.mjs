@@ -19,11 +19,19 @@ import { VehicleVtigerLinkRepository } from "./repositories/vehicle-vtiger-link-
 import { PersonnelRepository } from "./repositories/personnel-repository.mjs";
 import { PersonnelVtigerLinkRepository } from "./repositories/personnel-vtiger-link-repository.mjs";
 import { AssignmentPersonnelVtigerLinkRepository } from "./repositories/assignment-personnel-vtiger-link-repository.mjs";
+import { StockItemRepository } from "./repositories/stock-item-repository.mjs";
+import { StockItemVtigerLinkRepository } from "./repositories/stock-item-vtiger-link-repository.mjs";
+import { VehicleStockRepository, normalizeDecimal, normalizeSignedDecimal, addDecimal } from "./repositories/vehicle-stock-repository.mjs";
+import { VehicleStockVtigerLinkRepository } from "./repositories/vehicle-stock-vtiger-link-repository.mjs";
+import { StockUsageRepository } from "./repositories/stock-usage-repository.mjs";
+import { StockUsageVtigerLinkRepository } from "./repositories/stock-usage-vtiger-link-repository.mjs";
 
 const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
 const VEHICLE_SERVICE_STATUSES = ["Serviceable", "Out of Service", "Maintenance", "Offline/Unknown"];
 const PERSONNEL_STATUSES = ["Available", "Unavailable", "Off Duty", "Training", "Leave", "Suspended", "Inactive"];
+const STOCK_ITEM_TYPES = ["Consumable", "Medication"];
+const STOCK_ACTIVE_STATUSES = ["Active", "Inactive"];
 
 export class OrchestrationService {
   constructor(options = {}) {
@@ -43,6 +51,12 @@ export class OrchestrationService {
     this.personnel = new PersonnelRepository(this.db);
     this.personnelVtigerLinks = new PersonnelVtigerLinkRepository(this.db);
     this.assignmentPersonnelVtigerLinks = new AssignmentPersonnelVtigerLinkRepository(this.db);
+    this.stockItems = new StockItemRepository(this.db);
+    this.stockItemVtigerLinks = new StockItemVtigerLinkRepository(this.db);
+    this.vehicleStock = new VehicleStockRepository(this.db);
+    this.vehicleStockVtigerLinks = new VehicleStockVtigerLinkRepository(this.db);
+    this.stockUsage = new StockUsageRepository(this.db);
+    this.stockUsageVtigerLinks = new StockUsageVtigerLinkRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
@@ -334,6 +348,34 @@ export class OrchestrationService {
     return this.getVehicle(vehicleId);
   }
 
+  createStockItem(payload, meta) {
+    const normalized = { stock_item_id: payload.stock_item_id, name: payload.name, category: payload.category, unit_of_measure: payload.unit_of_measure, item_type: payload.item_type, active_status: payload.active_status ?? "Active", description: payload.description ?? null };
+    const fingerprint = JSON.stringify(normalized);
+    if (meta.idempotencyKey) { const existing = this.idempotency.get("stock_item", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.getStockItem(existing.resource_id); } }
+    return this.db.withTransaction(() => {
+      if (meta.idempotencyKey) { const existing = this.idempotency.get("stock_item", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.getStockItem(existing.resource_id); } }
+      const conflict = this.stockItems.findById(normalized.stock_item_id);
+      if (conflict) { const comparable = ["name","category","unit_of_measure","item_type","active_status","description"].every((k) => conflict[k] === normalized[k]); if (comparable) return this.getStockItem(normalized.stock_item_id); throw new ApiError("CONFLICT", `Stock item ${normalized.stock_item_id} already exists with a different definition`, 409); }
+      const now = new Date().toISOString(); const record = { ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
+      this.stockItems.create(record); this.audit("stock_item", record.stock_item_id, "create_stock_item", meta.correlationId, undefined, record); this.event("StockItemCreated", meta.correlationId, { stock_item_id: record.stock_item_id });
+      this.syncIntent("stock_item", "createStockItemMirror", meta.correlationId, this.vtigerMapper.mapStockItemCreate(record));
+      this.stockItemVtigerLinks.upsert({ stock_item_id: record.stock_item_id, external_key: `${this.vtigerMapper.sourceNamespace}:stock-item:${record.stock_item_id}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, created_at: now, updated_at: now });
+      if (meta.idempotencyKey) this.idempotency.save("stock_item", meta.idempotencyKey, record.stock_item_id, now, fingerprint);
+      return this.getStockItem(record.stock_item_id);
+    });
+  }
+
+  getStockItem(id) { const item=this.stockItems.findById(id); if(!item) throw new ApiError("NOT_FOUND", `Stock item ${id} not found`, 404); const link=this.stockItemVtigerLinks.findByStockItemId(id); const intent=this.syncIntents.listAll().filter((x)=>x.entity_type==="stock_item"&&x.payload?.stock_item_id===id).at(-1); return { ...item, vtiger:{record_id:link?.remote_id??null,record_number:link?.remote_number??null,external_key:link?.external_key??`${this.vtigerMapper.sourceNamespace}:stock-item:${id}`,sync_status:link?.sync_status??intent?.status??"pending",attempt_count:intent?.attempt_count??0,last_error_code:link?.last_error_code??intent?.last_error_classification??null,last_synced_at:link?.last_synced_at??null} }; }
+  listStockItems() { return this.stockItems.list().map((x)=>this.getStockItem(x.stock_item_id)); }
+  updateStockItem(id, payload, meta) { if(payload.stock_item_id!==undefined) throw new ApiError("INVALID_PAYLOAD","stock_item_id is immutable",400); const current=this.stockItems.findById(id); if(!current) throw new ApiError("NOT_FOUND",`Stock item ${id} not found`,404); if(payload.item_type!==undefined&&!STOCK_ITEM_TYPES.includes(payload.item_type)) throw new ApiError("INVALID_PAYLOAD","Invalid item_type",400); if(payload.active_status!==undefined&&!STOCK_ACTIVE_STATUSES.includes(payload.active_status)) throw new ApiError("INVALID_PAYLOAD","Invalid active_status",400); const updated={...current,...payload,stock_item_id:id,updated_at:new Date().toISOString(),correlation_id:meta.correlationId}; this.stockItems.update(updated); this.audit("stock_item",id,"update_stock_item",meta.correlationId,current,updated); this.event("StockItemUpdated",meta.correlationId,{stock_item_id:id,active_status:updated.active_status}); const link=this.stockItemVtigerLinks.findByStockItemId(id); this.syncIntent("stock_item","updateStockItemMirror",meta.correlationId,{...this.vtigerMapper.mapStockItemUpdate({...updated,remote_id:link?.remote_id}),stock_item_id:id}); return this.getStockItem(id); }
+
+  getVehicleStock(vehicleId) { if(!this.vehicles.findById(vehicleId)) throw new ApiError("NOT_FOUND",`Vehicle ${vehicleId} not found`,404); return this.vehicleStock.list(vehicleId).map((row)=>{const link=this.vehicleStockVtigerLinks.find(vehicleId,row.stock_item_id);const intent=this.syncIntents.listAll().filter((x)=>x.entity_type==="vehicle_stock"&&x.payload?.vehicle_id===vehicleId&&x.payload?.stock_item_id===row.stock_item_id).at(-1);return {...row,low_stock:Number(row.quantity_on_hand)<=Number(row.minimum_quantity),vtiger:{record_id:link?.remote_id??null,record_number:link?.remote_number??null,external_key:link?.external_key??`${this.vtigerMapper.sourceNamespace}:vehicle-stock:${vehicleId}:${row.stock_item_id}`,sync_status:link?.sync_status??intent?.status??"pending",attempt_count:intent?.attempt_count??0,last_error_code:link?.last_error_code??intent?.last_error_classification??null,last_synced_at:link?.last_synced_at??null}};}); }
+
+  adjustVehicleStock(vehicleId, stockItemId, payload, meta) {
+    const vehicle=this.vehicles.findById(vehicleId); const item=this.stockItems.findById(stockItemId); if(!vehicle||!item) throw new ApiError("NOT_FOUND","Vehicle or stock item not found",404); if(item.active_status!=="Active") throw new ApiError("CONFLICT","Inactive stock items cannot be loaded",409); if(!["restock","manual_correction"].includes(payload.type)) throw new ApiError("INVALID_PAYLOAD","type must be restock or manual_correction",400); const quantity=payload.type==="manual_correction"?normalizeSignedDecimal(payload.quantity_delta ?? payload.quantity):normalizeDecimal(payload.quantity_delta ?? payload.quantity); if(quantity==="0.000"||quantity==="-0.000") throw new ApiError("INVALID_PAYLOAD","quantity must be non-zero",400); if(payload.type==="restock"&&quantity.startsWith("-")) throw new ApiError("INVALID_PAYLOAD","restock quantity must be positive",400); const fingerprint=JSON.stringify({vehicle_id:vehicleId,stock_item_id:stockItemId,type:payload.type,quantity_delta:quantity,reason:payload.reason}); if(meta.idempotencyKey){const e=this.idempotency.get("stock_adjustment",meta.idempotencyKey);if(e){if(e.request_fingerprint!==fingerprint)throw new ApiError("CONFLICT","Idempotency key was reused with a different request",409);return this.getVehicleStock(vehicleId).find((x)=>x.stock_item_id===stockItemId);}}
+    return this.db.withTransaction(()=>{const now=new Date().toISOString();const existing=this.vehicleStock.find(vehicleId,stockItemId);const delta=quantity;const next=addDecimal(existing?.quantity_on_hand??"0",delta);const row=existing?{...existing,quantity_on_hand:next,updated_at:now,correlation_id:meta.correlationId}:{vehicle_id:vehicleId,stock_item_id:stockItemId,quantity_on_hand:next,minimum_quantity:payload.minimum_quantity??"0",target_quantity:payload.target_quantity??next,created_at:now,updated_at:now,correlation_id:meta.correlationId};if(existing)this.vehicleStock.update(row);else this.vehicleStock.create(row);const txId=`STX-${randomUUID()}`;this.db.execute(`INSERT INTO stock_transactions (transaction_id,vehicle_id,stock_item_id,transaction_type,quantity_delta,source_reference,reason,correlation_id,actor_id,created_at) VALUES (${sqlValue(txId)},${sqlValue(vehicleId)},${sqlValue(stockItemId)},${sqlValue(payload.type)},${sqlValue(delta)},${sqlValue(meta.idempotencyKey??txId)},${sqlValue(payload.reason)},${sqlValue(meta.correlationId)},${sqlValue(meta.actorId??null)},${sqlValue(now)});`);this.audit("vehicle_stock",`${vehicleId}:${stockItemId}`,"adjust_stock",meta.correlationId,existing,row);this.event("VehicleStockAdjusted",meta.correlationId,{vehicle_id:vehicleId,stock_item_id:stockItemId,quantity_delta:delta,transaction_id:txId});this.syncIntent("vehicle_stock","createVehicleStockMirror",meta.correlationId,this.vtigerMapper.mapVehicleStockCreate(row));this.vehicleStockVtigerLinks.upsert({vehicle_id:vehicleId,stock_item_id:stockItemId,external_key:`${this.vtigerMapper.sourceNamespace}:vehicle-stock:${vehicleId}:${stockItemId}`,create_correlation_id:meta.correlationId,last_correlation_id:meta.correlationId,sync_status:"pending",last_error_code:null,last_synced_at:null,remote_id:this.vehicleStockVtigerLinks.find(vehicleId,stockItemId)?.remote_id??null,remote_number:null,created_at:existing?.created_at??now,updated_at:now});if(meta.idempotencyKey)this.idempotency.save("stock_adjustment",meta.idempotencyKey,txId,now,fingerprint);return this.getVehicleStock(vehicleId).find((x)=>x.stock_item_id===stockItemId);});
+  }
+
   getAssignment(assignmentId) {
     const assignment = this.assignments.findById(assignmentId);
     if (!assignment) throw new ApiError("NOT_FOUND", `Assignment ${assignmentId} not found`, 404);
@@ -603,6 +645,14 @@ export class OrchestrationService {
   async createInterventionForEncounter(encounterId, payload, meta) {
     const encounter = this.encounterLinks.findByEncounterId(encounterId);
     if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+    const fingerprint = JSON.stringify({ encounter_id: encounterId, ...payload });
+    if (meta.idempotencyKey) {
+      const existing = this.idempotency.get("intervention", meta.idempotencyKey);
+      if (existing) {
+        if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
+        return { intervention_id: existing.resource_id, encounter_id: encounterId, status: "created", replayed: true };
+      }
+    }
 
     const created = await this.openemr.createIntervention({
       encounter_id: encounterId,
@@ -627,21 +677,19 @@ export class OrchestrationService {
       intervention_id: normalized.intervention_id
     });
 
-    if (payload.stock_item_id) {
-      this.syncIntent("stock_usage", "recordStockUsageMirror", meta.correlationId, {
-        intervention_id: normalized.intervention_id,
-        incident_id: encounter.incident_id,
-        encounter_id: normalized.encounter_id,
-        stock_item_id: payload.stock_item_id,
-        quantity_used: 1,
-        usage_source: "clinical_event",
-        performed_at: payload.performed_at,
-        intervention_type: payload.type,
-        intervention_name: payload.name
-      });
-    }
+    if (payload.stock_item_id) this.recordClinicalStockUsage({ ...payload, intervention_id: normalized.intervention_id, incident_id: encounter.incident_id, encounter_id: normalized.encounter_id }, meta);
+
+    if (meta.idempotencyKey) this.idempotency.save("intervention", meta.idempotencyKey, normalized.intervention_id, new Date().toISOString(), fingerprint);
 
     return normalized;
+  }
+
+  recordClinicalStockUsage(payload, meta) {
+    const item = this.stockItems.findById(payload.stock_item_id); if (!item) { const legacy = { intervention_id: payload.intervention_id, incident_id: payload.incident_id, encounter_id: payload.encounter_id, stock_item_id: payload.stock_item_id, quantity_used: 1, usage_source: "clinical_event", performed_at: payload.performed_at, intervention_type: payload.type, intervention_name: payload.name }; this.syncIntent("stock_usage", "recordStockUsageMirror", meta.correlationId, legacy); return { discrepancy_status: "STOCK_ITEM_NOT_FOUND" }; }
+    const usageId = `SU-${payload.intervention_id}-${payload.stock_item_id}`; const existing=this.stockUsage.find(usageId); if(existing)return existing;
+    const candidates = payload.vehicle_id ? [payload.vehicle_id] : [...new Set(this.assignments.findByIncidentId(payload.incident_id).filter((a)=>a.status!=="Cancelled"&&a.status!=="Stood Down").map((a)=>a.vehicle_id))];
+    const vehicleId = candidates.length===1 ? candidates[0] : null; const qty=normalizeDecimal(payload.quantity_used??"1"); const now=new Date().toISOString();
+    return this.db.withTransaction(()=>{let discrepancy=vehicleId?null:"VEHICLE_SOURCE_UNRESOLVED";const loadout=vehicleId?this.vehicleStock.find(vehicleId,payload.stock_item_id):null;let next=loadout?.quantity_on_hand; if(vehicleId&&!loadout)discrepancy="LOADOUT_MISSING"; else if(vehicleId&&Number(qty)>Number(loadout.quantity_on_hand))discrepancy="INSUFFICIENT_STOCK"; else if(vehicleId){next=addDecimal(loadout.quantity_on_hand,`-${qty}`);this.vehicleStock.update({...loadout,quantity_on_hand:next,updated_at:now,correlation_id:meta.correlationId});this.db.execute(`INSERT INTO stock_transactions (transaction_id,vehicle_id,stock_item_id,transaction_type,quantity_delta,source_reference,reason,correlation_id,actor_id,created_at) VALUES (${sqlValue(`STX-${usageId}`)},${sqlValue(vehicleId)},${sqlValue(payload.stock_item_id)},'usage',${sqlValue(`-${qty}`)},${sqlValue(usageId)},${sqlValue("Clinical intervention")},${sqlValue(meta.correlationId)},${sqlValue(meta.actorId??null)},${sqlValue(now)});`);}const usage={stock_usage_id:usageId,intervention_id:payload.intervention_id,incident_id:payload.incident_id,encounter_id:payload.encounter_id??null,stock_item_id:payload.stock_item_id,vehicle_id:vehicleId,quantity_used:qty,usage_source:"clinical_event",performed_at:payload.performed_at,intervention_type:payload.type,correlation_id:meta.correlationId,discrepancy_status:discrepancy,created_at:now};this.stockUsage.create(usage);this.audit("stock_usage",usageId,"record_stock_usage",meta.correlationId,undefined,usage);this.event(discrepancy?"StockDiscrepancyRecorded":"StockUsageRecorded",meta.correlationId,{stock_usage_id:usageId,stock_item_id:payload.stock_item_id,vehicle_id:vehicleId,discrepancy_status:discrepancy});this.syncIntent("stock_usage","recordStockUsageMirror",meta.correlationId,this.vtigerMapper.mapStockUsageRecord(usage));this.stockUsageVtigerLinks.upsert({stock_usage_id:usageId,external_key:`${this.vtigerMapper.sourceNamespace}:stock-usage:${usageId}`,create_correlation_id:meta.correlationId,last_correlation_id:meta.correlationId,sync_status:"pending",last_error_code:null,last_synced_at:null,remote_id:null,remote_number:null,created_at:now,updated_at:now});return usage;});
   }
 
   async getInterventionsForEncounter(encounterId) {

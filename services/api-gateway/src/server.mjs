@@ -11,6 +11,8 @@ const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Tr
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
 const VEHICLE_SERVICE_STATUSES = ["Serviceable", "Out of Service", "Maintenance", "Offline/Unknown"];
 const PERSONNEL_STATUSES = ["Available", "Unavailable", "Off Duty", "Training", "Leave", "Suspended", "Inactive"];
+const STOCK_ITEM_TYPES = ["Consumable", "Medication"];
+const STOCK_ACTIVE_STATUSES = ["Active", "Inactive"];
 const DEFAULT_JSON_BODY_MAX_BYTES = 1024 * 1024;
 
 
@@ -354,6 +356,27 @@ function validateUpdatePersonnel(payload) {
   if (payload.email && !/^\S+@\S+\.\S+$/.test(payload.email)) throw new ApiError("INVALID_PAYLOAD", "Invalid email", 400);
 }
 
+function validateCreateStockItem(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Stock item payload is required", 400);
+  const allowed = new Set(["stock_item_id", "name", "category", "unit_of_measure", "item_type", "active_status", "description"]);
+  const unknown = Object.keys(payload).filter((field) => !allowed.has(field)); if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown stock item fields: ${unknown.join(", ")}`, 400);
+  if (!/^ITEM-[0-9]{3,}$/.test(payload.stock_item_id)) throw new ApiError("INVALID_PAYLOAD", "Invalid stock_item_id", 400);
+  for (const field of ["name", "category", "unit_of_measure"]) if (typeof payload[field] !== "string" || !payload[field].trim()) throw new ApiError("INVALID_PAYLOAD", `${field} is required`, 400);
+  if (!STOCK_ITEM_TYPES.includes(payload.item_type)) throw new ApiError("INVALID_PAYLOAD", "Invalid item_type", 400);
+  if (payload.active_status !== undefined && !STOCK_ACTIVE_STATUSES.includes(payload.active_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid active_status", 400);
+  if (payload.description !== undefined && typeof payload.description !== "string") throw new ApiError("INVALID_PAYLOAD", "description must be a string", 400);
+}
+function validateUpdateStockItem(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Stock item update payload is required", 400);
+  const allowed = new Set(["name", "category", "unit_of_measure", "item_type", "active_status", "description"]); const unknown = Object.keys(payload).filter((field) => !allowed.has(field)); if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown stock item fields: ${unknown.join(", ")}`, 400); if (!Object.keys(payload).length) throw new ApiError("INVALID_PAYLOAD", "At least one stock item field is required", 400);
+  for (const field of ["name", "category", "unit_of_measure"]) if (payload[field] !== undefined && (typeof payload[field] !== "string" || !payload[field].trim())) throw new ApiError("INVALID_PAYLOAD", `${field} must be a non-empty string`, 400);
+  if (payload.item_type !== undefined && !STOCK_ITEM_TYPES.includes(payload.item_type)) throw new ApiError("INVALID_PAYLOAD", "Invalid item_type", 400); if (payload.active_status !== undefined && !STOCK_ACTIVE_STATUSES.includes(payload.active_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid active_status", 400); if (payload.description !== undefined && typeof payload.description !== "string") throw new ApiError("INVALID_PAYLOAD", "description must be a string", 400);
+}
+function validateStockAdjustment(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Stock adjustment payload is required", 400);
+  const allowed = new Set(["type", "quantity", "quantity_delta", "reason", "minimum_quantity", "target_quantity"]); const unknown = Object.keys(payload).filter((field) => !allowed.has(field)); if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown stock adjustment fields: ${unknown.join(", ")}`, 400); if (!["restock", "manual_correction"].includes(payload.type)) throw new ApiError("INVALID_PAYLOAD", "type must be restock or manual_correction", 400); if (typeof (payload.quantity_delta ?? payload.quantity) !== "string" && typeof (payload.quantity_delta ?? payload.quantity) !== "number") throw new ApiError("INVALID_PAYLOAD", "quantity is required", 400); if (!payload.reason || typeof payload.reason !== "string") throw new ApiError("INVALID_PAYLOAD", "reason is required", 400);
+}
+
 function validateAction(payload) {
   if (!payload?.action || typeof payload.action !== "string") throw new ApiError("INVALID_PAYLOAD", "action is required", 400);
 }
@@ -396,7 +419,11 @@ function validateCreateEncounter(payload) {
 }
 
 function validateEncounterId(encounterId) {
-  if (!/^ENC-[A-Za-z0-9-]+$/.test(encounterId)) throw new ApiError("INVALID_PAYLOAD", "Invalid encounter_id", 400);
+  // Native OpenEMR encounters use UUID identifiers; retain the legacy ENC-* form
+  // used by the local/mocked transport while accepting the native identifier.
+  if (!/^ENC-[A-Za-z0-9-]+$/.test(encounterId) && !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(encounterId)) {
+    throw new ApiError("INVALID_PAYLOAD", "Invalid encounter_id", 400);
+  }
 }
 
 function validateCreateObservation(payload) {
@@ -476,7 +503,7 @@ function validateCreateIntervention(payload) {
     throw new ApiError("INVALID_PAYLOAD", "Intervention payload is required", 400);
   }
 
-  const allowedFields = new Set(["performed_at", "type", "name", "dose", "route", "response", "stock_item_id"]);
+  const allowedFields = new Set(["performed_at", "type", "name", "dose", "route", "response", "stock_item_id", "vehicle_id", "quantity_used"]);
   const unknownFields = Object.keys(payload).filter((field) => !allowedFields.has(field));
   if (unknownFields.length > 0) {
     throw new ApiError("INVALID_PAYLOAD", `Unknown intervention fields: ${unknownFields.join(", ")}`, 400);
@@ -492,12 +519,16 @@ function validateCreateIntervention(payload) {
   if (!payload.name || typeof payload.name !== "string") {
     throw new ApiError("INVALID_PAYLOAD", "name is required", 400);
   }
+  if (payload.quantity_used !== undefined && ((typeof payload.quantity_used !== "string" && typeof payload.quantity_used !== "number") || !Number.isFinite(Number(payload.quantity_used)) || Number(payload.quantity_used) <= 0)) {
+    throw new ApiError("INVALID_PAYLOAD", "quantity_used must be a positive number", 400);
+  }
 
-  for (const optionalField of ["dose", "route", "response", "stock_item_id"]) {
+  for (const optionalField of ["dose", "route", "response", "stock_item_id", "vehicle_id"]) {
     if (payload[optionalField] !== undefined && typeof payload[optionalField] !== "string") {
       throw new ApiError("INVALID_PAYLOAD", `${optionalField} must be a string`, 400);
     }
   }
+  if (payload.vehicle_id !== undefined && !/^AMB-[0-9]{3,}$/.test(payload.vehicle_id)) throw new ApiError("INVALID_PAYLOAD", "Invalid vehicle_id", 400);
 }
 
 function validateCreateHandover(payload) {
@@ -703,6 +734,11 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateUpdatePersonnel(payload);
         return okJson(res, 200, orchestration.updatePersonnel(personnelMatch[1], payload, { correlationId: context.correlationId }), context);
       }
+      if (method === "GET" && url.pathname === "/api/stock-items") return okJson(res, 200, { stock_items: orchestration.listStockItems() }, context);
+      if (method === "POST" && url.pathname === "/api/stock-items") { const payload = await parseJson(req); validateCreateStockItem(payload); return okJson(res, 201, orchestration.createStockItem(payload, { correlationId: context.correlationId, idempotencyKey }), context); }
+      const stockItemMatch = url.pathname.match(/^\/api\/stock-items\/(ITEM-[0-9]{3,})$/);
+      if (stockItemMatch && method === "GET") return okJson(res, 200, orchestration.getStockItem(stockItemMatch[1]), context);
+      if (stockItemMatch && method === "PATCH") { const payload = await parseJson(req); validateUpdateStockItem(payload); return okJson(res, 200, orchestration.updateStockItem(stockItemMatch[1], payload, { correlationId: context.correlationId }), context); }
       const vehicleMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})$/);
       if (vehicleMatch && method === "GET") return okJson(res, 200, orchestration.getVehicle(vehicleMatch[1]), context);
       if (vehicleMatch && method === "PATCH") {
@@ -710,6 +746,10 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateUpdateVehicle(payload);
         return okJson(res, 200, orchestration.updateVehicle(vehicleMatch[1], payload, { correlationId: context.correlationId }), context);
       }
+      const vehicleStockMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})\/stock$/);
+      if (vehicleStockMatch && method === "GET") return okJson(res, 200, { vehicle_id: vehicleStockMatch[1], stock: orchestration.getVehicleStock(vehicleStockMatch[1]) }, context);
+      const vehicleStockAdjustmentMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})\/stock\/(ITEM-[0-9]{3,})\/adjustments$/);
+      if (vehicleStockAdjustmentMatch && method === "POST") { const payload = await parseJson(req); validateStockAdjustment(payload); return okJson(res, 201, orchestration.adjustVehicleStock(vehicleStockAdjustmentMatch[1], vehicleStockAdjustmentMatch[2], payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey }), context); }
 
       const incidentMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})$/);
       if (incidentMatch && method === "GET") {
@@ -784,7 +824,7 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateEncounterId(encounterId);
         const payload = await parseJson(req);
         validateCreateIntervention(payload);
-        const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId: context.correlationId });
+        const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId: context.correlationId, idempotencyKey });
         return okJson(res, 201, intervention, context);
       }
 

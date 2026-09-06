@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { VtigerAdapterClient } from "../src/adapters/vtiger/vtiger-adapter-client.mjs";
+import { VtigerPayloadMapper } from "../src/adapters/vtiger/vtiger-payload-mapper.mjs";
 
 test("vtiger adapter methods route mapped payloads through transport", async () => {
   const calls = [];
@@ -38,4 +39,19 @@ test("vtiger adapter methods route mapped payloads through transport", async () 
 test("vtiger adapter without transport fails explicitly", async () => {
   const client = new VtigerAdapterClient();
   await assert.rejects(() => client.createIncidentMirror({ incident_id: "INC-000001" }), /not configured/);
+});
+
+test("stock adapters propagate the configured Vtiger owner on mapped payloads", async () => {
+  const previous = process.env.VTIGER_ASSIGNED_USER_ID;
+  process.env.VTIGER_ASSIGNED_USER_ID = "19x5";
+  const calls = [];
+  const client = new VtigerAdapterClient({ mapper: new VtigerPayloadMapper(), transport: async (request) => { calls.push(request); return { ok: true }; } });
+  await client.createStockItemMirror({ stock_item_id: "ITEM-1" });
+  await client.updateStockItemMirror({ stock_item_id: "ITEM-1" });
+  await client.createVehicleStockMirror({ vehicle_id: "AMB-1", stock_item_id: "ITEM-1" });
+  await client.updateVehicleStockMirror({ vehicle_id: "AMB-1", stock_item_id: "ITEM-1" });
+  assert.equal(calls.length, 4);
+  for (const call of calls) assert.equal(call.payload.assigned_user_id, "19x5");
+  if (previous === undefined) delete process.env.VTIGER_ASSIGNED_USER_ID;
+  else process.env.VTIGER_ASSIGNED_USER_ID = previous;
 });

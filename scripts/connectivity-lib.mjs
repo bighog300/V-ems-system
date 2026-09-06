@@ -168,9 +168,15 @@ export async function validateOpenEmrConnectivity(env = process.env, options = {
   assertRequired(env.OPENEMR_CLIENT_SECRET, "OPENEMR_CLIENT_SECRET", "Set OpenEMR integration OAuth client secret.");
 
   const params = new URLSearchParams({
-    grant_type: "client_credentials",
+    grant_type: env.OPENEMR_GRANT_TYPE ?? (env.OPENEMR_USERNAME && env.OPENEMR_PASSWORD ? "password" : "client_credentials"),
     client_id: env.OPENEMR_CLIENT_ID,
-    client_secret: env.OPENEMR_CLIENT_SECRET
+    client_secret: env.OPENEMR_CLIENT_SECRET,
+    ...(env.OPENEMR_SCOPE ? { scope: env.OPENEMR_SCOPE } : {}),
+    ...(env.OPENEMR_USERNAME && env.OPENEMR_PASSWORD ? {
+      username: env.OPENEMR_USERNAME,
+      password: env.OPENEMR_PASSWORD,
+      user_role: env.OPENEMR_USER_ROLE ?? "users"
+    } : {})
   });
 
   const tokenResponse = await fetchWithTimeout(env.OPENEMR_TOKEN_URL, {

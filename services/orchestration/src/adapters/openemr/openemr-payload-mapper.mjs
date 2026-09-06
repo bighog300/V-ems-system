@@ -1,6 +1,6 @@
 export class OpenEmrPayloadMapper {
   mapPatientSearchRequest(criteria) {
-    return {
+    const mapped = {
       first_name: criteria.first_name,
       last_name: criteria.last_name,
       dob: criteria.dob,
@@ -55,6 +55,8 @@ export class OpenEmrPayloadMapper {
       response: intervention.response,
       stock_item_id: intervention.stock_item_id
     };
+    if (intervention.quantity_used !== undefined) mapped.quantity_used = intervention.quantity_used;
+    return mapped;
   }
 
   mapInterventionReadRequest(context) {

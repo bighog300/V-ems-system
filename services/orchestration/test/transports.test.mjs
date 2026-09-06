@@ -77,6 +77,51 @@ test("openemr transport supports configurable route path", async () => {
   });
 });
 
+test("native OpenEMR transport acquires OAuth password token and maps patient/encounter/intervention resources", async () => {
+  const requests = [];
+  await withServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    requests.push({ url: req.url, body });
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/oauth/token") {
+      res.end(JSON.stringify({ access_token: "opaque-test-token", token_type: "Bearer" }));
+    } else if (req.url.startsWith("/apis/default/api/patient?") && req.method === "GET") {
+      res.end(JSON.stringify({ data: [{ uuid: "pat-1", fname: "Jane", lname: "Doe" }] }));
+    } else if (req.url === "/apis/default/api/patient" && req.method === "POST") {
+      res.end(JSON.stringify({ data: { uuid: "pat-2", fname: "Jane", lname: "Doe" } }));
+    } else if (req.url === "/apis/default/api/patient/pat-2/encounter" && req.method === "POST") {
+      res.end(JSON.stringify({ data: { euuid: "enc-2" } }));
+    } else if (req.url === "/apis/default/api/patient/pat-2/encounter/enc-2/soap_note" && req.method === "POST") {
+      res.end(JSON.stringify({ sid: "soap-2", fid: "enc-2" }));
+    } else {
+      res.writeHead(404); res.end(JSON.stringify({ error: "not found" }));
+    }
+  }, async (port) => {
+    const transport = createOpenEmrTransportFromEnv({
+      OPENEMR_API_STYLE: "standard",
+      OPENEMR_BASE_URL: `http://127.0.0.1:${port}`,
+      OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+      OPENEMR_CLIENT_ID: "client",
+      OPENEMR_CLIENT_SECRET: "secret",
+      OPENEMR_USERNAME: "user",
+      OPENEMR_PASSWORD: "pass",
+      OPENEMR_USER_ROLE: "users"
+    });
+    const search = await transport({ method: "searchPatient", payload: { first_name: "Jane", last_name: "Doe" } });
+    assert.equal(search.patient_id, "pat-1");
+    const patient = await transport({ method: "createPatient", payload: { first_name: "Jane", last_name: "Doe", dob: "1990-01-01", sex: "Female" } });
+    assert.equal(patient.patient_id, "pat-2");
+    const encounter = await transport({ method: "createEncounter", payload: { patient_id: "pat-2", presenting_complaint: "fall" } });
+    assert.equal(encounter.encounter_id, "enc-2");
+    const intervention = await transport({ method: "createIntervention", payload: { patient_id: "pat-2", encounter_id: "enc-2", type: "treatment", name: "bandage", stock_item_id: "ITEM-1" } });
+    assert.equal(intervention.intervention_id, "soap-2");
+    assert.match(requests[0].body, /grant_type=password/);
+    assert.equal(requests.filter((request) => request.url === "/oauth/token").length, 1);
+    assert.ok(requests.some((request) => request.url === "/apis/default/api/patient/pat-2/encounter/enc-2/soap_note"));
+  });
+});
+
 test("vtiger transport enforces timeout", async () => {
   await withServer((req, res) => {
     setTimeout(() => {

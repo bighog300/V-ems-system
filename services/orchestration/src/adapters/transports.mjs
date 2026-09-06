@@ -65,6 +65,91 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
   const baseUrl = env.OPENEMR_BASE_URL;
   if (!baseUrl) return undefined;
 
+  // Native OpenEMR 8.x standard API mode. The domain adapter remains stable;
+  // this transport translates its operations to OpenEMR's supported routes.
+  if (env.OPENEMR_API_STYLE === "standard") {
+    const timeoutMs = Number(env.OPENEMR_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
+    const site = env.OPENEMR_SITE ?? "default";
+    const apiBase = `${baseUrl.replace(/\/$/, "")}/apis/${site}/api`;
+    let tokenPromise;
+    const accessToken = async () => {
+      if (env.OPENEMR_API_TOKEN) return env.OPENEMR_API_TOKEN;
+      if (!env.OPENEMR_TOKEN_URL || !env.OPENEMR_CLIENT_ID || !env.OPENEMR_CLIENT_SECRET) {
+        const error = new Error("OpenEMR OAuth configuration is incomplete"); error.code = "DOWNSTREAM_AUTH_FAILED"; error.classification = error.code; throw error;
+      }
+      const form = {
+        grant_type: env.OPENEMR_GRANT_TYPE ?? (env.OPENEMR_USERNAME && env.OPENEMR_PASSWORD ? "password" : "client_credentials"),
+        client_id: env.OPENEMR_CLIENT_ID,
+        client_secret: env.OPENEMR_CLIENT_SECRET,
+        ...(env.OPENEMR_SCOPE ? { scope: env.OPENEMR_SCOPE } : {})
+      };
+      if (form.grant_type === "password") {
+        form.username = env.OPENEMR_USERNAME;
+        form.password = env.OPENEMR_PASSWORD;
+        form.user_role = env.OPENEMR_USER_ROLE ?? "users";
+      }
+      tokenPromise ??= requestJson(env.OPENEMR_TOKEN_URL, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(form).toString()
+      }, "openemr", "oauth", timeoutMs);
+      let response;
+      try { response = await tokenPromise; } catch (error) { tokenPromise = undefined; throw error; }
+      if (!response?.access_token) { tokenPromise = undefined; const error = new Error("OpenEMR OAuth response did not include an access token"); error.code = "DOWNSTREAM_AUTH_FAILED"; error.classification = error.code; throw error; }
+      return response.access_token;
+    };
+    const call = async (method, path, payload, httpMethod = "POST") => {
+      const token = await accessToken();
+      const headers = { accept: "application/json", authorization: `Bearer ${token}` };
+      const options = { method: httpMethod, headers };
+      if (httpMethod !== "GET") { headers["content-type"] = "application/json"; options.body = JSON.stringify(payload ?? {}); }
+      return requestJson(`${apiBase}${path}`, options, "openemr", method, timeoutMs);
+    };
+    const standardData = (response) => response?.data ?? response;
+    const patientId = (data) => data?.uuid ?? data?.id ?? data?.pid ?? null;
+    return async ({ method, payload }) => {
+      const patient = encodeURIComponent(payload?.patient_id ?? "");
+      const encounter = encodeURIComponent(payload?.encounter_id ?? "");
+      if (method === "searchPatient") {
+        const query = new URLSearchParams(); if (payload?.first_name) query.set("fname", payload.first_name); if (payload?.last_name) query.set("lname", payload.last_name); if (payload?.dob) query.set("DOB", payload.dob); if (payload?.phone) query.set("phone", payload.phone);
+        const response = await call(method, `/patient?${query}`, undefined, "GET");
+        const candidates = Array.isArray(response?.data) ? response.data : [];
+        return { match_status: candidates.length === 1 ? "matched" : candidates.length > 1 ? "ambiguous" : "not_found", match_confidence: candidates.length === 1 ? 1 : 0, patient_id: candidates.length === 1 ? patientId(candidates[0]) : null, candidates };
+      }
+      if (method === "createPatient") {
+        const response = await call(method, "/patient", { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex, phone_contact: payload.phone });
+        const data = standardData(response); return { patient_id: patientId(data), display_name: [data?.fname, data?.lname].filter(Boolean).join(" ") };
+      }
+      if (method === "createEncounter") {
+        const response = await call(method, `/patient/${patient}/encounter`, { date: payload.care_started_at, reason: payload.presenting_complaint ?? "EMS encounter", pc_catid: "5", class_code: "AMB", external_id: payload.incident_id });
+        const data = standardData(response); return { encounter_id: data?.euuid ?? data?.uuid ?? data?.id ?? data?.eid ?? null, status: "Open" };
+      }
+      if (method === "createObservation") {
+        const vitals = payload.vital_signs ?? {};
+        const response = await call(method, `/patient/${patient}/encounter/${encounter}/vital`, { ...vitals, note: payload.notes ?? undefined });
+        const data = standardData(response); return { observation_id: data?.uuid ?? data?.id ?? data?.vid ?? null, encounter_id: payload.encounter_id, status: "created" };
+      }
+      if (method === "createIntervention") {
+        const response = await call(method, `/patient/${patient}/encounter/${encounter}/soap_note`, { subjective: `${payload.type ?? "Intervention"}: ${payload.name ?? ""}`.trim(), objective: payload.response ?? "", assessment: payload.stock_item_id ? `V-EMS stock item ${payload.stock_item_id}` : "", plan: [payload.dose, payload.route].filter(Boolean).join(" via ") || "EMS treatment" });
+        return { intervention_id: response?.sid ?? response?.id ?? null, encounter_id: payload.encounter_id, status: "created" };
+      }
+      if (method === "getInterventions") {
+        const response = await call(method, `/patient/${patient}/encounter/${encounter}/soap_note`, undefined, "GET");
+        const rows = Array.isArray(response?.data) ? response.data : Array.isArray(response) ? response : [];
+        return rows.map((row) => ({ intervention_id: row.sid ?? row.id ?? null, encounter_id: payload.encounter_id, status: "created", performed_at: row.date ?? null, type: "soap_note", name: row.title ?? null }));
+      }
+      if (method === "createHandover") {
+        const response = await call(method, `/patient/${patient}/encounter/${encounter}/soap_note`, { subjective: `Handover to ${payload.destination_facility ?? ""}`.trim(), objective: payload.receiving_clinician ? `Receiving clinician: ${payload.receiving_clinician}` : "", assessment: payload.disposition ?? "", plan: payload.notes ?? payload.handover_status ?? "" });
+        return { handover_id: response?.sid ?? response?.id ?? null, encounter_id: payload.encounter_id, handover_time: payload.handover_time, destination_facility: payload.destination_facility, receiving_clinician: payload.receiving_clinician, disposition: payload.disposition, handover_status: payload.handover_status, notes: payload.notes };
+      }
+      if (method === "getHandover") {
+        const response = await call(method, `/patient/${patient}/encounter/${encounter}/soap_note`, undefined, "GET");
+        return Array.isArray(response?.data) ? response.data[response.data.length - 1] ?? null : response ?? null;
+      }
+      throw new Error(`OpenEMR native route not configured for ${method}`);
+    };
+  }
+
   const token = env.OPENEMR_API_TOKEN;
   const timeoutMs = Number(env.OPENEMR_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
   const requireAuth = env.OPENEMR_AUTH_REQUIRED !== "false";
@@ -119,9 +204,9 @@ export function createVtigerTransportFromEnv(env = process.env) {
   return async ({ method, payload }) => {
     const client = await getClient();
     const externalKey = payload.vems_external_key;
-    const module = payload.elementType ?? (method === "createPersonnelMirror" || method === "updatePersonnelMirror" ? "VEMSPersonnel" : method === "createAssignmentCrewMirror" ? "VEMSAssignmentCrew" : method.includes("Assignment") ? "VEMSAssignments" : "HelpDesk");
+    const module = payload.elementType ?? (method === "createPersonnelMirror" || method === "updatePersonnelMirror" ? "VEMSPersonnel" : method === "createAssignmentCrewMirror" || method === "updateAssignmentCrewMirror" ? "VEMSAssignmentCrew" : method === "createStockItemMirror" || method === "updateStockItemMirror" ? "VEMSStockItems" : method === "createVehicleStockMirror" || method === "updateVehicleStockMirror" ? "VEMSVehicleStock" : method === "recordStockUsageMirror" ? "VEMSStockUsage" : method.includes("Assignment") ? "VEMSAssignments" : "HelpDesk");
     const esc = (value) => String(value ?? "").replaceAll("'", "''");
-    const numberField = module === "VEMSAssignments" ? "vems_assignment_no" : module === "VEMSVehicles" ? "vems_vehicle_no" : module === "VEMSPersonnel" ? "vems_personnel_no" : module === "VEMSAssignmentCrew" ? "vems_assignment_crew_no" : "ticket_no";
+    const numberField = module === "VEMSAssignments" ? "vems_assignment_no" : module === "VEMSVehicles" ? "vems_vehicle_no" : module === "VEMSPersonnel" ? "vems_personnel_no" : module === "VEMSAssignmentCrew" ? "vems_assignment_crew_no" : module === "VEMSStockItems" ? "vems_stock_item_no" : module === "VEMSVehicleStock" ? "vems_vehicle_stock_no" : module === "VEMSStockUsage" ? "vems_stock_usage_no" : "ticket_no";
     const query = `select id,${numberField},vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
     if (module === "VEMSAssignments" && !payload.vems_incident_remote_id) {
       const error = new Error("Vtiger incident linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
@@ -177,6 +262,22 @@ export function createVtigerTransportFromEnv(env = process.env) {
       if (!created?.id) { const error = new Error("Vtiger personnel create response did not include a record ID"); error.code = "VTIGER_PROTOCOL_ERROR"; error.classification = error.code; throw error; }
       return { remote_id: created.id, remote_number: created.vems_personnel_no ?? null, external_key: externalKey, outcome: "created" };
     }
+    if (method === "createStockItemMirror" || method === "recordStockUsageMirror" || method === "createVehicleStockMirror") {
+      if (method === "createVehicleStockMirror") {
+        const vehicleLink = payload.vehicle_remote_id;
+        const itemLink = payload.stock_item_remote_id;
+        if (!vehicleLink || !itemLink) { const error = new Error("Vtiger vehicle stock dependencies are pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error; }
+      }
+      const matches = await client.query(query);
+      if (matches.length > 1) { const error = new Error(`Multiple Vtiger ${module} records match the external key`); error.code = "VTIGER_DUPLICATE_CONFLICT"; error.classification = error.code; throw error; }
+      if (matches.length === 1) return { remote_id: matches[0].id, remote_number: matches[0][numberField] ?? null, external_key: externalKey, outcome: "existing" };
+      const element = { ...payload }; delete element.elementType; delete element.stock_item_id; delete element.vehicle_stock_id; delete element.stock_usage_id; delete element.vehicle_remote_id; delete element.stock_item_remote_id; delete element.quantity_used; delete element.usage_source; delete element.performed_at; delete element.intervention_type; delete element.intervention_name;
+      if (!element.assigned_user_id && env.VTIGER_ASSIGNED_USER_ID) element.assigned_user_id = env.VTIGER_ASSIGNED_USER_ID;
+      if (!element.assigned_user_id) { const error = new Error(`Vtiger ${module} create requires VTIGER_ASSIGNED_USER_ID`); error.code = "VTIGER_CONFIG_MISSING"; error.classification = "VTIGER_AUTH_FAILED"; throw error; }
+      const created = await client.create(element, module);
+      if (!created?.id) { const error = new Error(`Vtiger ${module} create response did not include a record ID`); error.code = "VTIGER_PROTOCOL_ERROR"; error.classification = error.code; throw error; }
+      return { remote_id: created.id, remote_number: created[numberField] ?? null, external_key: externalKey, outcome: "created" };
+    }
     if (method === "createAssignmentCrewMirror") {
       const matches = await client.query(query);
       if (matches.length > 1) { const error = new Error("Multiple Vtiger assignment crew records match the external key"); error.code = "VTIGER_DUPLICATE_CONFLICT"; error.classification = error.code; throw error; }
@@ -201,6 +302,14 @@ export function createVtigerTransportFromEnv(env = process.env) {
       const merged = { ...current, ...payload, id: remoteId }; delete merged.elementType; delete merged.staff_id;
       const updated = await client.update(merged, "VEMSPersonnel");
       return { remote_id: updated?.id ?? remoteId, remote_number: updated?.vems_personnel_no ?? current.vems_personnel_no ?? null, external_key: externalKey, outcome: "updated" };
+    }
+    if (method === "updateStockItemMirror" || method === "updateVehicleStockMirror") {
+      const remoteId = payload.id;
+      if (!remoteId) { const error = new Error("Vtiger stock update requires a remote record ID"); error.code = "VTIGER_REMOTE_NOT_FOUND"; error.classification = error.code; throw error; }
+      const current = await client.retrieve(remoteId, module);
+      const merged = { ...current, ...payload, id: remoteId }; delete merged.elementType; delete merged.stock_item_id; delete merged.vehicle_stock_id; delete merged.vehicle_remote_id; delete merged.stock_item_remote_id;
+      const updated = await client.update(merged, module);
+      return { remote_id: updated?.id ?? remoteId, remote_number: updated?.[numberField] ?? current[numberField] ?? null, external_key: externalKey, outcome: "updated" };
     }
     if (method === "updateAssignmentMirror") {
       const remoteId = payload.id;

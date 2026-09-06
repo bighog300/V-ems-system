@@ -63,6 +63,40 @@ async function run() {
     reason: "Smoke test dispatch"
   };
 
+  async function ensureAssignmentMasters(headers = {}) {
+    const vehicle = {
+      vehicle_id: "AMB-321",
+      callsign: "SMOKE-321",
+      vehicle_type: "Ambulance",
+      operational_status: "Available",
+      service_status: "Serviceable",
+      home_station: "Smoke Station"
+    };
+    const personnel = {
+      staff_id: "STAFF-123",
+      display_name: "Smoke Test Crew",
+      role: "Paramedic",
+      operational_status: "Available",
+      home_station: "Smoke Station"
+    };
+    const vehicleRead = await request(`/api/vehicles/${vehicle.vehicle_id}`, { method: "GET", headers });
+    if (vehicleRead.response.status === 404) {
+      const created = await request("/api/vehicles", {
+        method: "POST", body: JSON.stringify(vehicle),
+        headers: { ...headers, "idempotency-key": "smoke-master-vehicle-321" }
+      });
+      assert.equal(created.response.status, 201, "smoke vehicle master should be created");
+    } else assert.equal(vehicleRead.response.status, 200, "smoke vehicle master should be readable");
+    const personnelRead = await request(`/api/personnel/${personnel.staff_id}`, { method: "GET", headers });
+    if (personnelRead.response.status === 404) {
+      const created = await request("/api/personnel", {
+        method: "POST", body: JSON.stringify(personnel),
+        headers: { ...headers, "idempotency-key": "smoke-master-personnel-123" }
+      });
+      assert.equal(created.response.status, 201, "smoke personnel master should be created");
+    } else assert.equal(personnelRead.response.status, 200, "smoke personnel master should be readable");
+  }
+
   const patientLinkPayload = {
     verification_status: "provisional",
     match_confidence: 0.45
@@ -99,6 +133,7 @@ async function run() {
   };
 
   if (!enforceRbac) {
+    await ensureAssignmentMasters({ "x-correlation-id": "smoke-master-setup" });
     const createdIncident = await request("/api/incidents", {
       method: "POST",
       body: JSON.stringify(incidentPayload),
@@ -118,7 +153,8 @@ async function run() {
         "idempotency-key": `smoke-assignment-${Date.now()}`
       }
     });
-    assert.equal(createAssignment.response.status, 201, "POST assignment should return 201");
+    assert.ok([201, 409].includes(createAssignment.response.status), "POST assignment should create or report an existing active smoke assignment");
+    if (createAssignment.response.status === 409) assert.equal(createAssignment.body.error?.code, "CONFLICT");
 
     const listIncidents = await request("/api/incidents", { method: "GET" });
     assert.equal(listIncidents.response.status, 200, "GET /api/incidents should return 200");
@@ -134,6 +170,8 @@ async function run() {
     "x-correlation-id": `smoke-${role}-${action}-${Date.now()}`,
     "idempotency-key": `smoke-${role}-${action}-${Date.now()}`
   });
+
+  await ensureAssignmentMasters(roleHeaders("supervisor", "master-setup"));
 
   const assertStatus = (actual, expected, description, body) => {
     assert.equal(actual, expected, `${description}: expected ${expected}, received ${actual}. body=${JSON.stringify(body)}`);
@@ -168,7 +206,8 @@ async function run() {
     body: JSON.stringify(assignmentPayload),
     headers: roleHeaders("dispatcher", "create-assignment")
   });
-  assertStatus(dispatcherAssignment.response.status, 201, "dispatcher should create assignment", dispatcherAssignment.body);
+  assert.ok([201, 409].includes(dispatcherAssignment.response.status), `dispatcher assignment should create or report an existing active smoke assignment: ${JSON.stringify(dispatcherAssignment.body)}`);
+  if (dispatcherAssignment.response.status === 409) assert.equal(dispatcherAssignment.body.error?.code, "CONFLICT");
 
   const fieldCrewDeniedAssignment = await request(`/api/incidents/${incidentId}/assignments`, {
     method: "POST",

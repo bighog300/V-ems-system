@@ -443,3 +443,22 @@ test("handover read returns normalized OpenEMR handover", async () => {
     patient_id: "OE-930"
   }]);
 });
+
+test("intervention idempotency replays without a second clinical write", async () => {
+  let writes = 0;
+  const orchestration = createService({
+    createEncounter: async () => ({ encounter_id: "ENC-IDEMP", status: "Open" }),
+    createIntervention: async (payload) => { writes += 1; return { intervention_id: "INT-IDEMP", encounter_id: payload.encounter_id, status: "recorded" }; }
+  });
+  const incident = createIncident(orchestration, "corr-idemp-incident");
+  orchestration.linkPatientToIncidentContext(incident.incident_id, { verification_status: "verified", openemr_patient_id: "OE-IDEMP" }, { correlationId: "corr-idemp-link" });
+  await orchestration.createEncounterForIncident(incident.incident_id, {
+    patient_id: "OE-IDEMP", care_started_at: "2026-04-16T10:15:00Z", crew_ids: ["STAFF-001"], presenting_complaint: "Chest pain"
+  }, { correlationId: "corr-idemp-enc" });
+  const payload = { performed_at: "2026-04-16T10:25:00Z", type: "procedure", name: "Bandage" };
+  const first = await orchestration.createInterventionForEncounter("ENC-IDEMP", payload, { correlationId: "corr-idemp-1", idempotencyKey: "intervention-idemp" });
+  const replay = await orchestration.createInterventionForEncounter("ENC-IDEMP", payload, { correlationId: "corr-idemp-2", idempotencyKey: "intervention-idemp" });
+  assert.equal(writes, 1);
+  assert.equal(first.intervention_id, replay.intervention_id);
+  assert.equal(replay.replayed, true);
+});

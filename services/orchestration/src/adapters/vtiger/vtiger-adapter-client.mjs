@@ -46,11 +46,15 @@ export class VtigerAdapterClient {
   }
 
   createVehicleMirror(vehicle) {
-    return this.invoke("createVehicleMirror", vehicle?.vems_vehicle_id ? vehicle : this.mapper.mapVehicleCreate(vehicle));
+    const payload = vehicle?.vems_vehicle_id ? { ...vehicle } : this.mapper.mapVehicleCreate(vehicle);
+    if (payload.assigned_user_id == null && process.env.VTIGER_ASSIGNED_USER_ID) payload.assigned_user_id = process.env.VTIGER_ASSIGNED_USER_ID;
+    return this.invoke("createVehicleMirror", payload);
   }
 
   updateVehicleMirror(vehicle) {
-    return this.invoke("updateVehicleMirror", vehicle?.vems_vehicle_id ? vehicle : this.mapper.mapVehicleUpdate(vehicle));
+    const payload = vehicle?.vems_vehicle_id ? { ...vehicle } : this.mapper.mapVehicleUpdate(vehicle);
+    if (payload.assigned_user_id == null && process.env.VTIGER_ASSIGNED_USER_ID) payload.assigned_user_id = process.env.VTIGER_ASSIGNED_USER_ID;
+    return this.invoke("updateVehicleMirror", payload);
   }
 
   createPersonnelMirror(personnel) {
@@ -66,6 +70,30 @@ export class VtigerAdapterClient {
   }
 
   recordStockUsageMirror(stockUsage) {
-    return this.invoke("recordStockUsageMirror", this.mapper.mapStockUsageRecord(stockUsage));
+    const payload = this.mapper.mapStockUsageRecord(stockUsage);
+    if (payload.assigned_user_id == null && process.env.VTIGER_ASSIGNED_USER_ID) payload.assigned_user_id = process.env.VTIGER_ASSIGNED_USER_ID;
+    return this.invoke("recordStockUsageMirror", payload);
+  }
+
+  createStockItemMirror(item) {
+    const payload = this.mapper.mapStockItemCreate(item);
+    return this.invoke("createStockItemMirror", payload);
+  }
+
+  updateStockItemMirror(item) {
+    const payload = item?.vems_stock_item_id ? { ...item } : this.mapper.mapStockItemUpdate(item);
+    if (payload.assigned_user_id == null && process.env.VTIGER_ASSIGNED_USER_ID) payload.assigned_user_id = process.env.VTIGER_ASSIGNED_USER_ID;
+    return this.invoke("updateStockItemMirror", payload);
+  }
+
+  createVehicleStockMirror(row) {
+    const payload = this.mapper.mapVehicleStockCreate(row);
+    return this.invoke("createVehicleStockMirror", payload);
+  }
+
+  updateVehicleStockMirror(row) {
+    const payload = row?.vems_vehicle_stock_id ? { ...row } : this.mapper.mapVehicleStockUpdate(row);
+    if (payload.assigned_user_id == null) payload.assigned_user_id = process.env.VTIGER_ASSIGNED_USER_ID;
+    return this.invoke("updateVehicleStockMirror", payload);
   }
 }

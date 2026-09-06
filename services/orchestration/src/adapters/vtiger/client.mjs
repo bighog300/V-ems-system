@@ -31,6 +31,17 @@ export function createVtigerWebserviceClient(env = process.env, options = {}) {
       const junctionNames = new Set(junction.fields?.map((field) => field.name));
       const junctionMissing = junctionRequired.filter((name) => !junctionNames.has(name));
       if (junctionMissing.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `VEMSAssignmentCrew schema missing ${junctionMissing.join(",")}`, { operation: "describe" });
+      const stockSchemas = {
+        VEMSStockItems: ["vems_stock_item_id", "vems_external_key", "vems_name", "vems_category", "vems_unit_of_measure", "vems_item_type", "vems_active_status", "vems_correlation_id", "vems_last_correlation_id", "vems_created_at_utc", "vems_updated_at_utc", "vems_stock_item_no", "assigned_user_id"],
+        VEMSVehicleStock: ["vems_vehicle_stock_id", "vems_external_key", "vems_vehicle_id", "vems_stock_item_id", "vehicle_ref", "stock_item_ref", "vems_quantity_on_hand", "vems_minimum_quantity", "vems_target_quantity", "vems_correlation_id", "vems_last_correlation_id", "vems_created_at_utc", "vems_updated_at_utc", "vems_vehicle_stock_no", "assigned_user_id"],
+        VEMSStockUsage: ["vems_stock_usage_id", "vems_external_key", "vems_intervention_id", "vems_incident_id", "vems_stock_item_id", "stock_item_ref", "vems_quantity_used", "vems_usage_source", "vems_performed_at_utc", "vems_intervention_type", "vems_correlation_id", "vems_created_at_utc", "vems_stock_usage_no", "assigned_user_id"]
+      };
+      for (const [moduleName, requiredFields] of Object.entries(stockSchemas)) {
+        const metadata = await auth.call("describe", { elementType: moduleName });
+        const available = new Set(metadata.fields?.map((field) => field.name));
+        const missingFields = requiredFields.filter((name) => !available.has(name));
+        if (missingFields.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `${moduleName} schema missing ${missingFields.join(",")}`, { operation: "describe" });
+      }
       return { reachable: true, authenticated: true, schemaReady: true, vtigerVersion: undefined };
     },
     async query(query) { return auth.call("query", { query }); },
