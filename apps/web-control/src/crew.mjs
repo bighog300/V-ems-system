@@ -710,3 +710,20 @@ export function renderPatientCasesPanel(cases, selectedId) {
       <p>Observations, medications, procedures and the unified timeline are available through the Patient Case API and remain scoped to the selected case.</p>
     </section>` : '<p>Create or select a patient case to begin care.</p>'}</section>`;
 }
+
+export function renderEpcrFinalizationPanel(epcr, patientCaseId) {
+  const lifecycle = epcr?.lifecycle?.current_state ?? "draft";
+  const readiness = epcr?.readiness ?? { ready: false, missing: [], warnings: [] };
+  const missing = readiness.missing?.length ? `<ul>${readiness.missing.map(item => `<li>${escapeHtml(item.message)}</li>`).join("")}</ul>` : "<p>All configured completion requirements are satisfied.</p>";
+  const latest = epcr?.final_version ? `${epcr.final_version.version_id} · ${epcr.final_version.hash_algorithm}:${epcr.final_version.hash}` : "No version yet";
+  return `<section class="panel epcr-finalization-panel"><h3>Stage 8 ePCR finalization</h3>
+    <p><strong>Lifecycle:</strong> ${escapeHtml(lifecycle)} · <strong>Version:</strong> ${escapeHtml(latest)}</p>
+    <p><strong>Readiness:</strong> ${readiness.ready ? "Ready" : "Incomplete"}</p>${missing}
+    <form id="epcrCompleteForm"><button type="submit" ${readiness.ready && lifecycle === "draft" || lifecycle === "returned_for_correction" ? "" : "disabled"}>Complete for crew</button></form>
+    <form id="epcrSignatureForm"><label>Signer role <select name="signer_role"><option value="treating_clinician">Treating clinician</option><option value="crew_member">Crew member</option><option value="patient">Patient</option><option value="guardian">Guardian</option><option value="representative">Representative</option><option value="receiving_clinician">Receiving clinician</option><option value="witness">Witness</option></select></label><label>Signer identity <input name="signer_identity" required></label><button type="submit">Sign current version</button></form>
+    <form id="epcrSubmitForm"><button type="submit" ${lifecycle === "signed" ? "" : "disabled"}>Submit to QA</button></form>
+    <form id="epcrReviewForm"><label>Review action <select name="action"><option value="accept">Accept for QA</option><option value="return_for_correction">Return for correction</option><option value="request_clarification">Request clarification</option><option value="flag_clinical_concern">Flag clinical concern</option><option value="finalize">Finalize</option></select></label><label>Comment <textarea name="comment"></textarea></label><button type="submit">Record review</button></form>
+    <form id="epcrFlagForm"><label>QA flag <input name="flag_type" placeholder="clinical concern" required></label><label>Severity <select name="severity"><option>warning</option><option>high</option><option>critical</option></select></label><button type="submit">Raise QA flag</button></form>
+    <form id="epcrAmendmentForm"><label>Amendment path <input name="affected_path" placeholder="assessment.impression"></label><label>Reason <input name="reason"></label><label>After value <input name="after_value"></label><button type="submit" ${lifecycle === "final" ? "" : "disabled"}>Create amendment</button></form>
+  </section>`;
+}

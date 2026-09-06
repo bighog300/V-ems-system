@@ -1,4 +1,4 @@
-import { listPatientCases, loadPatientCaseData, createPatientCase, patientCaseWrite, patientIdentityWrite, getPatientCaseClinicalSection, savePatientCaseDemographics, createPatientCaseClinicalRecord } from './api.mjs';
+import { listPatientCases, loadPatientCaseData, createPatientCase, patientCaseWrite, patientIdentityWrite, getPatientCaseClinicalSection, savePatientCaseDemographics, createPatientCaseClinicalRecord, getEpcrSummary, epcrAction } from './api.mjs';
 import { renderPatientCasesPanel } from './crew.mjs';
 import {
   ApiError,
@@ -21,6 +21,7 @@ import {
   buildCreateObservationPayload,
   buildCrewJobListItems,
   renderCrewIncidentDetailHtml,
+  renderEpcrFinalizationPanel,
   renderCrewJobListHtml
 } from "./crew.mjs";
 import { applyProductionUiMode, readSessionFromDom } from "./session.mjs";
@@ -358,9 +359,10 @@ async function renderCrewIncidentDetail() {
     if (!cases.some(c => c.patient_case_id === selectedPatientCaseId)) selectedPatientCaseId = '';
     const selectedId = selectedPatientCaseId;
     const caseData = selectedId ? await loadPatientCaseData({ ...config, patientCaseId: selectedId }) : null;
+    const epcrData = selectedId ? await getEpcrSummary({ ...config, patientCaseId: selectedId }) : null;
     if (version !== crewRenderVersion) return;
     const summary = caseData ? buildIncidentOperationalSummary({ ...caseData, incident: { incident_id: config.incidentId, closure_ready: caseData.patientCase.closure_ready }, assignmentSummary: null }) : null;
-    output.innerHTML = renderPatientCasesPanel(cases, selectedId) + (summary ? renderCrewIncidentDetailHtml(summary) : '');
+    output.innerHTML = renderPatientCasesPanel(cases, selectedId) + (summary ? renderCrewIncidentDetailHtml(summary) + renderEpcrFinalizationPanel(epcrData, selectedId) : '');
     output.querySelectorAll('[data-patient-case]').forEach(button => button.addEventListener('click', () => {
       if (output.querySelector('[data-submitting="true"]')) return;
       if (selectedPatientCaseId && !window.confirm('Switch patient? Unsaved entries will be discarded.')) return;
@@ -413,6 +415,12 @@ async function renderCrewIncidentDetail() {
       await createPatientCaseClinicalRecord({ ...config, patientCaseId: selectedId, section: 'disposition', payload });
       await renderCrewIncidentDetail();
     });
+    bindCaseForm('#epcrCompleteForm', async () => { await epcrAction({ ...config, patientCaseId: selectedId, action: 'complete' }); await renderCrewIncidentDetail(); });
+    bindCaseForm('#epcrSignatureForm', async payload => { await epcrAction({ ...config, patientCaseId: selectedId, action: 'signatures', payload }); await renderCrewIncidentDetail(); });
+    bindCaseForm('#epcrSubmitForm', async () => { await epcrAction({ ...config, patientCaseId: selectedId, action: 'submit' }); await renderCrewIncidentDetail(); });
+    bindCaseForm('#epcrReviewForm', async payload => { await epcrAction({ ...config, patientCaseId: selectedId, action: 'review', payload }); await renderCrewIncidentDetail(); });
+    bindCaseForm('#epcrFlagForm', async payload => { await epcrAction({ ...config, patientCaseId: selectedId, action: 'qa-flags', payload }); await renderCrewIncidentDetail(); });
+    bindCaseForm('#epcrAmendmentForm', async payload => { await epcrAction({ ...config, patientCaseId: selectedId, action: 'amendments', payload: { ...payload, after_value: payload.after_value } }); await renderCrewIncidentDetail(); });
     if (!summary) { status.textContent = 'Select a patient case.'; return; }
 
     const createForm = document.querySelector("#createEncounterForm");
