@@ -121,7 +121,8 @@ export function createVtigerTransportFromEnv(env = process.env) {
     const externalKey = payload.vems_external_key;
     const module = payload.elementType ?? (method.includes("Assignment") ? "VEMSAssignments" : "HelpDesk");
     const esc = (value) => String(value ?? "").replaceAll("'", "''");
-    const query = `select id,${module === "VEMSAssignments" ? "vems_assignment_no" : "ticket_no"},vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
+    const numberField = module === "VEMSAssignments" ? "vems_assignment_no" : module === "VEMSVehicles" ? "vems_vehicle_no" : "ticket_no";
+    const query = `select id,${numberField},vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
     if (module === "VEMSAssignments" && !payload.vems_incident_remote_id) {
       const error = new Error("Vtiger incident linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
     }
@@ -145,6 +146,23 @@ export function createVtigerTransportFromEnv(env = process.env) {
       const created = await client.create(element, "VEMSAssignments");
       if (!created?.id) { const error = new Error("Vtiger assignment create response did not include a record ID"); error.code = "VTIGER_PROTOCOL_ERROR"; error.classification = error.code; throw error; }
       return { remote_id: created.id, remote_number: created.vems_assignment_no ?? null, external_key: externalKey, incident_remote_id: payload.vems_incident_remote_id, outcome: "created" };
+    }
+    if (method === "createVehicleMirror") {
+      const matches = await client.query(query);
+      if (matches.length > 1) { const error = new Error("Multiple Vtiger vehicle records match the external key"); error.code = "VTIGER_DUPLICATE_CONFLICT"; error.classification = error.code; throw error; }
+      if (matches.length === 1) return { remote_id: matches[0].id, remote_number: matches[0].vems_vehicle_no ?? null, external_key: externalKey, outcome: "existing" };
+      const element = { ...payload }; delete element.elementType; delete element.vehicle_id;
+      const created = await client.create(element, "VEMSVehicles");
+      if (!created?.id) { const error = new Error("Vtiger vehicle create response did not include a record ID"); error.code = "VTIGER_PROTOCOL_ERROR"; error.classification = error.code; throw error; }
+      return { remote_id: created.id, remote_number: created.vems_vehicle_no ?? null, external_key: externalKey, outcome: "created" };
+    }
+    if (method === "updateVehicleMirror") {
+      const remoteId = payload.id;
+      if (!remoteId) { const error = new Error("Vtiger vehicle update requires a remote record ID"); error.code = "VTIGER_REMOTE_NOT_FOUND"; error.classification = error.code; throw error; }
+      const current = await client.retrieve(remoteId, "VEMSVehicles");
+      const merged = { ...current, ...payload, id: remoteId }; delete merged.elementType; delete merged.vehicle_id;
+      const updated = await client.update(merged, "VEMSVehicles");
+      return { remote_id: updated?.id ?? remoteId, remote_number: updated?.vems_vehicle_no ?? current.vems_vehicle_no ?? null, external_key: externalKey, outcome: "updated" };
     }
     if (method === "updateAssignmentMirror") {
       const remoteId = payload.id;

@@ -45,6 +45,14 @@ export class VtigerAdapterClient {
     return this.invoke("updateAssignmentMirror", assignment?.vems_assignment_id ? assignment : this.mapper.mapAssignmentUpdate(assignment));
   }
 
+  createVehicleMirror(vehicle) {
+    return this.invoke("createVehicleMirror", vehicle?.vems_vehicle_id ? vehicle : this.mapper.mapVehicleCreate(vehicle));
+  }
+
+  updateVehicleMirror(vehicle) {
+    return this.invoke("updateVehicleMirror", vehicle?.vems_vehicle_id ? vehicle : this.mapper.mapVehicleUpdate(vehicle));
+  }
+
   recordStockUsageMirror(stockUsage) {
     return this.invoke("recordStockUsageMirror", this.mapper.mapStockUsageRecord(stockUsage));
   }

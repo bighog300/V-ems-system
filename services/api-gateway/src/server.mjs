@@ -8,6 +8,8 @@ import { RBAC_POLICIES } from "./authorization-policy.mjs";
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
 const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Treatment In Progress", "Ready for Handover", "Handover Completed", "Closed", "Cancelled"];
+const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
+const VEHICLE_SERVICE_STATUSES = ["Serviceable", "Out of Service", "Maintenance", "Offline/Unknown"];
 const DEFAULT_JSON_BODY_MAX_BYTES = 1024 * 1024;
 
 
@@ -301,6 +303,30 @@ function validateCreateAssignment(payload) {
   if (!Array.isArray(payload.crew_ids) || payload.crew_ids.length === 0) throw new ApiError("INVALID_PAYLOAD", "crew_ids required", 400);
   if (!payload.crew_ids.every((id) => /^STAFF-[0-9]{3,}$/.test(id))) throw new ApiError("INVALID_PAYLOAD", "Invalid crew_ids format", 400);
   if (!payload.reason || typeof payload.reason !== "string") throw new ApiError("INVALID_PAYLOAD", "reason is required", 400);
+}
+
+function validateCreateVehicle(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Vehicle payload is required", 400);
+  const allowed = new Set(["vehicle_id", "callsign", "vehicle_type", "operational_status", "service_status", "home_station", "notes"]);
+  const unknown = Object.keys(payload).filter((field) => !allowed.has(field));
+  if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown vehicle fields: ${unknown.join(", ")}`, 400);
+  if (!/^AMB-[0-9]{3,}$/.test(payload.vehicle_id)) throw new ApiError("INVALID_PAYLOAD", "Invalid vehicle_id", 400);
+  for (const field of ["callsign", "vehicle_type", "home_station"]) if (typeof payload[field] !== "string" || !payload[field].trim()) throw new ApiError("INVALID_PAYLOAD", `${field} is required`, 400);
+  if (payload.operational_status !== undefined && !VEHICLE_OPERATIONAL_STATUSES.includes(payload.operational_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
+  if (payload.service_status !== undefined && !VEHICLE_SERVICE_STATUSES.includes(payload.service_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid service_status", 400);
+  if (payload.notes !== undefined && typeof payload.notes !== "string") throw new ApiError("INVALID_PAYLOAD", "notes must be a string", 400);
+}
+
+function validateUpdateVehicle(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Vehicle update payload is required", 400);
+  const allowed = new Set(["callsign", "vehicle_type", "operational_status", "service_status", "home_station", "notes"]);
+  const unknown = Object.keys(payload).filter((field) => !allowed.has(field));
+  if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown vehicle fields: ${unknown.join(", ")}`, 400);
+  if (Object.keys(payload).length === 0) throw new ApiError("INVALID_PAYLOAD", "At least one vehicle field is required", 400);
+  for (const field of ["callsign", "vehicle_type", "home_station"]) if (payload[field] !== undefined && (typeof payload[field] !== "string" || !payload[field].trim())) throw new ApiError("INVALID_PAYLOAD", `${field} must be a non-empty string`, 400);
+  if (payload.operational_status !== undefined && !VEHICLE_OPERATIONAL_STATUSES.includes(payload.operational_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
+  if (payload.service_status !== undefined && !VEHICLE_SERVICE_STATUSES.includes(payload.service_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid service_status", 400);
+  if (payload.notes !== undefined && typeof payload.notes !== "string") throw new ApiError("INVALID_PAYLOAD", "notes must be a string", 400);
 }
 
 function validateAction(payload) {
@@ -629,6 +655,22 @@ export function createApp(orchestration = new OrchestrationService()) {
         validatePatientCreate(payload);
         const patient = await orchestration.createPatient(payload, { correlationId: context.correlationId, idempotencyKey });
         return okJson(res, 201, patient, context);
+      }
+
+      if (method === "GET" && url.pathname === "/api/vehicles") {
+        return okJson(res, 200, { vehicles: orchestration.listVehicles() }, context);
+      }
+      if (method === "POST" && url.pathname === "/api/vehicles") {
+        const payload = await parseJson(req);
+        validateCreateVehicle(payload);
+        return okJson(res, 201, orchestration.createVehicle(payload, { correlationId: context.correlationId, idempotencyKey }), context);
+      }
+      const vehicleMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})$/);
+      if (vehicleMatch && method === "GET") return okJson(res, 200, orchestration.getVehicle(vehicleMatch[1]), context);
+      if (vehicleMatch && method === "PATCH") {
+        const payload = await parseJson(req);
+        validateUpdateVehicle(payload);
+        return okJson(res, 200, orchestration.updateVehicle(vehicleMatch[1], payload, { correlationId: context.correlationId }), context);
       }
 
       const incidentMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})$/);

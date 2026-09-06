@@ -5,6 +5,7 @@ import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv } from "./a
 import { VtigerAdapterClient } from "./adapters/vtiger/vtiger-adapter-client.mjs";
 import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
 import { AssignmentVtigerLinkRepository } from "./repositories/assignment-vtiger-link-repository.mjs";
+import { VehicleVtigerLinkRepository } from "./repositories/vehicle-vtiger-link-repository.mjs";
 
 function parsePositiveInt(value, fallback) {
   if (value === undefined) return fallback;
@@ -52,6 +53,7 @@ export async function runSyncWorkerService(options = {}) {
   const syncIntents = options.syncIntents ?? new SyncIntentRepository(db);
   const vtigerLinks = options.vtigerLinks ?? new VtigerLinkRepository(db);
   const assignmentLinks = options.assignmentLinks ?? new AssignmentVtigerLinkRepository(db);
+  const vehicleLinks = options.vehicleLinks ?? new VehicleVtigerLinkRepository(db);
   const transport = options.transport ?? unsupportedTransport;
   const openemrTransport = options.openemrTransport ?? createOpenEmrTransportFromEnv() ?? transport;
   const vtigerTransport = options.vtigerTransport ?? createVtigerTransportFromEnv() ?? transport;
@@ -61,6 +63,8 @@ export async function runSyncWorkerService(options = {}) {
     createIncidentMirror: (...args) => vtiger.createIncidentMirror(...args),
     updateIncidentMirror: (...args) => vtiger.updateIncidentMirror(...args),
     recordStockUsageMirror: (...args) => vtiger.recordStockUsageMirror(...args),
+    createVehicleMirror: (...args) => vtiger.createVehicleMirror(...args),
+    updateVehicleMirror: (...args) => vtiger.updateVehicleMirror(...args),
     async createAssignmentMirror(payload) {
       const incident = vtigerLinks.findByIncidentId(payload.incident_id);
       if (!incident?.remote_id || incident.sync_status !== "succeeded") {
@@ -70,7 +74,11 @@ export async function runSyncWorkerService(options = {}) {
         error.retryable = true;
         throw error;
       }
-      return vtiger.createAssignmentMirror({ ...payload, incident_remote_id: incident.remote_id, vems_incident_remote_id: incident.remote_id, incident_ref: incident.remote_id });
+      const vehicle = vehicleLinks.findByVehicleId(payload.vems_vehicle_id);
+      if (!vehicle?.remote_id || vehicle.sync_status !== "succeeded") {
+        const error = new Error("Vehicle Vtiger linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
+      }
+      return vtiger.createAssignmentMirror({ ...payload, incident_remote_id: incident.remote_id, vems_incident_remote_id: incident.remote_id, incident_ref: incident.remote_id, vehicle_ref: vehicle.remote_id });
     },
     async updateAssignmentMirror(payload) {
       const link = assignmentLinks.findByAssignmentId(payload.assignment_id);
@@ -80,7 +88,8 @@ export async function runSyncWorkerService(options = {}) {
         error.classification = error.code;
         throw error;
       }
-      return vtiger.updateAssignmentMirror({ ...payload, remote_id: link.remote_id, incident_remote_id: link.incident_remote_id, vems_incident_remote_id: link.incident_remote_id });
+      const vehicle = vehicleLinks.findByVehicleId(payload.vems_vehicle_id);
+      return vtiger.updateAssignmentMirror({ ...payload, remote_id: link.remote_id, incident_remote_id: link.incident_remote_id, vems_incident_remote_id: link.incident_remote_id, vehicle_ref: vehicle?.remote_id ?? null });
     }
   };
   const worker = options.worker ?? new SyncWorker({
@@ -103,6 +112,14 @@ export async function runSyncWorkerService(options = {}) {
         const current = assignmentLinks.findByAssignmentId(intent.payload.assignment_id);
         db.withTransaction(() => {
           assignmentLinks.upsert({ assignment_id: intent.payload.assignment_id, incident_id: intent.payload.incident_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:assignment:${intent.payload.assignment_id}`, incident_remote_id: result.incident_remote_id ?? intent.payload.vems_incident_remote_id ?? current?.incident_remote_id, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
+          syncIntents.markSucceeded(intent.intent_id, now);
+        });
+        return true;
+      }
+      if (intent.entity_type === "vehicle") {
+        const current = vehicleLinks.findByVehicleId(intent.payload.vehicle_id);
+        db.withTransaction(() => {
+          vehicleLinks.upsert({ vehicle_id: intent.payload.vehicle_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:vehicle:${intent.payload.vehicle_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
           syncIntents.markSucceeded(intent.intent_id, now);
         });
         return true;
@@ -131,6 +148,10 @@ export async function runSyncWorkerService(options = {}) {
       if (intent.target_system !== "vtiger") return;
       if (intent.entity_type === "assignment") {
         assignmentLinks.markFailure(intent.payload.assignment_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
+        return;
+      }
+      if (intent.entity_type === "vehicle") {
+        vehicleLinks.markFailure(intent.payload.vehicle_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
         return;
       }
       if (intent.entity_type !== "incident") return;

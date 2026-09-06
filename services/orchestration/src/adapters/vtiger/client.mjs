@@ -12,10 +12,15 @@ export function createVtigerWebserviceClient(env = process.env, options = {}) {
       const missing = required.filter((name) => !names.has(name));
       if (missing.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `HelpDesk schema missing ${missing.join(",")}`, { operation: "describe" });
       const assignment = await auth.call("describe", { elementType: "VEMSAssignments" });
-      const assignmentRequired = ["vems_assignment_id", "vems_external_key", "vems_incident_id", "vems_incident_remote_id", "incident_ref", "vems_vehicle_id", "vems_crew_ids", "vems_status", "vems_vehicle_status", "vems_reason", "vems_correlation_id", "vems_last_correlation_id", "vems_created_at_utc", "vems_updated_at_utc", "assigned_user_id"];
+      const assignmentRequired = ["vems_assignment_id", "vems_external_key", "vems_incident_id", "vems_incident_remote_id", "incident_ref", "vehicle_ref", "vems_vehicle_id", "vems_crew_ids", "vems_status", "vems_vehicle_status", "vems_reason", "vems_correlation_id", "vems_last_correlation_id", "vems_created_at_utc", "vems_updated_at_utc", "assigned_user_id"];
       const assignmentNames = new Set(assignment.fields?.map((field) => field.name));
       const assignmentMissing = assignmentRequired.filter((name) => !assignmentNames.has(name));
       if (assignmentMissing.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `VEMSAssignments schema missing ${assignmentMissing.join(",")}`, { operation: "describe" });
+      const vehicle = await auth.call("describe", { elementType: "VEMSVehicles" });
+      const vehicleRequired = ["vems_vehicle_id", "vems_external_key", "vems_callsign", "vems_operational_status", "vems_service_status", "vems_vehicle_type", "vems_home_station", "vems_correlation_id", "vems_last_correlation_id", "vems_created_at_utc", "vems_updated_at_utc", "assigned_user_id"];
+      const vehicleNames = new Set(vehicle.fields?.map((field) => field.name));
+      const vehicleMissing = vehicleRequired.filter((name) => !vehicleNames.has(name));
+      if (vehicleMissing.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `VEMSVehicles schema missing ${vehicleMissing.join(",")}`, { operation: "describe" });
       return { reachable: true, authenticated: true, schemaReady: true, vtigerVersion: undefined };
     },
     async query(query) { return auth.call("query", { query }); },

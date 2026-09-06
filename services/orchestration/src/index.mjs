@@ -14,8 +14,12 @@ import { PatientLinkRepository } from "./repositories/patient-link-repository.mj
 import { EncounterLinkRepository } from "./repositories/encounter-link-repository.mjs";
 import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
 import { AssignmentVtigerLinkRepository } from "./repositories/assignment-vtiger-link-repository.mjs";
+import { VehicleRepository } from "./repositories/vehicle-repository.mjs";
+import { VehicleVtigerLinkRepository } from "./repositories/vehicle-vtiger-link-repository.mjs";
 
 const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
+const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
+const VEHICLE_SERVICE_STATUSES = ["Serviceable", "Out of Service", "Maintenance", "Offline/Unknown"];
 
 export class OrchestrationService {
   constructor(options = {}) {
@@ -30,6 +34,8 @@ export class OrchestrationService {
     this.encounterLinks = new EncounterLinkRepository(this.db);
     this.vtigerLinks = new VtigerLinkRepository(this.db);
     this.assignmentVtigerLinks = new AssignmentVtigerLinkRepository(this.db);
+    this.vehicles = new VehicleRepository(this.db);
+    this.vehicleVtigerLinks = new VehicleVtigerLinkRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
@@ -58,13 +64,6 @@ export class OrchestrationService {
       }
     }
     return this.db.withTransaction(() => {
-      if (meta.idempotencyKey) {
-        const existing = this.idempotency.get("assignment", meta.idempotencyKey);
-        if (existing) {
-          if (existing.request_fingerprint && existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
-          return this.getAssignment(existing.resource_id);
-        }
-      }
       const now = new Date().toISOString();
       const callId = this.incidents.nextCallId();
       const incidentId = this.incidents.nextIncidentId();
@@ -172,6 +171,10 @@ export class OrchestrationService {
 
   createAssignment(incidentId, payload, meta) {
     this.getIncident(incidentId);
+    const vehicleMasterActive = this.vehicles.list().length > 0;
+    const vehicle = this.vehicles.findById(payload.vehicle_id);
+    if (vehicleMasterActive && !vehicle) throw new ApiError("CONFLICT", `Vehicle ${payload.vehicle_id} is not registered`, 409);
+    if (vehicle && (vehicle.operational_status !== "Available" || vehicle.service_status !== "Serviceable")) throw new ApiError("CONFLICT", `Vehicle ${payload.vehicle_id} is not assignable`, 409);
     const normalized = { vehicle_id: payload.vehicle_id, crew_ids: [...new Set(payload.crew_ids)].sort(), reason: payload.reason };
     const fingerprint = JSON.stringify(normalized);
     if (meta.idempotencyKey) {
@@ -182,6 +185,14 @@ export class OrchestrationService {
       }
     }
     return this.db.withTransaction(() => {
+      if (meta.idempotencyKey) {
+        const existing = this.idempotency.get("assignment", meta.idempotencyKey);
+        if (existing) {
+          if (existing.request_fingerprint && existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
+          return this.getAssignment(existing.resource_id);
+        }
+      }
+      if (vehicle && this.vehicles.countActiveAssignments(vehicle.vehicle_id) > 0) throw new ApiError("CONFLICT", `Vehicle ${vehicle.vehicle_id} already has an active assignment`, 409);
       const now = new Date().toISOString();
       const assignmentId = this.assignments.nextAssignmentId();
       const record = { assignment_id: assignmentId, incident_id: incidentId, status: "Proposed", vehicle_status: "Assigned", ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
@@ -193,6 +204,70 @@ export class OrchestrationService {
       if (meta.idempotencyKey) this.idempotency.save("assignment", meta.idempotencyKey, assignmentId, now, fingerprint);
       return record;
     });
+  }
+
+  createVehicle(payload, meta) {
+    if (!/^AMB-[0-9]{3,}$/.test(payload.vehicle_id)) throw new ApiError("INVALID_PAYLOAD", "Invalid vehicle_id", 400);
+    if (!VEHICLE_OPERATIONAL_STATUSES.includes(payload.operational_status ?? "Available")) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
+    if (!VEHICLE_SERVICE_STATUSES.includes(payload.service_status ?? "Serviceable")) throw new ApiError("INVALID_PAYLOAD", "Invalid service_status", 400);
+    const normalized = { vehicle_id: payload.vehicle_id, callsign: payload.callsign, vehicle_type: payload.vehicle_type, operational_status: payload.operational_status ?? "Available", service_status: payload.service_status ?? "Serviceable", home_station: payload.home_station, notes: payload.notes ?? null };
+    const fingerprint = JSON.stringify(normalized);
+    if (meta.idempotencyKey) {
+      const existing = this.idempotency.get("vehicle", meta.idempotencyKey);
+      if (existing) {
+        if (existing.request_fingerprint && existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
+        return this.getVehicle(existing.resource_id);
+      }
+    }
+    return this.db.withTransaction(() => {
+      if (meta.idempotencyKey) {
+        const existing = this.idempotency.get("vehicle", meta.idempotencyKey);
+        if (existing) {
+          if (existing.request_fingerprint && existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
+          return this.getVehicle(existing.resource_id);
+        }
+      }
+      const conflict = this.vehicles.findById(normalized.vehicle_id);
+      if (conflict) {
+        if (JSON.stringify({ callsign: conflict.callsign, vehicle_type: conflict.vehicle_type, operational_status: conflict.operational_status, service_status: conflict.service_status, home_station: conflict.home_station, notes: conflict.notes }) === JSON.stringify({ callsign: normalized.callsign, vehicle_type: normalized.vehicle_type, operational_status: normalized.operational_status, service_status: normalized.service_status, home_station: normalized.home_station, notes: normalized.notes })) return this.getVehicle(normalized.vehicle_id);
+        throw new ApiError("CONFLICT", `Vehicle ${normalized.vehicle_id} already exists with a different definition`, 409);
+      }
+      const now = new Date().toISOString();
+      const record = { ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
+      this.vehicles.create(record);
+      this.audit("vehicle", record.vehicle_id, "create_vehicle", meta.correlationId, undefined, record);
+      this.event("VehicleCreated", meta.correlationId, { vehicle_id: record.vehicle_id, operational_status: record.operational_status, service_status: record.service_status });
+      this.syncIntent("vehicle", "createVehicleMirror", meta.correlationId, this.vtigerMapper.mapVehicleCreate(record));
+      this.vehicleVtigerLinks.upsert({ vehicle_id: record.vehicle_id, external_key: `${this.vtigerMapper.sourceNamespace}:vehicle:${record.vehicle_id}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, created_at: now, updated_at: now });
+      if (meta.idempotencyKey) this.idempotency.save("vehicle", meta.idempotencyKey, record.vehicle_id, now, fingerprint);
+      return record;
+    });
+  }
+
+  getVehicle(vehicleId) {
+    const vehicle = this.vehicles.findById(vehicleId);
+    if (!vehicle) throw new ApiError("NOT_FOUND", `Vehicle ${vehicleId} not found`, 404);
+    const link = this.vehicleVtigerLinks.findByVehicleId(vehicleId);
+    const intent = this.syncIntents.listAll().filter((item) => item.entity_type === "vehicle" && item.payload?.vehicle_id === vehicleId).at(-1);
+    return { ...vehicle, vtiger: { record_id: link?.remote_id ?? null, record_number: link?.remote_number ?? null, external_key: link?.external_key ?? `${this.vtigerMapper.sourceNamespace}:vehicle:${vehicleId}`, sync_status: link?.sync_status ?? intent?.status ?? "pending", attempt_count: intent?.attempt_count ?? 0, last_error_code: link?.last_error_code ?? intent?.last_error_classification ?? null, last_synced_at: link?.last_synced_at ?? null } };
+  }
+
+  listVehicles() { return this.vehicles.list().map((vehicle) => this.getVehicle(vehicle.vehicle_id)); }
+
+  updateVehicle(vehicleId, payload, meta) {
+    if (payload.vehicle_id !== undefined) throw new ApiError("INVALID_PAYLOAD", "vehicle_id is immutable", 400);
+    if (payload.operational_status !== undefined && !VEHICLE_OPERATIONAL_STATUSES.includes(payload.operational_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
+    if (payload.service_status !== undefined && !VEHICLE_SERVICE_STATUSES.includes(payload.service_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid service_status", 400);
+    const current = this.vehicles.findById(vehicleId);
+    if (!current) throw new ApiError("NOT_FOUND", `Vehicle ${vehicleId} not found`, 404);
+    const updated = { ...current, ...payload, vehicle_id: vehicleId, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
+    if (payload.operational_status && payload.operational_status !== current.operational_status && this.vehicles.countActiveAssignments(vehicleId) > 0 && payload.operational_status === "Available") throw new ApiError("CONFLICT", `Vehicle ${vehicleId} has active assignments`, 409);
+    this.vehicles.update(updated);
+    this.audit("vehicle", vehicleId, payload.operational_status || payload.service_status ? "vehicle_status_change" : "update_vehicle", meta.correlationId, current, updated);
+    this.event(payload.operational_status || payload.service_status ? "VehicleStatusChanged" : "VehicleUpdated", meta.correlationId, { vehicle_id: vehicleId, operational_status: updated.operational_status, service_status: updated.service_status });
+    const link = this.vehicleVtigerLinks.findByVehicleId(vehicleId);
+    this.syncIntent("vehicle", "updateVehicleMirror", meta.correlationId, { ...this.vtigerMapper.mapVehicleUpdate({ ...updated, remote_id: link?.remote_id }), vehicle_id: vehicleId });
+    return this.getVehicle(vehicleId);
   }
 
   getAssignment(assignmentId) {

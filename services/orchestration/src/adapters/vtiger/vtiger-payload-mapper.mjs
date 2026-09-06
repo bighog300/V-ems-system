@@ -54,6 +54,7 @@ export class VtigerPayloadMapper {
       vems_incident_id: assignment.incident_id,
       vems_incident_remote_id: assignment.incident_remote_id,
       incident_ref: assignment.incident_remote_id,
+      vehicle_ref: assignment.vehicle_ref ?? assignment.vehicle_remote_id ?? null,
       vems_vehicle_id: assignment.vehicle_id,
       vems_crew_ids: crewIds,
       vems_status: assignment.status,
@@ -74,8 +75,37 @@ export class VtigerPayloadMapper {
     const mapped = this.mapAssignmentCreate(assignment);
     delete mapped.elementType;
     mapped.vems_last_correlation_id = assignment.correlation_id;
+    mapped.vehicle_ref = assignment.vehicle_ref ?? assignment.vehicle_remote_id ?? null;
     mapped.status = assignment.status;
     return { ...mapped, id: assignment.remote_id ?? assignment.vtiger?.record_id };
+  }
+
+  mapVehicleCreate(vehicle) {
+    return {
+      elementType: "VEMSVehicles",
+      vems_vehicle_id: vehicle.vehicle_id,
+      vems_external_key: vehicle.external_key ?? `${this.sourceNamespace}:vehicle:${vehicle.vehicle_id}`,
+      vems_callsign: vehicle.callsign,
+      vems_operational_status: vehicle.operational_status,
+      vems_service_status: vehicle.service_status,
+      vems_vehicle_type: vehicle.vehicle_type,
+      vems_home_station: vehicle.home_station,
+      vems_notes: vehicle.notes ?? "",
+      vems_correlation_id: vehicle.correlation_id,
+      vems_last_correlation_id: vehicle.correlation_id,
+      vems_created_at_utc: vehicle.created_at,
+      vems_updated_at_utc: vehicle.updated_at,
+      assigned_user_id: vehicle.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID,
+      vehicle_id: vehicle.vehicle_id
+    };
+  }
+
+  mapVehicleUpdate(vehicle) {
+    const mapped = this.mapVehicleCreate(vehicle);
+    delete mapped.elementType;
+    mapped.vems_last_correlation_id = vehicle.correlation_id;
+    mapped.id = vehicle.remote_id ?? vehicle.vtiger?.record_id;
+    return mapped;
   }
 
   mapStockUsageRecord(stockUsage) {
