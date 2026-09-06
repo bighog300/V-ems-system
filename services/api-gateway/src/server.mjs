@@ -764,6 +764,28 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
 
+      const epcrMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})\/(readiness|lifecycle|complete|versions|signatures|submit|amendments|review|reviews|qa-flags|summary)(?:\/([^/]+))?$/);
+      if (epcrMatch) {
+        const patientCaseId = epcrMatch[1], action = epcrMatch[2], childId = epcrMatch[3];
+        const meta = { correlationId: context.correlationId, actorId: context.actorId, actorRole: context.role, idempotencyKey };
+        if (method === "GET" && action === "readiness") return okJson(res, 200, orchestration.getEpcrReadiness(patientCaseId), context);
+        if (method === "GET" && action === "lifecycle") return okJson(res, 200, orchestration.getEpcrLifecycle(patientCaseId), context);
+        if (method === "GET" && action === "versions") return okJson(res, 200, childId ? orchestration.getEpcrVersion(patientCaseId, childId) : orchestration.listEpcrVersions(patientCaseId), context);
+        if (method === "POST" && action === "versions") return okJson(res, 201, orchestration.createEpcrVersion(patientCaseId, await parseJson(req), meta), context);
+        if (method === "POST" && action === "complete") return okJson(res, 200, orchestration.completeEpcr(patientCaseId, meta), context);
+        if (method === "GET" && action === "signatures") return okJson(res, 200, orchestration.getEpcrSignatures(patientCaseId), context);
+        if (method === "POST" && action === "signatures") return okJson(res, 201, orchestration.signEpcr(patientCaseId, await parseJson(req), meta), context);
+        if (method === "POST" && action === "submit") return okJson(res, 200, orchestration.submitEpcr(patientCaseId, meta), context);
+        if (method === "GET" && action === "amendments") return okJson(res, 200, orchestration.listEpcrAmendments(patientCaseId), context);
+        if (method === "POST" && action === "amendments") return okJson(res, 201, orchestration.createEpcrAmendment(patientCaseId, await parseJson(req), meta), context);
+        if (method === "GET" && action === "reviews") return okJson(res, 200, orchestration.listEpcrReviews(patientCaseId), context);
+        if (method === "POST" && action === "review") return okJson(res, 200, orchestration.reviewEpcr(patientCaseId, await parseJson(req), meta), context);
+        if (method === "GET" && action === "qa-flags") return okJson(res, 200, orchestration.listEpcrQaFlags(patientCaseId), context);
+        if (method === "POST" && action === "qa-flags") return okJson(res, 201, orchestration.createEpcrQaFlag(patientCaseId, await parseJson(req), meta), context);
+        if (method === "PATCH" && action === "qa-flags" && childId) return okJson(res, 200, orchestration.updateEpcrQaFlag(patientCaseId, childId, await parseJson(req), meta), context);
+        if (method === "GET" && action === "summary") return okJson(res, 200, orchestration.getEpcrSummary(patientCaseId), context);
+      }
+
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
       const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline))?$/);
       if (caseListMatch || caseMatch) {
@@ -773,7 +795,7 @@ export function createApp(orchestration = new OrchestrationService()) {
           const assigned = orchestration.assignments.findActiveByIncident(incidentId).some(a => a.crew_ids.includes(context.actorId));
           if (!assigned) throw new ApiError('FORBIDDEN', 'Crew member must be assigned to this incident', 403);
         }
-        const meta = { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey };
+        const meta = { correlationId: context.correlationId, actorId: context.actorId, actorRole: context.role, idempotencyKey };
         if (caseListMatch && method === 'GET') return okJson(res, 200, { patient_cases: orchestration.listPatientCases(incidentId) }, context);
         if (caseListMatch && method === 'POST') return okJson(res, 201, orchestration.createPatientCase(incidentId, await parseJson(req), meta), context);
         const action = caseMatch?.[2];
@@ -912,7 +934,7 @@ export function createApp(orchestration = new OrchestrationService()) {
           error_code: error.code,
           error_message: error.message
         });
-        return okJson(res, error.status, errorEnvelope(error.code, error.message, error.retryable, context), context);
+        return okJson(res, error.status, errorEnvelope(error.code, error.message, error.retryable, context, error.details), context);
       }
 
       logger.error("request_failed_unhandled", {

@@ -122,6 +122,12 @@ export async function savePatientCaseDemographics({ apiBaseUrl, patientCaseId, p
 export async function createPatientCaseClinicalRecord({ apiBaseUrl, patientCaseId, section, payload, fetchImpl = fetch, ...config }) {
   return postJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/${section}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
 }
+export async function getEpcrSummary({ apiBaseUrl, patientCaseId, fetchImpl = fetch, ...config }) {
+  return (await getJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/summary`, config)).data;
+}
+export async function epcrAction({ apiBaseUrl, patientCaseId, action, payload = {}, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/${action}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
+}
 export async function patientIdentityWrite({ apiBaseUrl, action, payload, fetchImpl = fetch, ...config }) {
   return postJson(fetchImpl, `${apiBaseUrl}/api/patients${action === 'search' ? '/search' : ''}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
 }

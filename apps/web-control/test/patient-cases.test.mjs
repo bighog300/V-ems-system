@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { renderPatientCasesPanel } from '../src/crew.mjs';
+import { renderPatientCasesPanel, renderEpcrFinalizationPanel } from '../src/crew.mjs';
 import { loadPatientCaseData, patientCaseWrite } from '../src/api.mjs';
 
 test('patient case panel displays independent context and escapes temporary labels', () => {
@@ -25,4 +25,13 @@ test('switching case reads only selected patient clinical chain and writes to ca
   assert.ok(urls.filter(url => url.includes('/encounters/')).every(url => url.includes('selected-encounter')));
   await patientCaseWrite({ apiBaseUrl: 'http://test', patientCaseId: 'PCR-000002', action: 'encounters', payload: {}, fetchImpl });
   assert.equal(urls.at(-1), 'http://test/api/patient-cases/PCR-000002/encounters');
+});
+
+test('Stage 8 ePCR panel exposes readiness, lifecycle, hash, review, QA and amendment controls', () => {
+  const html = renderEpcrFinalizationPanel({
+    readiness: { ready: false, missing: [{ message: 'Assessment required' }], warnings: [] },
+    lifecycle: { current_state: 'submitted' },
+    final_version: { version_id: 'EPV-1', hash_algorithm: 'sha256', hash: 'abc123' }
+  }, 'PCR-000002');
+  for (const marker of ['Assessment required', 'submitted', 'sha256:abc123', 'epcrSignatureForm', 'epcrReviewForm', 'epcrFlagForm', 'epcrAmendmentForm']) assert.ok(html.includes(marker));
 });
