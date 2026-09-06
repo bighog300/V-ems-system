@@ -107,3 +107,5 @@ UTC fixture tests explicitly configure their test process timezone. Isolated
 regression processes cover UTC, Europe/London (winter, summer, and transitions),
 America/New_York, and Asia/Kolkata, including UTC date rollover. These expectations
 are independent of the developer/CI host timezone; browser behavior is unchanged.
+
+Stage 6 introduces incident 1:N Patient Cases. See [Patient Case API, lifecycle and migration](docs/PATIENT_CASES.md) for case-scoped clinical routes, legacy compatibility and provisional identity reconciliation.

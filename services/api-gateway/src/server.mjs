@@ -763,6 +763,34 @@ export function createApp(orchestration = new OrchestrationService()) {
         return okJson(res, 200, incident, context);
       }
 
+
+      const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient))?$/);
+      if (caseListMatch || caseMatch) {
+        const id = caseMatch?.[1];
+        const incidentId = caseListMatch?.[1] ?? orchestration.getPatientCase(id).incident_id;
+        if (['field_crew','field_crew_lead'].includes(context.role)) {
+          const assigned = orchestration.assignments.findActiveByIncident(incidentId).some(a => a.crew_ids.includes(context.actorId));
+          if (!assigned) throw new ApiError('FORBIDDEN', 'Crew member must be assigned to this incident', 403);
+        }
+        const meta = { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey };
+        if (caseListMatch && method === 'GET') return okJson(res, 200, { patient_cases: orchestration.listPatientCases(incidentId) }, context);
+        if (caseListMatch && method === 'POST') return okJson(res, 201, orchestration.createPatientCase(incidentId, await parseJson(req), meta), context);
+        const action = caseMatch?.[2];
+        if (method === 'GET' && !action) return okJson(res, 200, orchestration.getPatientCase(id), context);
+        if (method === 'GET' && action === 'patient-link') return okJson(res, 200, orchestration.getPatientCasePatientLink(id), context);
+        if (method === 'GET' && action === 'encounter') return okJson(res, 200, orchestration.getPatientCaseEncounter(id), context);
+        if (method === 'POST' && action === 'patient-link') {
+          const payload = await parseJson(req); validatePatientLink(payload);
+          return okJson(res, 200, orchestration.linkPatientToPatientCase(id, payload, meta), context);
+        }
+        if (method === 'POST' && action === 'provisional-patient') return okJson(res, 201, await orchestration.createProvisionalPatientForCase(id, meta), context);
+        if (method === 'POST' && action === 'encounters') return okJson(res, 201, await orchestration.createEncounterForPatientCase(id, await parseJson(req), meta), context);
+        if (method === 'PATCH' && action === 'assignment') return okJson(res, 200, orchestration.changePatientCaseAssignment(id, await parseJson(req), meta), context);
+        if (method === 'PATCH' && action === 'status') return okJson(res, 200, orchestration.setPatientCaseStatus(id, (await parseJson(req)).status, meta), context);
+        if (method === 'POST' && action === 'identity-reconciliation') return okJson(res, 200, orchestration.reconcilePatientCaseIdentity(id, await parseJson(req), meta), context);
+      }
+
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
       if (patientLinkMatch && method === "GET") {
         const link = orchestration.getPatientLink(patientLinkMatch[1]);

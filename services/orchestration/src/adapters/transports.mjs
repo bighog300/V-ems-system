@@ -1,3 +1,5 @@
+import { PROVISIONAL_IDENTITY_LABEL, PROVISIONAL_IDENTITY_NOTE } from "../provisional-identity.mjs";
+
 const DEFAULT_TIMEOUT_MS = 5000;
 
 function createDownstreamError(target, method, status, bodyText = "") {
@@ -117,11 +119,11 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
         return { match_status: candidates.length === 1 ? "matched" : candidates.length > 1 ? "ambiguous" : "not_found", match_confidence: candidates.length === 1 ? 1 : 0, patient_id: candidates.length === 1 ? patientId(candidates[0]) : null, candidates };
       }
       if (method === "createPatient") {
-        const response = await call(method, "/patient", { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex, phone_contact: payload.phone });
+        const response = await call(method, "/patient", { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex, phone_contact: payload.phone, ...(payload.provisional_identity ? { genericname1: PROVISIONAL_IDENTITY_LABEL, genericval1: PROVISIONAL_IDENTITY_NOTE } : {}) });
         const data = standardData(response); return { patient_id: patientId(data), display_name: [data?.fname, data?.lname].filter(Boolean).join(" ") };
       }
       if (method === "createEncounter") {
-        const response = await call(method, `/patient/${patient}/encounter`, { date: payload.care_started_at, reason: payload.presenting_complaint ?? "EMS encounter", pc_catid: "5", class_code: "AMB", external_id: payload.incident_id });
+        const response = await call(method, `/patient/${patient}/encounter`, { date: payload.care_started_at, reason: payload.presenting_complaint ?? "EMS encounter", pc_catid: "5", class_code: "AMB", external_id: payload.patient_case_id ?? payload.incident_id });
         const data = standardData(response); return { encounter_id: data?.euuid ?? data?.uuid ?? data?.id ?? data?.eid ?? null, status: "Open" };
       }
       if (method === "createObservation") {

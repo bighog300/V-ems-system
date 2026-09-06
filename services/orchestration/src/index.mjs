@@ -1,3 +1,5 @@
+import { PatientCaseRepository } from './repositories/patient-case-repository.mjs';
+import { patientCaseMethods } from './patient-cases.mjs';
 import { randomUUID } from "node:crypto";
 import { ApiError, nextAssignmentStatus, nextIncidentStatus } from "@vems/shared";
 import { SqliteClient, sqlValue } from "./db.mjs";
@@ -42,6 +44,7 @@ export class OrchestrationService {
     this.events = new EventOutboxRepository(this.db);
     this.idempotency = new IdempotencyKeyRepository(this.db);
     this.syncIntents = new SyncIntentRepository(this.db);
+    this.patientCases = new PatientCaseRepository(this.db);
     this.patientLinks = new PatientLinkRepository(this.db);
     this.encounterLinks = new EncounterLinkRepository(this.db);
     this.vtigerLinks = new VtigerLinkRepository(this.db);
@@ -113,7 +116,7 @@ export class OrchestrationService {
     const incidents = this.incidents.listAll();
     return incidents.map((incident) => {
       const assignment = this.assignments.findByIncidentId(incident.incident_id)[0];
-      const encounter = this.encounterLinks.findByIncidentId(incident.incident_id);
+      const encounter = this.patientCases.list(incident.incident_id)[0];
 
       const summary = {
         incident_id: incident.incident_id,
@@ -124,7 +127,7 @@ export class OrchestrationService {
       };
 
       if (encounter) {
-        summary.closure_ready = Boolean(encounter.closure_ready);
+        summary.closure_ready = this.withClosureReadiness(incident).closure_ready;
       }
       if (assignment) {
         summary.assignment_summary = {
@@ -165,29 +168,17 @@ export class OrchestrationService {
       throw new ApiError("INVALID_STATUS_TRANSITION", "Incident cannot close while active assignments exist", 409);
     }
 
-    const encounter = this.encounterLinks.findByIncidentId(incidentId);
-    if (!encounter) return;
-
-    const hasClosureMetadata = Boolean(encounter.handover_time)
-      && Boolean(encounter.handover_status)
-      && Boolean(encounter.disposition)
-      && encounter.closure_ready === true;
-    if (!hasClosureMetadata) {
-      throw new ApiError(
-        "INVALID_STATUS_TRANSITION",
-        "Incident cannot close without persisted encounter handover/disposition closure metadata",
-        409
-      );
+    const cases = this.patientCases.list(incidentId);
+    if (cases.some(c => !this.getPatientCase(c.patient_case_id).closure_ready)) {
+      throw new ApiError("INVALID_STATUS_TRANSITION", "Incident cannot close without persisted encounter handover/disposition closure metadata", 409);
     }
   }
 
   withClosureReadiness(incident) {
-    const encounter = this.encounterLinks.findByIncidentId(incident.incident_id);
-    if (!encounter) return incident;
-    return {
-      ...incident,
-      closure_ready: Boolean(encounter.closure_ready)
-    };
+    const cases = this.patientCases.list(incident.incident_id);
+    if (!cases.length) return incident;
+    return { ...incident, closure_ready: this.assignments.findActiveByIncident(incident.incident_id).length === 0
+      && cases.every(c => this.getPatientCase(c.patient_case_id).closure_ready) };
   }
 
   createAssignment(incidentId, payload, meta) {
@@ -469,41 +460,13 @@ export class OrchestrationService {
   }
 
   linkPatientToIncidentContext(incidentId, payload, meta) {
-    this.getIncident(incidentId);
-
-    const now = new Date().toISOString();
-    const existing = this.patientLinks.findByIncidentId(incidentId);
-    const record = {
-      incident_id: incidentId,
-      openemr_patient_id: payload.openemr_patient_id ?? null,
-      temporary_label: payload.temporary_label ?? null,
-      verification_status: payload.verification_status,
-      created_at: existing?.created_at ?? now,
-      updated_at: now,
-      correlation_id: meta.correlationId
-    };
-
-    this.patientLinks.save(record);
-    this.audit("patient_link", incidentId, "link_patient_to_incident", meta.correlationId, existing, record);
-    this.event("PatientMatched", meta.correlationId, {
-      incident_id: incidentId,
-      patient_id: record.openemr_patient_id,
-      verification_status: record.verification_status
-    });
-    return record;
+    return this.linkPatientToPatientCase(this.resolveLegacyPatientCase(incidentId, true, meta), payload, meta);
   }
 
   getPatientLink(incidentId) {
     this.getIncident(incidentId);
-    const patientLink = this.patientLinks.findByIncidentId(incidentId);
-    if (!patientLink) throw new ApiError("NOT_FOUND", `Patient link for incident ${incidentId} not found`, 404);
-    return {
-      incident_id: patientLink.incident_id,
-      verification_status: patientLink.verification_status,
-      openemr_patient_id: patientLink.openemr_patient_id,
-      temporary_label: patientLink.temporary_label,
-      updated_at: patientLink.updated_at
-    };
+    if (!this.patientCases.list(incidentId).length) throw new ApiError('NOT_FOUND', `Patient link for incident ${incidentId} not found`, 404);
+    return this.getPatientCasePatientLink(this.resolveLegacyPatientCase(incidentId, false));
   }
 
   getAssignmentsByIncident(incidentId) {
@@ -529,87 +492,16 @@ export class OrchestrationService {
 
 
   async createEncounterForIncident(incidentId, payload, meta) {
-    if (meta.idempotencyKey) {
-      const existingEncounterId = this.idempotency.getResourceId("encounter", meta.idempotencyKey);
-      if (existingEncounterId) {
-        const existingByKey = this.encounterLinks.findByEncounterId(existingEncounterId);
-        if (existingByKey) {
-          return {
-            encounter_id: existingByKey.openemr_encounter_id,
-            status: existingByKey.encounter_status,
-            linked_incident_id: existingByKey.incident_id
-          };
-        }
-      }
-    }
-
     this.getIncident(incidentId);
-    const patientLink = this.patientLinks.findByIncidentId(incidentId);
-    if (!patientLink?.openemr_patient_id) {
-      throw new ApiError("CONFLICT", "Cannot create encounter without linked patient", 409);
-    }
-    if (!ENCOUNTER_ALLOWED_PATIENT_LINK_STATES.includes(patientLink.verification_status)) {
-      throw new ApiError(
-        "INVALID_STATUS_TRANSITION",
-        `Cannot create encounter when patient link is ${patientLink.verification_status}`,
-        409
-      );
-    }
-    if (payload.patient_id !== patientLink.openemr_patient_id) {
-      throw new ApiError("INVALID_PAYLOAD", "patient_id must match linked incident patient", 400);
-    }
-
-    const existing = this.encounterLinks.findByIncidentAndPatient(incidentId, payload.patient_id) ?? this.encounterLinks.findByIncidentId(incidentId);
-    if (existing) {
-      return {
-        encounter_id: existing.openemr_encounter_id,
-        status: existing.encounter_status,
-        linked_incident_id: existing.incident_id
-      };
-    }
-
-    const created = await this.openemr.createEncounter({ incident_id: incidentId, ...payload });
-    const now = new Date().toISOString();
-    const record = {
-      incident_id: incidentId,
-      openemr_patient_id: patientLink.openemr_patient_id,
-      openemr_encounter_id: created.encounter_id,
-      encounter_status: created.status,
-      care_started_at: payload.care_started_at,
-      created_at: now,
-      updated_at: now,
-      correlation_id: meta.correlationId
-    };
-
-    this.encounterLinks.save(record);
-    this.audit("encounter_link", incidentId, "create_encounter", meta.correlationId, undefined, record);
-    this.event("EncounterCreated", meta.correlationId, {
-      incident_id: incidentId,
-      encounter_id: record.openemr_encounter_id,
-      status: record.encounter_status
-    });
-
-    if (meta.idempotencyKey) this.idempotency.save("encounter", meta.idempotencyKey, record.openemr_encounter_id, now);
-
-    return {
-      encounter_id: record.openemr_encounter_id,
-      status: record.encounter_status,
-      linked_incident_id: incidentId
-    };
+    if (!this.patientCases.list(incidentId).length) throw new ApiError('CONFLICT', 'Cannot create encounter without linked patient', 409);
+    const record = await this.createEncounterForPatientCase(this.resolveLegacyPatientCase(incidentId, false), payload, { ...meta, legacy: true });
+    return { encounter_id: record.encounter_id, status: record.status, linked_incident_id: incidentId };
   }
 
   getEncounterByIncident(incidentId) {
-    this.getIncident(incidentId);
-    const record = this.encounterLinks.findByIncidentId(incidentId);
-    if (!record) throw new ApiError("NOT_FOUND", `Encounter for incident ${incidentId} not found`, 404);
-    return {
-      incident_id: record.incident_id,
-      openemr_encounter_id: record.openemr_encounter_id,
-      encounter_id: record.openemr_encounter_id,
-      openemr_patient_id: record.openemr_patient_id,
-      encounter_status: record.encounter_status,
-      care_started_at: record.care_started_at
-    };
+    const r = this.getPatientCaseEncounter(this.resolveLegacyPatientCase(incidentId, false));
+    return { incident_id: r.incident_id, openemr_encounter_id: r.openemr_encounter_id, encounter_id: r.encounter_id,
+      openemr_patient_id: r.openemr_patient_id, encounter_status: r.encounter_status, care_started_at: r.care_started_at };
   }
 
   async createObservationForEncounter(encounterId, payload, meta) {
@@ -617,10 +509,10 @@ export class OrchestrationService {
     if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
 
     const created = await this.openemr.createObservation({
+      ...payload,
       encounter_id: encounterId,
       incident_id: encounter.incident_id,
-      patient_id: encounter.openemr_patient_id,
-      ...payload
+      patient_id: encounter.openemr_patient_id
     });
 
     const normalized = {
@@ -629,11 +521,14 @@ export class OrchestrationService {
       status: created.status
     };
 
+    if (this.patientCases.find(encounter.patient_case_id)?.status === 'Encounter Open') this.setPatientCaseStatus(encounter.patient_case_id, 'Care In Progress', meta);
     this.audit("observation", normalized.observation_id, "create_observation", meta.correlationId, undefined, {
       ...normalized,
-      incident_id: encounter.incident_id
+      incident_id: encounter.incident_id,
+      patient_case_id: encounter.patient_case_id
     });
     this.event("ObservationCreated", meta.correlationId, {
+      patient_case_id: encounter.patient_case_id,
       incident_id: encounter.incident_id,
       encounter_id: normalized.encounter_id,
       observation_id: normalized.observation_id
@@ -655,10 +550,10 @@ export class OrchestrationService {
     }
 
     const created = await this.openemr.createIntervention({
+      ...payload,
       encounter_id: encounterId,
       incident_id: encounter.incident_id,
-      patient_id: encounter.openemr_patient_id,
-      ...payload
+      patient_id: encounter.openemr_patient_id
     });
 
     const normalized = {
@@ -667,17 +562,20 @@ export class OrchestrationService {
       status: created.status
     };
 
+    if (this.patientCases.find(encounter.patient_case_id)?.status === 'Encounter Open') this.setPatientCaseStatus(encounter.patient_case_id, 'Care In Progress', meta);
     this.audit("intervention", normalized.intervention_id, "create_intervention", meta.correlationId, undefined, {
       ...normalized,
-      incident_id: encounter.incident_id
+      incident_id: encounter.incident_id,
+      patient_case_id: encounter.patient_case_id
     });
     this.event("InterventionCreated", meta.correlationId, {
+      patient_case_id: encounter.patient_case_id,
       incident_id: encounter.incident_id,
       encounter_id: normalized.encounter_id,
       intervention_id: normalized.intervention_id
     });
 
-    if (payload.stock_item_id) this.recordClinicalStockUsage({ ...payload, intervention_id: normalized.intervention_id, incident_id: encounter.incident_id, encounter_id: normalized.encounter_id }, meta);
+    if (payload.stock_item_id) this.recordClinicalStockUsage({ ...payload, patient_case_id: encounter.patient_case_id, vehicle_id: this.getPatientCase(encounter.patient_case_id).vehicle_id ?? payload.vehicle_id, intervention_id: normalized.intervention_id, incident_id: encounter.incident_id, encounter_id: normalized.encounter_id }, meta);
 
     if (meta.idempotencyKey) this.idempotency.save("intervention", meta.idempotencyKey, normalized.intervention_id, new Date().toISOString(), fingerprint);
 
@@ -685,11 +583,11 @@ export class OrchestrationService {
   }
 
   recordClinicalStockUsage(payload, meta) {
-    const item = this.stockItems.findById(payload.stock_item_id); if (!item) { const legacy = { intervention_id: payload.intervention_id, incident_id: payload.incident_id, encounter_id: payload.encounter_id, stock_item_id: payload.stock_item_id, quantity_used: 1, usage_source: "clinical_event", performed_at: payload.performed_at, intervention_type: payload.type, intervention_name: payload.name }; this.syncIntent("stock_usage", "recordStockUsageMirror", meta.correlationId, legacy); return { discrepancy_status: "STOCK_ITEM_NOT_FOUND" }; }
+    const item = this.stockItems.findById(payload.stock_item_id); if (!item) { const legacy = { patient_case_id: payload.patient_case_id ?? null, intervention_id: payload.intervention_id, incident_id: payload.incident_id, encounter_id: payload.encounter_id, stock_item_id: payload.stock_item_id, quantity_used: 1, usage_source: "clinical_event", performed_at: payload.performed_at, intervention_type: payload.type, intervention_name: payload.name }; this.syncIntent("stock_usage", "recordStockUsageMirror", meta.correlationId, Object.fromEntries(Object.entries(legacy).filter(([key]) => key !== "patient_case_id"))); return { discrepancy_status: "STOCK_ITEM_NOT_FOUND" }; }
     const usageId = `SU-${payload.intervention_id}-${payload.stock_item_id}`; const existing=this.stockUsage.find(usageId); if(existing)return existing;
     const candidates = payload.vehicle_id ? [payload.vehicle_id] : [...new Set(this.assignments.findByIncidentId(payload.incident_id).filter((a)=>a.status!=="Cancelled"&&a.status!=="Stood Down").map((a)=>a.vehicle_id))];
     const vehicleId = candidates.length===1 ? candidates[0] : null; const qty=normalizeDecimal(payload.quantity_used??"1"); const now=new Date().toISOString();
-    return this.db.withTransaction(()=>{let discrepancy=vehicleId?null:"VEHICLE_SOURCE_UNRESOLVED";const loadout=vehicleId?this.vehicleStock.find(vehicleId,payload.stock_item_id):null;let next=loadout?.quantity_on_hand; if(vehicleId&&!loadout)discrepancy="LOADOUT_MISSING"; else if(vehicleId&&Number(qty)>Number(loadout.quantity_on_hand))discrepancy="INSUFFICIENT_STOCK"; else if(vehicleId){next=addDecimal(loadout.quantity_on_hand,`-${qty}`);this.vehicleStock.update({...loadout,quantity_on_hand:next,updated_at:now,correlation_id:meta.correlationId});this.db.execute(`INSERT INTO stock_transactions (transaction_id,vehicle_id,stock_item_id,transaction_type,quantity_delta,source_reference,reason,correlation_id,actor_id,created_at) VALUES (${sqlValue(`STX-${usageId}`)},${sqlValue(vehicleId)},${sqlValue(payload.stock_item_id)},'usage',${sqlValue(`-${qty}`)},${sqlValue(usageId)},${sqlValue("Clinical intervention")},${sqlValue(meta.correlationId)},${sqlValue(meta.actorId??null)},${sqlValue(now)});`);}const usage={stock_usage_id:usageId,intervention_id:payload.intervention_id,incident_id:payload.incident_id,encounter_id:payload.encounter_id??null,stock_item_id:payload.stock_item_id,vehicle_id:vehicleId,quantity_used:qty,usage_source:"clinical_event",performed_at:payload.performed_at,intervention_type:payload.type,correlation_id:meta.correlationId,discrepancy_status:discrepancy,created_at:now};this.stockUsage.create(usage);this.audit("stock_usage",usageId,"record_stock_usage",meta.correlationId,undefined,usage);this.event(discrepancy?"StockDiscrepancyRecorded":"StockUsageRecorded",meta.correlationId,{stock_usage_id:usageId,stock_item_id:payload.stock_item_id,vehicle_id:vehicleId,discrepancy_status:discrepancy});this.syncIntent("stock_usage","recordStockUsageMirror",meta.correlationId,this.vtigerMapper.mapStockUsageRecord(usage));this.stockUsageVtigerLinks.upsert({stock_usage_id:usageId,external_key:`${this.vtigerMapper.sourceNamespace}:stock-usage:${usageId}`,create_correlation_id:meta.correlationId,last_correlation_id:meta.correlationId,sync_status:"pending",last_error_code:null,last_synced_at:null,remote_id:null,remote_number:null,created_at:now,updated_at:now});return usage;});
+    return this.db.withTransaction(()=>{let discrepancy=vehicleId?null:"VEHICLE_SOURCE_UNRESOLVED";const loadout=vehicleId?this.vehicleStock.find(vehicleId,payload.stock_item_id):null;let next=loadout?.quantity_on_hand; if(vehicleId&&!loadout)discrepancy="LOADOUT_MISSING"; else if(vehicleId&&Number(qty)>Number(loadout.quantity_on_hand))discrepancy="INSUFFICIENT_STOCK"; else if(vehicleId){next=addDecimal(loadout.quantity_on_hand,`-${qty}`);this.vehicleStock.update({...loadout,quantity_on_hand:next,updated_at:now,correlation_id:meta.correlationId});this.db.execute(`INSERT INTO stock_transactions (transaction_id,vehicle_id,stock_item_id,transaction_type,quantity_delta,source_reference,reason,correlation_id,actor_id,created_at) VALUES (${sqlValue(`STX-${usageId}`)},${sqlValue(vehicleId)},${sqlValue(payload.stock_item_id)},'usage',${sqlValue(`-${qty}`)},${sqlValue(usageId)},${sqlValue("Clinical intervention")},${sqlValue(meta.correlationId)},${sqlValue(meta.actorId??null)},${sqlValue(now)});`);}const usage={stock_usage_id:usageId,intervention_id:payload.intervention_id,incident_id:payload.incident_id,patient_case_id:payload.patient_case_id??null,encounter_id:payload.encounter_id??null,stock_item_id:payload.stock_item_id,vehicle_id:vehicleId,quantity_used:qty,usage_source:"clinical_event",performed_at:payload.performed_at,intervention_type:payload.type,correlation_id:meta.correlationId,discrepancy_status:discrepancy,created_at:now};this.stockUsage.create(usage);this.audit("stock_usage",usageId,"record_stock_usage",meta.correlationId,undefined,usage);this.event(discrepancy?"StockDiscrepancyRecorded":"StockUsageRecorded",meta.correlationId,{patient_case_id:payload.patient_case_id??null,incident_id:payload.incident_id,stock_usage_id:usageId,stock_item_id:payload.stock_item_id,vehicle_id:vehicleId,discrepancy_status:discrepancy});this.syncIntent("stock_usage","recordStockUsageMirror",meta.correlationId,this.vtigerMapper.mapStockUsageRecord(Object.fromEntries(Object.entries(usage).filter(([key]) => key !== "patient_case_id"))));this.stockUsageVtigerLinks.upsert({stock_usage_id:usageId,external_key:`${this.vtigerMapper.sourceNamespace}:stock-usage:${usageId}`,create_correlation_id:meta.correlationId,last_correlation_id:meta.correlationId,sync_status:"pending",last_error_code:null,last_synced_at:null,remote_id:null,remote_number:null,created_at:now,updated_at:now});return usage;});
   }
 
   async getInterventionsForEncounter(encounterId) {
@@ -742,10 +640,10 @@ export class OrchestrationService {
     if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
 
     const created = await this.openemr.createHandover({
+      ...payload,
       encounter_id: encounterId,
       incident_id: encounter.incident_id,
-      patient_id: encounter.openemr_patient_id,
-      ...payload
+      patient_id: encounter.openemr_patient_id
     });
 
     const now = new Date().toISOString();
@@ -764,6 +662,7 @@ export class OrchestrationService {
       correlation_id: meta.correlationId
     };
     this.encounterLinks.save(updatedEncounter);
+    if (closureReady) this.setPatientCaseStatus(encounter.patient_case_id, "Handover Completed", meta);
 
     const normalized = {
       handover_id: created.handover_id,
@@ -775,9 +674,11 @@ export class OrchestrationService {
 
     this.audit("handover", normalized.handover_id, "create_handover", meta.correlationId, undefined, {
       ...normalized,
-      incident_id: encounter.incident_id
+      incident_id: encounter.incident_id,
+      patient_case_id: encounter.patient_case_id
     });
     this.event("HandoverCompleted", meta.correlationId, {
+      patient_case_id: encounter.patient_case_id,
       incident_id: encounter.incident_id,
       encounter_id: encounterId,
       handover_id: normalized.handover_id,
@@ -825,3 +726,5 @@ export class OrchestrationService {
     return this.syncIntents.listAll().find((intent) => intent.intent_id === Number(intentId)) ?? null;
   }
 }
+
+Object.assign(OrchestrationService.prototype, patientCaseMethods);

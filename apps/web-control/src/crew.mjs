@@ -684,3 +684,23 @@ export function renderCrewIncidentDetailHtml(summary, { includeActionPlaceholder
   `;
 }
 import { escapeHtml } from "./security.mjs";
+
+export function renderPatientCasesPanel(cases, selectedId) {
+  return `<section class="panel"><h2>Patient Cases</h2>
+    <form id="createPatientCaseForm"><label>Temporary label <input name="temporary_label" maxlength="120"></label>
+    <label>Assignment (required if multiple active assignments) <input name="assignment_id"></label>
+    <label>Lead clinician (optional) <input name="lead_clinician_id"></label><button type="submit">Create patient case</button></form>
+    ${cases.map(c => `<article><button type="button" data-patient-case="${escapeHtml(c.patient_case_id)}" ${c.patient_case_id === selectedId ? 'disabled' : ''}>Select ${escapeHtml(c.patient_case_id)}</button>
+    <p>Patient ${escapeHtml(c.patient_sequence)} · ${escapeHtml(c.temporary_label ?? c.openemr_patient_id ?? 'Identity pending')} · ${escapeHtml(c.verification_status)}</p>
+    <p>Assignment: ${escapeHtml(c.assignment_id ?? 'Unassigned')} · Vehicle: ${escapeHtml(c.vehicle_id ?? 'Unassigned')} · Lead clinician: ${escapeHtml(c.lead_clinician_id ?? 'Not selected')}</p>
+    <p>${escapeHtml(c.encounter_status ?? c.status)} · Closure ready: ${escapeHtml(c.closure_ready)}</p></article>`).join('')}
+    ${selectedId ? `<h3>Patient identity for ${escapeHtml(selectedId)}</h3>
+    <form id="provisionalPatientForm"><p>If identity and birth date are unknown, create a marked provisional OpenEMR record. Its technical birth-date placeholder must not be used for age-based care.</p><button>Create unidentified patient and link</button></form>
+    <form id="patientIdentityForm"><label>First name <input name="first_name"></label><label>Last name <input name="last_name"></label>
+    <label>Date of birth <input type="date" name="dob"></label><label>Sex <input name="sex"></label>
+    <button name="action" value="search">Search</button><button name="action" value="create">Create OpenEMR patient</button></form>
+    <pre id="patientSearchResults"></pre>
+    <form id="patientLinkForm"><label>OpenEMR patient ID <input name="openemr_patient_id" required></label>
+    <label>Verification <select name="verification_status"><option value="verified">Verified</option><option value="provisional">Provisional / unidentified</option></select></label>
+    <button>Link patient</button></form>` : '<p>Create or select a patient case to begin care.</p>'}</section>`;
+}

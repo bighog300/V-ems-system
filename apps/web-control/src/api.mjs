@@ -23,7 +23,14 @@ export async function loadIncidentOperationalData({ apiBaseUrl, incidentId, fetc
   const assignmentResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/assignments`, config, { signal });
   const assignmentSummary = assignmentResult.notFound ? null : assignmentResult.data;
 
-  const patientLinkResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-link`, config, { signal });
+  let patientLinkResult;
+  try {
+    patientLinkResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-link`, config, { signal });
+  } catch (error) {
+    if (error.status !== 409) throw error;
+    const patientCases = await listPatientCases({ apiBaseUrl, incidentId, fetchImpl, ...config });
+    return { incident: incidentResult.data, assignmentSummary, patientCases, patientLink: null, encounterLink: null, handover: null, interventions: [] };
+  }
   const patientLink = patientLinkResult.notFound ? null : patientLinkResult.data;
 
   const encounterResult = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/encounters`, config, { signal });
@@ -83,3 +90,29 @@ export async function loadCrewJobListData({ apiBaseUrl, fetchImpl = fetch, ...co
 }
 
 export { ApiError };
+
+export async function loadPatientCaseData({ apiBaseUrl, patientCaseId, fetchImpl = fetch, ...config }) {
+  const root = `${apiBaseUrl}/api/patient-cases/${patientCaseId}`;
+  const c = await getJson(fetchImpl, root, config);
+  if (c.notFound) throw new Error('Patient case not found');
+  const patient = await getJson(fetchImpl, `${root}/patient-link`, config);
+  const encounter = await getJson(fetchImpl, `${root}/encounter`, config);
+  let handover = null, interventions = [];
+  if (encounter.data?.encounter_id) {
+    handover = (await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounter.data.encounter_id}/handover`, config)).data;
+    interventions = (await getJson(fetchImpl, `${apiBaseUrl}/api/encounters/${encounter.data.encounter_id}/interventions`, config)).data ?? [];
+  }
+  return { patientCase: c.data, patientLink: patient.data, encounterLink: encounter.data, handover, interventions };
+}
+export async function listPatientCases({ apiBaseUrl, incidentId, fetchImpl = fetch, ...config }) {
+  return (await getJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-cases`, config)).data?.patient_cases ?? [];
+}
+export async function createPatientCase({ apiBaseUrl, incidentId, payload, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-cases`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
+}
+export async function patientCaseWrite({ apiBaseUrl, patientCaseId, action, payload, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/${action}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
+}
+export async function patientIdentityWrite({ apiBaseUrl, action, payload, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/patients${action === 'search' ? '/search' : ''}`, payload, config, { headers: { 'idempotency-key': config.idempotencyKey ?? crypto.randomUUID() } });
+}

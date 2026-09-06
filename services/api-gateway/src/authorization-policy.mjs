@@ -1,4 +1,11 @@
 export const RBAC_POLICIES = [
+  { pattern: /^\/api\/incidents\/INC-[0-9]{6}\/patient-cases$/, method: 'GET', roles: ['dispatcher','field_crew','field_crew_lead','clinical_reviewer','supervisor','sys_admin'] },
+  { pattern: /^\/api\/incidents\/INC-[0-9]{6}\/patient-cases$/, method: 'POST', roles: ['dispatcher','field_crew','field_crew_lead','supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}(?:\/(patient-link|encounter))?$/, method: 'GET', roles: ['dispatcher','field_crew','field_crew_lead','clinical_reviewer','supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(patient-link|encounters|provisional-patient)$/, method: 'POST', roles: ['field_crew','field_crew_lead','supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/identity-reconciliation$/, method: 'POST', roles: ['supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(assignment|status)$/, method: 'PATCH', roles: ['field_crew_lead','supervisor','sys_admin'] },
+
   { pattern: /^\/api\/support\/diagnostics$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/support\/sync-intents\/([0-9]+)\/replay$/, method: "POST", roles: ["operations_manager", "sys_admin"] },
   { pattern: /^\/api\/incidents$/, method: "GET", roles: ["dispatcher", "supervisor", "operations_manager", "sys_admin"] },

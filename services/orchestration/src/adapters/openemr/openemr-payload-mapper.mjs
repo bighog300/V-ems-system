@@ -7,6 +7,7 @@ export class OpenEmrPayloadMapper {
       sex: criteria.sex,
       phone: criteria.phone
     };
+    return mapped;
   }
 
   mapPatientCreateRequest(patient) {
@@ -15,6 +16,7 @@ export class OpenEmrPayloadMapper {
       last_name: patient.last_name,
       dob: patient.dob,
       sex: patient.sex,
+      ...(patient.provisional_identity ? { provisional_identity: true } : {}),
       phone: patient.phone
     };
   }
@@ -23,6 +25,7 @@ export class OpenEmrPayloadMapper {
   mapEncounterCreateRequest(encounter) {
     return {
       incident_id: encounter.incident_id,
+      ...(encounter.patient_case_id ? { patient_case_id: encounter.patient_case_id, assignment_id: encounter.assignment_id, vehicle_id: encounter.vehicle_id } : {}),
       patient_id: encounter.patient_id,
       care_started_at: encounter.care_started_at,
       crew_ids: encounter.crew_ids,
@@ -43,7 +46,7 @@ export class OpenEmrPayloadMapper {
   }
 
   mapInterventionCreateRequest(intervention) {
-    return {
+    const mapped = {
       encounter_id: intervention.encounter_id,
       incident_id: intervention.incident_id,
       patient_id: intervention.patient_id,

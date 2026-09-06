@@ -1,3 +1,5 @@
+import { listPatientCases, loadPatientCaseData, createPatientCase, patientCaseWrite, patientIdentityWrite } from './api.mjs';
+import { renderPatientCasesPanel } from './crew.mjs';
 import {
   ApiError,
   closeIncident,
@@ -28,6 +30,9 @@ function readConfig() {
   return readSessionFromDom();
 }
 
+let selectedPatientCaseId = '';
+let selectedPatientIncidentId = '';
+let crewRenderVersion = 0;
 let closeIncidentFeedback = "";
 let selectedDispatcherIncidentId = "";
 let previousDispatcherSnapshot = new Map();
@@ -238,13 +243,18 @@ async function onCreateEncounterSubmit(event) {
     status,
     submitButton,
     config: readConfig(),
-    buildPayload: buildCreateEncounterPayload,
+    buildPayload: data => {
+      const result = buildCreateEncounterPayload(data);
+      result.validationErrors = result.validationErrors.filter(e => !e.startsWith('crew_ids'));
+      delete result.payload.crew_ids;
+      return result;
+    },
     progressMessage: "Creating encounter...",
     successMessage: "Encounter created and crew incident detail refreshed.",
     failureStatusMessage: "Encounter create failed.",
     successStatusLoadingMessage: "Encounter created. Refreshing crew incident detail...",
     buildRequest: ({ apiBaseUrl, incidentId, payload }) => ({ apiBaseUrl, incidentId, payload }),
-    requestAction: createIncidentEncounter,
+    requestAction: request => patientCaseWrite({ ...readConfig(), ...request, patientCaseId: form.dataset.patientCaseId, action: 'encounters' }),
     refreshCrewIncidentDetail: renderCrewIncidentDetail,
     formatError: formatApiError
   });
@@ -341,12 +351,62 @@ async function renderCrewIncidentDetail() {
       throw new Error("API Base URL and Incident ID are required.");
     }
 
-    const data = await loadIncidentOperationalData(config);
-    const summary = buildIncidentOperationalSummary(data);
-    output.innerHTML = renderCrewIncidentDetailHtml(summary);
+    const version = ++crewRenderVersion;
+    output.innerHTML = '';
+    if (selectedPatientIncidentId !== config.incidentId) { selectedPatientCaseId = ''; selectedPatientIncidentId = config.incidentId; }
+    const cases = await listPatientCases(config);
+    if (!cases.some(c => c.patient_case_id === selectedPatientCaseId)) selectedPatientCaseId = '';
+    const selectedId = selectedPatientCaseId;
+    const caseData = selectedId ? await loadPatientCaseData({ ...config, patientCaseId: selectedId }) : null;
+    if (version !== crewRenderVersion) return;
+    const summary = caseData ? buildIncidentOperationalSummary({ ...caseData, incident: { incident_id: config.incidentId, closure_ready: caseData.patientCase.closure_ready }, assignmentSummary: null }) : null;
+    output.innerHTML = renderPatientCasesPanel(cases, selectedId) + (summary ? renderCrewIncidentDetailHtml(summary) : '');
+    output.querySelectorAll('[data-patient-case]').forEach(button => button.addEventListener('click', () => {
+      if (output.querySelector('[data-submitting="true"]')) return;
+      if (selectedPatientCaseId && !window.confirm('Switch patient? Unsaved entries will be discarded.')) return;
+      selectedPatientCaseId = button.dataset.patientCase;
+      void renderCrewIncidentDetail();
+    }));
+    const bindCaseForm = (selector, action) => {
+      const form = output.querySelector(selector);
+      form?.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (form.dataset.submitting === 'true') return;
+        form.dataset.submitting = 'true';
+        try { await action(Object.fromEntries(new FormData(form)), event); }
+        catch (error) { status.textContent = formatApiError(error); }
+        finally { form.dataset.submitting = 'false'; }
+      });
+    };
+    bindCaseForm('#createPatientCaseForm', async payload => {
+      for (const key of Object.keys(payload)) if (!payload[key]) delete payload[key];
+      const created = await createPatientCase({ ...config, payload });
+      selectedPatientCaseId = created.patient_case_id;
+      await renderCrewIncidentDetail();
+    });
+    bindCaseForm('#provisionalPatientForm', async () => {
+      await patientCaseWrite({ ...config, patientCaseId: selectedId, action: 'provisional-patient', payload: {} });
+      await renderCrewIncidentDetail();
+    });
+    bindCaseForm('#patientLinkForm', async payload => {
+      await patientCaseWrite({ ...config, patientCaseId: selectedId, action: 'patient-link', payload });
+      await renderCrewIncidentDetail();
+    });
+    bindCaseForm('#patientIdentityForm', async (payload, event) => {
+      const action = event.submitter?.value ?? 'search';
+      const result = await patientIdentityWrite({ ...config, action, payload });
+      output.querySelector('#patientSearchResults').textContent = JSON.stringify(result, null, 2);
+      if (action === 'create') output.querySelector('#patientLinkForm [name="openemr_patient_id"]').value = result.patient_id;
+    });
+    if (!summary) { status.textContent = 'Select a patient case.'; return; }
 
     const createForm = document.querySelector("#createEncounterForm");
     if (createForm) {
+      createForm.dataset.patientCaseId = selectedId;
+      createForm.querySelector('[name="patient_id"]').readOnly = true;
+      const crewInput = createForm.querySelector('[name="crew_ids"]');
+      crewInput.value = caseData.patientCase.crew_ids.join(', ');
+      crewInput.required = false; crewInput.readOnly = true;
       createForm.addEventListener("submit", onCreateEncounterSubmit);
     }
 

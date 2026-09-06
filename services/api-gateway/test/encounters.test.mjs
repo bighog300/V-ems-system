@@ -84,6 +84,9 @@ test("encounter create success path", async () => {
       method: "createEncounter",
       payload: {
         incident_id: incidentId,
+        patient_case_id: "PCR-000001",
+        assignment_id: null,
+        vehicle_id: null,
         patient_id: "OE-100",
         care_started_at: "2026-04-16T10:15:00Z",
         crew_ids: ["STAFF-001"],

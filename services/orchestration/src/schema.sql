@@ -257,6 +257,7 @@ CREATE TABLE IF NOT EXISTS stock_transactions (
 );
 CREATE TABLE IF NOT EXISTS stock_usage (
   stock_usage_id TEXT PRIMARY KEY, intervention_id TEXT NOT NULL, incident_id TEXT NOT NULL,
+  patient_case_id TEXT REFERENCES patient_cases(patient_case_id),
   encounter_id TEXT, stock_item_id TEXT NOT NULL, vehicle_id TEXT, quantity_used TEXT NOT NULL,
   usage_source TEXT NOT NULL, performed_at TEXT NOT NULL, intervention_type TEXT NOT NULL,
   correlation_id TEXT NOT NULL, discrepancy_status TEXT, created_at TEXT NOT NULL,
@@ -286,3 +287,63 @@ CREATE INDEX IF NOT EXISTS idx_vehicle_stock_item ON vehicle_stock(stock_item_id
 CREATE INDEX IF NOT EXISTS idx_stock_transactions_loadout ON stock_transactions(vehicle_id, stock_item_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_stock_usage_intervention ON stock_usage(intervention_id, stock_item_id);
 CREATE INDEX IF NOT EXISTS idx_stock_usage_vehicle ON stock_usage(vehicle_id, stock_item_id);
+
+-- Stage 6: legacy tables above are retained as migration archives.
+CREATE TABLE patient_cases (
+  patient_case_id TEXT PRIMARY KEY,
+  incident_id TEXT NOT NULL REFERENCES incidents(incident_id),
+  patient_sequence INTEGER NOT NULL CHECK(patient_sequence > 0),
+  status TEXT NOT NULL DEFAULT 'Created',
+  assignment_id TEXT REFERENCES assignments(assignment_id),
+  vehicle_id TEXT,
+  crew_ids_json TEXT NOT NULL DEFAULT '[]',
+  lead_clinician_id TEXT REFERENCES personnel(staff_id),
+  temporary_label TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, correlation_id TEXT NOT NULL,
+  UNIQUE(incident_id, patient_sequence), UNIQUE(patient_case_id, incident_id)
+);
+CREATE INDEX idx_patient_cases_assignment ON patient_cases(assignment_id);
+CREATE INDEX idx_patient_cases_vehicle ON patient_cases(vehicle_id);
+CREATE TABLE patient_case_patient_links (
+  patient_case_id TEXT PRIMARY KEY REFERENCES patient_cases(patient_case_id),
+  incident_id TEXT NOT NULL,
+  openemr_patient_id TEXT,
+  temporary_label TEXT,
+  verification_status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  correlation_id TEXT NOT NULL,
+  FOREIGN KEY (patient_case_id, incident_id) REFERENCES patient_cases(patient_case_id, incident_id)
+);
+CREATE TABLE patient_case_encounter_links (
+  patient_case_id TEXT PRIMARY KEY REFERENCES patient_cases(patient_case_id),
+  incident_id TEXT NOT NULL,
+  openemr_patient_id TEXT NOT NULL,
+  openemr_encounter_id TEXT NOT NULL UNIQUE,
+  encounter_status TEXT NOT NULL,
+  care_started_at TEXT NOT NULL,
+  handover_time TEXT,
+  handover_status TEXT,
+  disposition TEXT,
+  destination_facility TEXT,
+  receiving_clinician TEXT,
+  handover_notes TEXT,
+  closure_ready INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  correlation_id TEXT NOT NULL,
+  FOREIGN KEY (patient_case_id, incident_id) REFERENCES patient_cases(patient_case_id, incident_id)
+);
+CREATE TABLE patient_case_identity_reconciliations (
+ reconciliation_id TEXT PRIMARY KEY, patient_case_id TEXT NOT NULL REFERENCES patient_cases(patient_case_id),
+ clinical_patient_id TEXT NOT NULL, verified_patient_id TEXT NOT NULL, reason TEXT NOT NULL,
+ created_at TEXT NOT NULL, correlation_id TEXT NOT NULL
+);
+CREATE TABLE patient_case_encounter_requests (
+ patient_case_id TEXT PRIMARY KEY REFERENCES patient_cases(patient_case_id),
+ request_fingerprint TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE TABLE patient_case_provisional_requests (
+  patient_case_id TEXT PRIMARY KEY REFERENCES patient_cases(patient_case_id),
+  status TEXT NOT NULL, created_at TEXT NOT NULL
+);
