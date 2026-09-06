@@ -29,6 +29,7 @@ import { StockUsageRepository } from "./repositories/stock-usage-repository.mjs"
 import { StockUsageVtigerLinkRepository } from "./repositories/stock-usage-vtiger-link-repository.mjs";
 import { PatientCaseDemographicsRepository, PatientCaseAssessmentRepository, ClinicalObservationRepository, MedicationAdministrationRepository, ClinicalProcedureRepository, PatientCaseDispositionRepository, PatientCaseTimelineRepository } from "./repositories/clinical-record-repository.mjs";
 import { clinicalRecordMethods } from "./clinical-record.mjs";
+import { epcrFinalizationMethods } from "./epcr-finalization.mjs";
 
 const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
@@ -516,6 +517,7 @@ export class OrchestrationService {
   async createObservationForEncounter(encounterId, payload, meta) {
     const encounter = this.encounterLinks.findByEncounterId(encounterId);
     if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+    this.assertPatientCaseClinicalMutable(encounter.patient_case_id);
 
     const created = await this.openemr.createObservation({
       ...payload,
@@ -549,6 +551,7 @@ export class OrchestrationService {
   async createInterventionForEncounter(encounterId, payload, meta) {
     const encounter = this.encounterLinks.findByEncounterId(encounterId);
     if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+    this.assertPatientCaseClinicalMutable(encounter.patient_case_id);
     const fingerprint = JSON.stringify({ encounter_id: encounterId, ...payload });
     if (meta.idempotencyKey) {
       const existing = this.idempotency.get("intervention", meta.idempotencyKey);
@@ -647,6 +650,7 @@ export class OrchestrationService {
   async createHandoverForEncounter(encounterId, payload, meta) {
     const encounter = this.encounterLinks.findByEncounterId(encounterId);
     if (!encounter) throw new ApiError("NOT_FOUND", `Encounter ${encounterId} not found`, 404);
+    this.assertPatientCaseClinicalMutable(encounter.patient_case_id);
 
     const created = await this.openemr.createHandover({
       ...payload,
@@ -738,3 +742,4 @@ export class OrchestrationService {
 
 Object.assign(OrchestrationService.prototype, patientCaseMethods);
 Object.assign(OrchestrationService.prototype, clinicalRecordMethods);
+Object.assign(OrchestrationService.prototype, epcrFinalizationMethods);
