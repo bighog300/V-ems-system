@@ -21,6 +21,16 @@ export function createVtigerWebserviceClient(env = process.env, options = {}) {
       const vehicleNames = new Set(vehicle.fields?.map((field) => field.name));
       const vehicleMissing = vehicleRequired.filter((name) => !vehicleNames.has(name));
       if (vehicleMissing.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `VEMSVehicles schema missing ${vehicleMissing.join(",")}`, { operation: "describe" });
+      const personnel = await auth.call("describe", { elementType: "VEMSPersonnel" });
+      const personnelRequired = ["vems_staff_id", "vems_external_key", "vems_display_name", "vems_role", "vems_operational_status", "vems_home_station", "vems_correlation_id", "vems_last_correlation_id", "vems_created_at_utc", "vems_updated_at_utc", "vems_personnel_no", "assigned_user_id"];
+      const personnelNames = new Set(personnel.fields?.map((field) => field.name));
+      const personnelMissing = personnelRequired.filter((name) => !personnelNames.has(name));
+      if (personnelMissing.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `VEMSPersonnel schema missing ${personnelMissing.join(",")}`, { operation: "describe" });
+      const junction = await auth.call("describe", { elementType: "VEMSAssignmentCrew" });
+      const junctionRequired = ["assignment_ref", "personnel_ref", "vems_assignment_crew_id", "vems_external_key", "vems_assignment_id", "vems_staff_id", "vems_correlation_id", "vems_last_correlation_id", "vems_created_at_utc", "vems_updated_at_utc", "assigned_user_id"];
+      const junctionNames = new Set(junction.fields?.map((field) => field.name));
+      const junctionMissing = junctionRequired.filter((name) => !junctionNames.has(name));
+      if (junctionMissing.length) throw new VtigerError("VTIGER_SCHEMA_MISMATCH", `VEMSAssignmentCrew schema missing ${junctionMissing.join(",")}`, { operation: "describe" });
       return { reachable: true, authenticated: true, schemaReady: true, vtigerVersion: undefined };
     },
     async query(query) { return auth.call("query", { query }); },

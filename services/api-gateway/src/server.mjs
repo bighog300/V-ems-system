@@ -10,6 +10,7 @@ const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_e
 const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Treatment In Progress", "Ready for Handover", "Handover Completed", "Closed", "Cancelled"];
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
 const VEHICLE_SERVICE_STATUSES = ["Serviceable", "Out of Service", "Maintenance", "Offline/Unknown"];
+const PERSONNEL_STATUSES = ["Available", "Unavailable", "Off Duty", "Training", "Leave", "Suspended", "Inactive"];
 const DEFAULT_JSON_BODY_MAX_BYTES = 1024 * 1024;
 
 
@@ -327,6 +328,30 @@ function validateUpdateVehicle(payload) {
   if (payload.operational_status !== undefined && !VEHICLE_OPERATIONAL_STATUSES.includes(payload.operational_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
   if (payload.service_status !== undefined && !VEHICLE_SERVICE_STATUSES.includes(payload.service_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid service_status", 400);
   if (payload.notes !== undefined && typeof payload.notes !== "string") throw new ApiError("INVALID_PAYLOAD", "notes must be a string", 400);
+}
+
+function validateCreatePersonnel(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Personnel payload is required", 400);
+  const allowed = new Set(["staff_id", "display_name", "role", "operational_status", "home_station", "callsign", "phone", "email", "notes"]);
+  const unknown = Object.keys(payload).filter((field) => !allowed.has(field));
+  if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown personnel fields: ${unknown.join(", ")}`, 400);
+  if (!/^STAFF-[0-9]{3,}$/.test(payload.staff_id)) throw new ApiError("INVALID_PAYLOAD", "Invalid staff_id", 400);
+  for (const field of ["display_name", "role", "home_station"]) if (typeof payload[field] !== "string" || !payload[field].trim()) throw new ApiError("INVALID_PAYLOAD", `${field} is required`, 400);
+  if (!PERSONNEL_STATUSES.includes(payload.operational_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
+  for (const field of ["callsign", "phone", "email", "notes"]) if (payload[field] !== undefined && typeof payload[field] !== "string") throw new ApiError("INVALID_PAYLOAD", `${field} must be a string`, 400);
+  if (payload.email && !/^\S+@\S+\.\S+$/.test(payload.email)) throw new ApiError("INVALID_PAYLOAD", "Invalid email", 400);
+}
+
+function validateUpdatePersonnel(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Personnel update payload is required", 400);
+  const allowed = new Set(["display_name", "role", "operational_status", "home_station", "callsign", "phone", "email", "notes"]);
+  const unknown = Object.keys(payload).filter((field) => !allowed.has(field));
+  if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown personnel fields: ${unknown.join(", ")}`, 400);
+  if (!Object.keys(payload).length) throw new ApiError("INVALID_PAYLOAD", "At least one personnel field is required", 400);
+  for (const field of ["display_name", "role", "home_station"]) if (payload[field] !== undefined && (typeof payload[field] !== "string" || !payload[field].trim())) throw new ApiError("INVALID_PAYLOAD", `${field} must be a non-empty string`, 400);
+  if (payload.operational_status !== undefined && !PERSONNEL_STATUSES.includes(payload.operational_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
+  for (const field of ["callsign", "phone", "email", "notes"]) if (payload[field] !== undefined && typeof payload[field] !== "string") throw new ApiError("INVALID_PAYLOAD", `${field} must be a string`, 400);
+  if (payload.email && !/^\S+@\S+\.\S+$/.test(payload.email)) throw new ApiError("INVALID_PAYLOAD", "Invalid email", 400);
 }
 
 function validateAction(payload) {
@@ -664,6 +689,19 @@ export function createApp(orchestration = new OrchestrationService()) {
         const payload = await parseJson(req);
         validateCreateVehicle(payload);
         return okJson(res, 201, orchestration.createVehicle(payload, { correlationId: context.correlationId, idempotencyKey }), context);
+      }
+      if (method === "GET" && url.pathname === "/api/personnel") return okJson(res, 200, { personnel: orchestration.listPersonnel() }, context);
+      if (method === "POST" && url.pathname === "/api/personnel") {
+        const payload = await parseJson(req);
+        validateCreatePersonnel(payload);
+        return okJson(res, 201, orchestration.createPersonnel(payload, { correlationId: context.correlationId, idempotencyKey }), context);
+      }
+      const personnelMatch = url.pathname.match(/^\/api\/personnel\/(STAFF-[0-9]{3,})$/);
+      if (personnelMatch && method === "GET") return okJson(res, 200, orchestration.getPersonnel(personnelMatch[1]), context);
+      if (personnelMatch && method === "PATCH") {
+        const payload = await parseJson(req);
+        validateUpdatePersonnel(payload);
+        return okJson(res, 200, orchestration.updatePersonnel(personnelMatch[1], payload, { correlationId: context.correlationId }), context);
       }
       const vehicleMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})$/);
       if (vehicleMatch && method === "GET") return okJson(res, 200, orchestration.getVehicle(vehicleMatch[1]), context);

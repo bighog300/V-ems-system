@@ -6,6 +6,8 @@ import { VtigerAdapterClient } from "./adapters/vtiger/vtiger-adapter-client.mjs
 import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
 import { AssignmentVtigerLinkRepository } from "./repositories/assignment-vtiger-link-repository.mjs";
 import { VehicleVtigerLinkRepository } from "./repositories/vehicle-vtiger-link-repository.mjs";
+import { PersonnelVtigerLinkRepository } from "./repositories/personnel-vtiger-link-repository.mjs";
+import { AssignmentPersonnelVtigerLinkRepository } from "./repositories/assignment-personnel-vtiger-link-repository.mjs";
 
 function parsePositiveInt(value, fallback) {
   if (value === undefined) return fallback;
@@ -54,6 +56,8 @@ export async function runSyncWorkerService(options = {}) {
   const vtigerLinks = options.vtigerLinks ?? new VtigerLinkRepository(db);
   const assignmentLinks = options.assignmentLinks ?? new AssignmentVtigerLinkRepository(db);
   const vehicleLinks = options.vehicleLinks ?? new VehicleVtigerLinkRepository(db);
+  const personnelLinks = options.personnelLinks ?? new PersonnelVtigerLinkRepository(db);
+  const assignmentPersonnelLinks = options.assignmentPersonnelLinks ?? new AssignmentPersonnelVtigerLinkRepository(db);
   const transport = options.transport ?? unsupportedTransport;
   const openemrTransport = options.openemrTransport ?? createOpenEmrTransportFromEnv() ?? transport;
   const vtigerTransport = options.vtigerTransport ?? createVtigerTransportFromEnv() ?? transport;
@@ -65,6 +69,8 @@ export async function runSyncWorkerService(options = {}) {
     recordStockUsageMirror: (...args) => vtiger.recordStockUsageMirror(...args),
     createVehicleMirror: (...args) => vtiger.createVehicleMirror(...args),
     updateVehicleMirror: (...args) => vtiger.updateVehicleMirror(...args),
+    createPersonnelMirror: (...args) => vtiger.createPersonnelMirror(...args),
+    updatePersonnelMirror: (...args) => vtiger.updatePersonnelMirror(...args),
     async createAssignmentMirror(payload) {
       const incident = vtigerLinks.findByIncidentId(payload.incident_id);
       if (!incident?.remote_id || incident.sync_status !== "succeeded") {
@@ -78,7 +84,17 @@ export async function runSyncWorkerService(options = {}) {
       if (!vehicle?.remote_id || vehicle.sync_status !== "succeeded") {
         const error = new Error("Vehicle Vtiger linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
       }
-      return vtiger.createAssignmentMirror({ ...payload, incident_remote_id: incident.remote_id, vems_incident_remote_id: incident.remote_id, incident_ref: incident.remote_id, vehicle_ref: vehicle.remote_id });
+      const crewIds = Array.isArray(payload.crew_ids) ? [...new Set(payload.crew_ids)].sort() : String(payload.vems_crew_ids ?? "").split(",").filter(Boolean).sort();
+      const requiredPersonnel = [];
+      const personnelIntegrationActive = personnelLinks.db?.queryOne("SELECT COUNT(*) AS count FROM personnel;")?.count > 0;
+      for (const staffId of personnelIntegrationActive ? crewIds : []) {
+        const link = personnelLinks.findByStaffId(staffId);
+        if (!link?.remote_id || link.sync_status !== "succeeded") {
+          const error = new Error(`Personnel Vtiger linkage is pending for ${staffId}`); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
+        }
+        requiredPersonnel.push({ staff_id: staffId, personnel_remote_id: link.remote_id, external_key: `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:assignment-crew:${payload.assignment_id}:${staffId}`, assignment_crew_id: `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:assignment-crew:${payload.assignment_id}:${staffId}` });
+      }
+      return vtiger.createAssignmentMirror({ ...payload, crew_ids: crewIds, incident_remote_id: incident.remote_id, vems_incident_remote_id: incident.remote_id, incident_ref: incident.remote_id, vehicle_ref: vehicle.remote_id, personnel_links: requiredPersonnel });
     },
     async updateAssignmentMirror(payload) {
       const link = assignmentLinks.findByAssignmentId(payload.assignment_id);
@@ -112,6 +128,9 @@ export async function runSyncWorkerService(options = {}) {
         const current = assignmentLinks.findByAssignmentId(intent.payload.assignment_id);
         db.withTransaction(() => {
           assignmentLinks.upsert({ assignment_id: intent.payload.assignment_id, incident_id: intent.payload.incident_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:assignment:${intent.payload.assignment_id}`, incident_remote_id: result.incident_remote_id ?? intent.payload.vems_incident_remote_id ?? current?.incident_remote_id, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
+          for (const junction of result.junctions ?? []) {
+            assignmentPersonnelLinks.upsert({ assignment_id: intent.payload.assignment_id, staff_id: junction.staff_id, assignment_remote_id: result.remote_id, personnel_remote_id: personnelLinks.findByStaffId(junction.staff_id)?.remote_id ?? null, junction_remote_id: junction.remote_id, junction_remote_number: junction.remote_number ?? null, external_key: junction.external_key, sync_status: "succeeded", last_error_code: null, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, last_synced_at: now, created_at: now, updated_at: now });
+          }
           syncIntents.markSucceeded(intent.intent_id, now);
         });
         return true;
@@ -120,6 +139,14 @@ export async function runSyncWorkerService(options = {}) {
         const current = vehicleLinks.findByVehicleId(intent.payload.vehicle_id);
         db.withTransaction(() => {
           vehicleLinks.upsert({ vehicle_id: intent.payload.vehicle_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:vehicle:${intent.payload.vehicle_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
+          syncIntents.markSucceeded(intent.intent_id, now);
+        });
+        return true;
+      }
+      if (intent.entity_type === "personnel") {
+        const current = personnelLinks.findByStaffId(intent.payload.staff_id);
+        db.withTransaction(() => {
+          personnelLinks.upsert({ staff_id: intent.payload.staff_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:personnel:${intent.payload.staff_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
           syncIntents.markSucceeded(intent.intent_id, now);
         });
         return true;
@@ -152,6 +179,10 @@ export async function runSyncWorkerService(options = {}) {
       }
       if (intent.entity_type === "vehicle") {
         vehicleLinks.markFailure(intent.payload.vehicle_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
+        return;
+      }
+      if (intent.entity_type === "personnel") {
+        personnelLinks.markFailure(intent.payload.staff_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
         return;
       }
       if (intent.entity_type !== "incident") return;

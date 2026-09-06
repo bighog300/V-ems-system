@@ -108,6 +108,53 @@ export class VtigerPayloadMapper {
     return mapped;
   }
 
+  mapPersonnelCreate(personnel) {
+    return {
+      elementType: "VEMSPersonnel",
+      vems_staff_id: personnel.staff_id,
+      vems_external_key: personnel.external_key ?? `${this.sourceNamespace}:personnel:${personnel.staff_id}`,
+      vems_display_name: personnel.display_name,
+      vems_role: personnel.role,
+      vems_operational_status: personnel.operational_status,
+      vems_home_station: personnel.home_station,
+      vems_callsign: personnel.callsign ?? "",
+      vems_phone: personnel.phone ?? "",
+      vems_email: personnel.email ?? "",
+      vems_notes: personnel.notes ?? "",
+      vems_correlation_id: personnel.correlation_id,
+      vems_last_correlation_id: personnel.correlation_id,
+      vems_created_at_utc: personnel.created_at,
+      vems_updated_at_utc: personnel.updated_at,
+      assigned_user_id: personnel.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID,
+      staff_id: personnel.staff_id
+    };
+  }
+
+  mapPersonnelUpdate(personnel) {
+    const mapped = this.mapPersonnelCreate(personnel);
+    delete mapped.elementType;
+    mapped.vems_last_correlation_id = personnel.correlation_id;
+    mapped.id = personnel.remote_id ?? personnel.vtiger?.record_id;
+    return mapped;
+  }
+
+  mapAssignmentCrewCreate(link) {
+    return {
+      elementType: "VEMSAssignmentCrew",
+      vems_assignment_crew_id: link.assignment_crew_id ?? `${this.sourceNamespace}:assignment-crew:${link.assignment_id}:${link.staff_id}`,
+      vems_external_key: link.external_key ?? `${this.sourceNamespace}:assignment-crew:${link.assignment_id}:${link.staff_id}`,
+      vems_assignment_id: link.assignment_id,
+      vems_staff_id: link.staff_id,
+      assignment_ref: link.assignment_remote_id,
+      personnel_ref: link.personnel_remote_id,
+      vems_correlation_id: link.correlation_id,
+      vems_last_correlation_id: link.correlation_id,
+      vems_created_at_utc: link.created_at,
+      vems_updated_at_utc: link.updated_at,
+      assigned_user_id: link.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID
+    };
+  }
+
   mapStockUsageRecord(stockUsage) {
     return {
       stock_usage_ref: stockUsage.intervention_id ?? null,
