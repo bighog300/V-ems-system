@@ -117,6 +117,7 @@ test("native OpenEMR transport acquires OAuth password token and maps patient/en
     const intervention = await transport({ method: "createIntervention", payload: { patient_id: "pat-2", encounter_id: "enc-2", type: "treatment", name: "bandage", stock_item_id: "ITEM-1" } });
     assert.equal(intervention.intervention_id, "soap-2");
     assert.match(requests[0].body, /grant_type=password/);
+    assert.match(requests[0].body, /api%3Aoemr/);
     assert.equal(requests.filter((request) => request.url === "/oauth/token").length, 1);
     assert.ok(requests.some((request) => request.url === "/apis/default/api/patient/pat-2/encounter/enc-2/soap_note"));
   });
