@@ -14,6 +14,8 @@ function mapIncident(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
     correlation_id: row.correlation_id
+    ,call_source: row.call_source ?? null
+    ,received_at: row.received_at ?? null
   };
 }
 
@@ -48,12 +50,12 @@ export class IncidentRepository {
   }
 
   findById(incidentId) {
-    return mapIncident(this.db.queryOne(`SELECT * FROM incidents WHERE incident_id = ${sqlValue(incidentId)};`));
+    return mapIncident(this.db.queryOne(`SELECT incidents.*, calls.call_source, calls.received_at FROM incidents LEFT JOIN calls ON calls.call_id=incidents.call_id WHERE incidents.incident_id = ${sqlValue(incidentId)};`));
   }
 
   listAll() {
     return this.db
-      .queryAll("SELECT * FROM incidents ORDER BY created_at DESC;")
+      .queryAll("SELECT incidents.*, calls.call_source, calls.received_at FROM incidents LEFT JOIN calls ON calls.call_id=incidents.call_id ORDER BY incidents.created_at DESC;")
       .map(mapIncident);
   }
 

@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS assignments (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   correlation_id TEXT NOT NULL,
-  FOREIGN KEY (incident_id) REFERENCES incidents(incident_id)
+  FOREIGN KEY (incident_id) REFERENCES incidents(incident_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS id_sequences (
@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
   idempotency_key TEXT NOT NULL,
   resource_id TEXT NOT NULL,
   created_at TEXT NOT NULL,
+  request_fingerprint TEXT,
   PRIMARY KEY (scope, idempotency_key)
 );
 
@@ -73,6 +74,11 @@ CREATE TABLE IF NOT EXISTS sync_intents (
   last_error_classification TEXT,
   processed_at TEXT,
   dead_lettered_at TEXT,
+  claim_token TEXT,
+  claimed_at TEXT,
+  lease_expires_at TEXT,
+  outcome_unknown INTEGER NOT NULL DEFAULT 0,
+  retryable INTEGER NOT NULL DEFAULT 1,
   payload_json TEXT NOT NULL
 );
 
@@ -104,4 +110,30 @@ CREATE TABLE IF NOT EXISTS encounter_links (
   updated_at TEXT NOT NULL,
   correlation_id TEXT NOT NULL,
   FOREIGN KEY (incident_id) REFERENCES incidents(incident_id)
+);
+
+-- Vtiger incident integration additions are applied by migration 003.
+-- Keep this reference schema aligned for fresh schema inspection.
+CREATE TABLE IF NOT EXISTS calls (
+  call_id TEXT PRIMARY KEY,
+  call_source TEXT NOT NULL,
+  received_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  correlation_id TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS vtiger_links (
+  incident_id TEXT PRIMARY KEY,
+  target_system TEXT NOT NULL DEFAULT 'vtiger',
+  remote_id TEXT,
+  remote_number TEXT,
+  external_key TEXT NOT NULL UNIQUE,
+  create_correlation_id TEXT NOT NULL,
+  last_correlation_id TEXT NOT NULL,
+  sync_status TEXT NOT NULL DEFAULT 'pending',
+  last_error_code TEXT,
+  last_synced_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+  ,FOREIGN KEY (incident_id) REFERENCES incidents(incident_id) ON DELETE CASCADE
 );

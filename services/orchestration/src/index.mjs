@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ApiError, nextAssignmentStatus, nextIncidentStatus } from "@vems/shared";
-import { SqliteClient } from "./db.mjs";
+import { SqliteClient, sqlValue } from "./db.mjs";
 import { IncidentRepository } from "./repositories/incident-repository.mjs";
 import { AssignmentRepository } from "./repositories/assignment-repository.mjs";
 import { AuditLogRepository } from "./repositories/audit-log-repository.mjs";
@@ -12,6 +12,7 @@ import { OpenEmrAdapterClient } from "./adapters/openemr/openemr-adapter-client.
 import { createOpenEmrTransportFromEnv } from "./adapters/transports.mjs";
 import { PatientLinkRepository } from "./repositories/patient-link-repository.mjs";
 import { EncounterLinkRepository } from "./repositories/encounter-link-repository.mjs";
+import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
 
 const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
 
@@ -26,43 +27,57 @@ export class OrchestrationService {
     this.syncIntents = new SyncIntentRepository(this.db);
     this.patientLinks = new PatientLinkRepository(this.db);
     this.encounterLinks = new EncounterLinkRepository(this.db);
-    this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper();
+    this.vtigerLinks = new VtigerLinkRepository(this.db);
+    this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
 
   createIncident(payload, meta) {
-    if (meta.idempotencyKey) {
-      const existingId = this.idempotency.getResourceId("incident", meta.idempotencyKey);
-      if (existingId) return this.incidents.findById(existingId);
-    }
-
-    const now = new Date().toISOString();
-    const callId = this.incidents.nextCallId();
-    const incidentId = this.incidents.nextIncidentId();
-
-    const record = {
-      incident_id: incidentId,
-      call_id: callId,
-      status: "New",
-      created_at: now,
-      updated_at: now,
-      correlation_id: meta.correlationId,
-      ...payload.incident
+    const normalized = {
+      call: {
+        call_source: payload.call.call_source,
+        received_at: new Date(payload.call.received_at).toISOString()
+      },
+      incident: {
+        status: payload.incident.status ?? "New",
+        category: payload.incident.category,
+        priority: payload.incident.priority,
+        description: payload.incident.description,
+        address: payload.incident.address,
+        patient_count: payload.incident.patient_count
+      }
     };
-
-    this.incidents.create(record);
-    this.audit("incident", incidentId, "create_incident", meta.correlationId, undefined, record);
-    this.event("IncidentCreated", meta.correlationId, { incident_id: incidentId, call_id: callId, status: record.status });
-    this.syncIntent("incident", "createIncidentMirror", meta.correlationId, this.vtigerMapper.mapIncidentCreate(record));
-
-    if (meta.idempotencyKey) this.idempotency.save("incident", meta.idempotencyKey, incidentId, now);
-    return record;
+    const requestFingerprint = JSON.stringify(normalized);
+    if (meta.idempotencyKey) {
+      const existing = this.idempotency.get("incident", meta.idempotencyKey);
+      if (existing) {
+        if (existing.request_fingerprint && existing.request_fingerprint !== requestFingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409);
+        return this.getIncident(existing.resource_id);
+      }
+    }
+    return this.db.withTransaction(() => {
+      const now = new Date().toISOString();
+      const callId = this.incidents.nextCallId();
+      const incidentId = this.incidents.nextIncidentId();
+      const record = { incident_id: incidentId, call_id: callId, created_at: now, updated_at: now, correlation_id: meta.correlationId, ...normalized.incident, call_source: normalized.call.call_source, received_at: normalized.call.received_at };
+      this.db.execute(`INSERT INTO calls (call_id,call_source,received_at,created_at,correlation_id) VALUES (${sqlValue(callId)},${sqlValue(normalized.call.call_source)},${sqlValue(normalized.call.received_at)},${sqlValue(now)},${sqlValue(meta.correlationId)});`);
+      this.incidents.create(record);
+      this.audit("incident", incidentId, "create_incident", meta.correlationId, undefined, record);
+      this.event("IncidentCreated", meta.correlationId, { incident_id: incidentId, call_id: callId, status: record.status });
+      this.syncIntent("incident", "createIncidentMirror", meta.correlationId, this.vtigerMapper.mapIncidentCreate(record, normalized.call));
+      this.vtigerLinks.upsert({ incident_id: incidentId, external_key: `${this.vtigerMapper.sourceNamespace}:${incidentId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, created_at: now, updated_at: now, remote_id: null, remote_number: null });
+      if (meta.idempotencyKey) this.idempotency.save("incident", meta.idempotencyKey, incidentId, now, requestFingerprint);
+      return record;
+    });
   }
 
   getIncident(incidentId) {
     const incident = this.incidents.findById(incidentId);
     if (!incident) throw new ApiError("NOT_FOUND", `Incident ${incidentId} not found`, 404);
-    return this.withClosureReadiness(incident);
+    const result = this.withClosureReadiness(incident);
+    const link = this.vtigerLinks.findByIncidentId(incidentId);
+    const intent = this.syncIntents.listAll().filter((item) => item.entity_type === "incident" && item.payload?.incident_id === incidentId).pop();
+    return { ...result, vtiger: { record_id: link?.remote_id ?? null, record_number: link?.remote_number ?? null, external_key: link?.external_key ?? `${this.vtigerMapper.sourceNamespace}:${incidentId}`, sync_status: link?.sync_status ?? intent?.status ?? "pending", attempt_count: intent?.attempt_count ?? 0, last_error_code: link?.last_error_code ?? intent?.last_error_classification ?? null, last_synced_at: link?.last_synced_at ?? null } };
   }
 
   listIncidentsForBoard() {

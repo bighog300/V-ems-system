@@ -108,6 +108,29 @@ export class SqliteClient {
       throw error;
     }
   }
+
+  withTransaction(callback) {
+    if (this.db) {
+      this.db.exec("BEGIN IMMEDIATE;");
+      try {
+        const result = callback();
+        this.db.exec("COMMIT;");
+        return result;
+      } catch (error) {
+        this.db.exec("ROLLBACK;");
+        throw error;
+      }
+    }
+    this.execute("BEGIN IMMEDIATE;");
+    try {
+      const result = callback();
+      this.execute("COMMIT;");
+      return result;
+    } catch (error) {
+      try { this.execute("ROLLBACK;"); } catch {}
+      throw error;
+    }
+  }
 }
 
 export function hasEmbeddedSqliteRuntime() {

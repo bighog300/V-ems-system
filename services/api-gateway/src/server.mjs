@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
-import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, createLogger } from "@vems/shared";
+import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCIDENT_STATUSES, createLogger } from "@vems/shared";
 import { authenticateRequest } from "./auth.mjs";
 import { RBAC_POLICIES } from "./authorization-policy.mjs";
 
@@ -150,11 +150,15 @@ function syncIntentSummary(orchestration) {
       entity_type: intent.entity_type,
       status: intent.status,
       attempt_count: intent.attempt_count,
+      retryable: intent.retryable !== false,
+      next_retry: intent.next_attempt_at,
+      error_code: intent.last_error_classification,
       last_error_classification: intent.last_error_classification,
       last_error: intent.last_error,
       dead_lettered_at: intent.dead_lettered_at,
       created_at: intent.created_at,
       correlation_id: intent.correlation_id,
+      incident_id: intent.payload?.incident_id ?? null,
       reference_id: intent.payload?.incident_id ?? intent.payload?.encounter_id ?? intent.payload?.assignment_id ?? null
     }));
 
@@ -270,14 +274,22 @@ async function parseJson(req) {
 
 function validateCreateIncident(payload) {
   if (!payload?.call || !payload?.incident) throw new ApiError("INVALID_PAYLOAD", "Missing call or incident object", 400);
+  const callFields = new Set(["call_source", "received_at"]);
+  const incidentFields = new Set(["status", "category", "priority", "description", "address", "patient_count"]);
+  const unknownCallFields = Object.keys(payload.call).filter((field) => !callFields.has(field));
+  const unknownIncidentFields = Object.keys(payload.incident).filter((field) => !incidentFields.has(field));
+  if (unknownCallFields.length || unknownIncidentFields.length) {
+    throw new ApiError("INVALID_PAYLOAD", `Unknown incident fields: ${[...unknownCallFields, ...unknownIncidentFields].join(", ")}`, 400);
+  }
   if (!CALL_SOURCES.includes(payload.call.call_source)) throw new ApiError("INVALID_PAYLOAD", "Invalid call_source", 400);
-  if (!payload.call.received_at) throw new ApiError("INVALID_PAYLOAD", "received_at is required", 400);
+  if (!payload.call.received_at || Number.isNaN(Date.parse(payload.call.received_at))) throw new ApiError("INVALID_PAYLOAD", "received_at must be a valid timestamp", 400);
   if (!INCIDENT_CATEGORIES.includes(payload.incident.category)) throw new ApiError("INVALID_PAYLOAD", "Invalid incident category", 400);
   if (!INCIDENT_PRIORITIES.includes(payload.incident.priority)) throw new ApiError("INVALID_PAYLOAD", "Invalid incident priority", 400);
   if (!payload.incident.description || !payload.incident.address) throw new ApiError("INVALID_PAYLOAD", "description and address are required", 400);
   if (!Number.isInteger(payload.incident.patient_count) || payload.incident.patient_count < 0) {
     throw new ApiError("INVALID_PAYLOAD", "patient_count must be integer >= 0", 400);
   }
+  if (payload.incident.status !== undefined && !INCIDENT_STATUSES.includes(payload.incident.status)) throw new ApiError("INVALID_PAYLOAD", "Invalid incident status", 400);
 }
 
 function validateCreateAssignment(payload) {

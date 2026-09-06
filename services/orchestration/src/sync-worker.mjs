@@ -5,6 +5,8 @@ function classifyError(error) {
   return "DOWNSTREAM_UNAVAILABLE";
 }
 
+const NON_RETRYABLE = new Set(["VTIGER_AUTH_FAILED", "VTIGER_PERMISSION_DENIED", "VTIGER_VALIDATION_FAILED", "VTIGER_SCHEMA_MISMATCH", "VTIGER_DUPLICATE_CONFLICT"]);
+
 function createSyncWorkerMetrics() {
   return {
     started_at: new Date().toISOString(),
@@ -23,6 +25,9 @@ export class SyncWorker {
     this.maxAttempts = options.maxAttempts ?? 3;
     this.baseBackoffMs = options.baseBackoffMs ?? 0;
     this.maxBackoffMs = options.maxBackoffMs ?? 60000;
+    this.leaseMs = options.leaseMs ?? 30000;
+    this.onSuccess = options.onSuccess;
+    this.onFailure = options.onFailure;
     this.metrics = options.metrics ?? createSyncWorkerMetrics();
   }
 
@@ -31,7 +36,9 @@ export class SyncWorker {
     const results = [];
 
     for (const intent of intents) {
-      results.push(await this.processIntent(intent));
+      const token = `${process.pid}-${Date.now()}-${intent.intent_id}`;
+      if (typeof this.syncIntents.claim === "function" && !this.syncIntents.claim(intent.intent_id, token, this.leaseMs ?? 30000)) continue;
+      results.push(await this.processIntent({ ...intent, claim_token: token }));
     }
 
     return results;
@@ -71,8 +78,9 @@ export class SyncWorker {
     }
 
     try {
-      await adapter[methodName](intent.payload);
-      this.syncIntents.markSucceeded(intent.intent_id, new Date().toISOString());
+      const result = await adapter[methodName](intent.payload);
+      const handled = this.onSuccess ? await this.onSuccess(intent, result) : false;
+      if (!handled) this.syncIntents.markSucceeded(intent.intent_id, new Date().toISOString());
       this.metrics.succeeded_intents += 1;
       return { intent_id: intent.intent_id, status: "succeeded" };
     } catch (error) {
@@ -82,16 +90,18 @@ export class SyncWorker {
 
   handleFailure(intent, error) {
     const attemptCount = intent.attempt_count + 1;
-    const deadLettered = attemptCount >= this.maxAttempts;
     const classification = classifyError(error);
+    const retryable = error?.retryable ?? !NON_RETRYABLE.has(classification);
+    const deadLettered = !retryable || attemptCount >= this.maxAttempts;
 
     console.warn(
       `[sync-worker] intent failed intent_id=${intent.intent_id} target=${intent.target_system} method=${intent.intent_type ?? intent.operation} attempt=${attemptCount}/${this.maxAttempts} classification=${classification} dead_lettered=${deadLettered} message=${error?.message ?? "Unknown sync failure"}`
     );
 
-    const nextAttemptAt = deadLettered
-      ? null
-      : new Date(Date.now() + Math.min(this.maxBackoffMs, this.baseBackoffMs * (2 ** Math.max(0, attemptCount - 1)))).toISOString();
+    const delayMs = this.baseBackoffMs === 0
+      ? 0
+      : Math.max(1000, Math.min(this.maxBackoffMs, this.baseBackoffMs * (2 ** Math.max(0, attemptCount - 1)) + Math.floor(Math.random() * 250)));
+    const nextAttemptAt = deadLettered ? null : new Date(Date.now() + delayMs).toISOString();
 
     this.syncIntents.markFailed(intent.intent_id, {
       status: deadLettered ? "dead_lettered" : "pending",
@@ -99,8 +109,11 @@ export class SyncWorker {
       last_error: error?.message ?? "Unknown sync failure",
       last_error_classification: classification,
       dead_lettered_at: deadLettered ? new Date().toISOString() : null,
-      next_attempt_at: nextAttemptAt
+      next_attempt_at: nextAttemptAt,
+      retryable,
+      outcome_unknown: Boolean(error?.outcomeUnknown)
     });
+    if (this.onFailure) this.onFailure(intent, error, { status: deadLettered ? "dead_lettered" : "retrying", attemptCount, retryable, nextAttemptAt });
 
     this.metrics.failed_intents += 1;
     if (deadLettered) this.metrics.dead_lettered_intents += 1;

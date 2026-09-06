@@ -8,6 +8,9 @@ function wrapTransportError(method, error) {
   const wrapped = new Error(`Vtiger adapter ${method} failed: ${error?.message ?? "Unknown transport error"}`);
   wrapped.code = error?.code ?? "DOWNSTREAM_UNAVAILABLE";
   wrapped.classification = error?.classification ?? wrapped.code;
+  wrapped.retryable = error?.retryable;
+  wrapped.outcomeUnknown = error?.outcomeUnknown;
+  wrapped.operation = method;
   wrapped.cause = error;
   return wrapped;
 }
@@ -27,11 +30,11 @@ export class VtigerAdapterClient {
   }
 
   createIncidentMirror(incident) {
-    return this.invoke("createIncidentMirror", this.mapper.mapIncidentCreate(incident));
+    return this.invoke("createIncidentMirror", incident?.vems_incident_id ? incident : this.mapper.mapIncidentCreate(incident));
   }
 
   updateIncidentMirror(incident) {
-    return this.invoke("updateIncidentMirror", this.mapper.mapIncidentUpdate(incident));
+    return this.invoke("updateIncidentMirror", incident?.vems_incident_id ? incident : this.mapper.mapIncidentUpdate(incident));
   }
 
   createAssignmentMirror(assignment) {

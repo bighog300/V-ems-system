@@ -2,6 +2,8 @@ import { SqliteClient } from "./db.mjs";
 import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
 import { SyncWorker } from "./sync-worker.mjs";
 import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv } from "./adapters/transports.mjs";
+import { VtigerAdapterClient } from "./adapters/vtiger/vtiger-adapter-client.mjs";
+import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
 
 function parsePositiveInt(value, fallback) {
   if (value === undefined) return fallback;
@@ -16,7 +18,7 @@ export function loadSyncWorkerConfig(env = process.env) {
     pollIntervalMs: parsePositiveInt(env.SYNC_WORKER_POLL_INTERVAL_MS, 2000),
     batchSize: parsePositiveInt(env.SYNC_WORKER_BATCH_SIZE, 100),
     maxAttempts: parsePositiveInt(env.SYNC_WORKER_MAX_ATTEMPTS, 3),
-    baseBackoffMs: parsePositiveInt(env.SYNC_WORKER_BACKOFF_BASE_MS, 0),
+    baseBackoffMs: parsePositiveInt(env.SYNC_WORKER_BACKOFF_BASE_MS, 1000),
     maxBackoffMs: parsePositiveInt(env.SYNC_WORKER_BACKOFF_MAX_MS, 60000)
   };
 }
@@ -47,28 +49,58 @@ export async function runSyncWorkerService(options = {}) {
   const config = options.config ?? loadSyncWorkerConfig();
   const db = options.db ?? new SqliteClient(config.dbPath);
   const syncIntents = options.syncIntents ?? new SyncIntentRepository(db);
+  const vtigerLinks = options.vtigerLinks ?? new VtigerLinkRepository(db);
   const transport = options.transport ?? unsupportedTransport;
   const openemrTransport = options.openemrTransport ?? createOpenEmrTransportFromEnv() ?? transport;
   const vtigerTransport = options.vtigerTransport ?? createVtigerTransportFromEnv() ?? transport;
 
+  const vtiger = options.vtiger ?? new VtigerAdapterClient({ transport: vtigerTransport });
   const worker = options.worker ?? new SyncWorker({
     syncIntents,
     maxAttempts: config.maxAttempts,
     baseBackoffMs: config.baseBackoffMs,
     maxBackoffMs: config.maxBackoffMs,
-    vtiger: options.vtiger ?? createAdapterProxy("vtiger", [
-      "createIncidentMirror",
-      "updateIncidentMirror",
-      "createAssignmentMirror",
-      "updateAssignmentMirror"
-    ], vtigerTransport),
+    vtiger,
     openemr: options.openemr ?? createAdapterProxy("openemr", [
       "createPatient",
       "createEncounter",
       "createObservation",
       "createIntervention",
       "createHandover"
-    ], openemrTransport)
+    ], openemrTransport),
+    onSuccess: async (intent, result) => {
+      if (intent.target_system !== "vtiger" || intent.entity_type !== "incident" || !result?.remote_id) return false;
+      const now = new Date().toISOString();
+      const link = vtigerLinks.findByIncidentId(intent.payload.incident_id);
+      db.withTransaction(() => {
+        vtigerLinks.upsert({
+          incident_id: intent.payload.incident_id,
+          remote_id: result.remote_id,
+          remote_number: result.remote_number ?? null,
+          external_key: result.external_key ?? link?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:${intent.payload.incident_id}`,
+          create_correlation_id: link?.create_correlation_id ?? intent.correlation_id,
+          last_correlation_id: intent.correlation_id,
+          sync_status: "succeeded",
+          last_error_code: null,
+          last_synced_at: now,
+          created_at: link?.created_at ?? now,
+          updated_at: now
+        });
+        syncIntents.markSucceeded(intent.intent_id, now);
+      });
+      return true;
+    },
+    onFailure: (intent, error, state) => {
+      if (intent.target_system !== "vtiger" || intent.entity_type !== "incident") return;
+      const existing = vtigerLinks.findByIncidentId(intent.payload.incident_id);
+      if (!existing) return;
+      vtigerLinks.markFailure(
+        intent.payload.incident_id,
+        error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE",
+        state.status,
+        new Date().toISOString()
+      );
+    }
   });
 
   let stopping = false;
