@@ -1,4 +1,4 @@
-import { listPatientCases, loadPatientCaseData, createPatientCase, patientCaseWrite, patientIdentityWrite } from './api.mjs';
+import { listPatientCases, loadPatientCaseData, createPatientCase, patientCaseWrite, patientIdentityWrite, getPatientCaseClinicalSection, savePatientCaseDemographics, createPatientCaseClinicalRecord } from './api.mjs';
 import { renderPatientCasesPanel } from './crew.mjs';
 import {
   ApiError,
@@ -397,6 +397,21 @@ async function renderCrewIncidentDetail() {
       const result = await patientIdentityWrite({ ...config, action, payload });
       output.querySelector('#patientSearchResults').textContent = JSON.stringify(result, null, 2);
       if (action === 'create') output.querySelector('#patientLinkForm [name="openemr_patient_id"]').value = result.patient_id;
+    });
+    bindCaseForm('#demographicsForm', async payload => {
+      payload.dob_unknown = Boolean(payload.dob_unknown);
+      await savePatientCaseDemographics({ ...config, patientCaseId: selectedId, payload });
+      await renderCrewIncidentDetail();
+    });
+    bindCaseForm('#assessmentForm', async payload => {
+      let structured;
+      try { structured = JSON.parse(payload.payload || '{}'); } catch { throw new Error('Assessment payload must be valid JSON'); }
+      await createPatientCaseClinicalRecord({ ...config, patientCaseId: selectedId, section: 'assessments', payload: { section_type: payload.section_type, payload: structured } });
+      await renderCrewIncidentDetail();
+    });
+    bindCaseForm('#dispositionForm', async payload => {
+      await createPatientCaseClinicalRecord({ ...config, patientCaseId: selectedId, section: 'disposition', payload });
+      await renderCrewIncidentDetail();
     });
     if (!summary) { status.textContent = 'Select a patient case.'; return; }
 

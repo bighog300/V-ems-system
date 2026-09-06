@@ -765,7 +765,7 @@ export function createApp(orchestration = new OrchestrationService()) {
 
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient))?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline))?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? orchestration.getPatientCase(id).incident_id;
@@ -789,6 +789,19 @@ export function createApp(orchestration = new OrchestrationService()) {
         if (method === 'PATCH' && action === 'assignment') return okJson(res, 200, orchestration.changePatientCaseAssignment(id, await parseJson(req), meta), context);
         if (method === 'PATCH' && action === 'status') return okJson(res, 200, orchestration.setPatientCaseStatus(id, (await parseJson(req)).status, meta), context);
         if (method === 'POST' && action === 'identity-reconciliation') return okJson(res, 200, orchestration.reconcilePatientCaseIdentity(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'demographics') return okJson(res, 200, orchestration.getPatientCaseDemographics(id), context);
+        if (method === 'PUT' && action === 'demographics') return okJson(res, 200, orchestration.savePatientCaseDemographics(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'assessments') return okJson(res, 200, { assessments: orchestration.listPatientCaseAssessments(id) }, context);
+        if (method === 'POST' && action === 'assessments') return okJson(res, 201, orchestration.createPatientCaseAssessment(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'observations') return okJson(res, 200, { observations: orchestration.listPatientCaseObservations(id) }, context);
+        if (method === 'POST' && action === 'observations') return okJson(res, 201, await orchestration.createPatientCaseObservation(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'medications') return okJson(res, 200, { medications: orchestration.listPatientCaseMedications(id) }, context);
+        if (method === 'POST' && action === 'medications') return okJson(res, 201, await orchestration.createPatientCaseMedication(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'procedures') return okJson(res, 200, { procedures: orchestration.listPatientCaseProcedures(id) }, context);
+        if (method === 'POST' && action === 'procedures') return okJson(res, 201, await orchestration.createPatientCaseProcedure(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'disposition') return okJson(res, 200, orchestration.getPatientCaseDisposition(id), context);
+        if (method === 'POST' && action === 'disposition') return okJson(res, 201, orchestration.setPatientCaseDisposition(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'timeline') return okJson(res, 200, { timeline: orchestration.listPatientCaseTimeline(id) }, context);
       }
 
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
