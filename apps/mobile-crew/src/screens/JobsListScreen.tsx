@@ -12,6 +12,7 @@ export interface JobsListScreenProps {
   session: Session;
   onSignedOut: () => void;
   onSelectJob: (job: AssignedJob) => void;
+  onOpenSyncStatus?: () => void;
   sync?: UseSyncTriggersResult;
 }
 
@@ -25,7 +26,7 @@ function syncStatusText(sync: UseSyncTriggersResult): string | null {
   return `${pending} item${pending === 1 ? "" : "s"} waiting to sync`;
 }
 
-export default function JobsListScreen({ session, onSignedOut, onSelectJob, sync = NOOP_SYNC }: JobsListScreenProps) {
+export default function JobsListScreen({ session, onSignedOut, onSelectJob, onOpenSyncStatus, sync = NOOP_SYNC }: JobsListScreenProps) {
   const [jobs, setJobs] = useState<AssignedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,9 +75,17 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob, sync
 
       <View style={styles.syncRow}>
         {syncStatusText(sync) ? (
-          <Text style={styles.syncStatus} accessibilityLiveRegion="polite" testID="sync-status">
-            {syncStatusText(sync)}
-          </Text>
+          onOpenSyncStatus ? (
+            <Pressable onPress={onOpenSyncStatus} accessibilityRole="button" accessibilityLabel="View sync status" style={styles.syncStatusLink}>
+              <Text style={[styles.syncStatus, styles.syncStatusUnderline]} accessibilityLiveRegion="polite" testID="sync-status">
+                {syncStatusText(sync)}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text style={styles.syncStatus} accessibilityLiveRegion="polite" testID="sync-status">
+              {syncStatusText(sync)}
+            </Text>
+          )
         ) : null}
         <Pressable
           onPress={() => sync.syncNow()}
@@ -181,11 +190,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 12
   },
+  syncStatusLink: {
+    flexShrink: 1,
+    marginRight: 12,
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center"
+  },
   syncStatus: {
     fontSize: 13,
-    color: "#555",
-    flexShrink: 1,
-    marginRight: 12
+    color: "#555"
+  },
+  syncStatusUnderline: {
+    textDecorationLine: "underline"
   },
   syncButton: {
     minHeight: TOUCH_TARGET_MIN,
