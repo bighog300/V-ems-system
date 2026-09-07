@@ -26,7 +26,14 @@ export function backoffMs(attemptCount: number): number {
 }
 
 export function isEntryDueForRetry(entry: Pick<OutboxEntry, "status" | "attemptCount" | "lastAttemptedAt">, now: number): boolean {
-  if (entry.status === "queued") return true;
+  // `sending` only ever means "a runSync pass had claimed this entry". Within
+  // a single process that's transient — the coordinator never lets two
+  // passes overlap — so a `sending` row still on disk when a new pass starts
+  // can only be left over from a previous process that died mid-attempt
+  // (app kill, crash) before recording an outcome. It's always due: retrying
+  // it is exactly as safe as the original attempt, since both use the same
+  // idempotency key.
+  if (entry.status === "queued" || entry.status === "sending") return true;
   if (entry.status !== "retrying") return false;
   if (!entry.lastAttemptedAt) return true;
   return now - new Date(entry.lastAttemptedAt).getTime() >= backoffMs(entry.attemptCount);
@@ -85,7 +92,7 @@ export async function runSync(db: OfflineSqliteLike, key: Uint8Array, session: S
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.now ?? Date.now;
 
-  const entries = await listMutations(db, key, { status: ["queued", "retrying"] });
+  const entries = await listMutations(db, key, { status: ["queued", "retrying", "sending"] });
   const due = entries
     .filter((entry) => isEntryDueForRetry(entry, now()))
     .sort((a, b) => a.patientCaseId.localeCompare(b.patientCaseId) || a.createdAt.localeCompare(b.createdAt));
