@@ -77,4 +77,42 @@ describe("JobsListScreen", () => {
     await fireEvent.press(getByTestId("sign-out"));
     await waitFor(() => expect(onSignedOut).toHaveBeenCalledTimes(1));
   });
+
+  it("pressing Sync now calls the provided syncNow", async () => {
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ assignments: [] }), { status: 200 })) as unknown as typeof fetch;
+    const syncNow = jest.fn(async () => {});
+
+    const { getByTestId } = await render(
+      <JobsListScreen
+        session={session}
+        onSignedOut={jest.fn()}
+        onSelectJob={jest.fn()}
+        sync={{ syncing: false, lastResult: null, syncNow }}
+      />
+    );
+    await waitFor(() => expect(getByTestId("jobs-empty")).toBeTruthy());
+
+    await fireEvent.press(getByTestId("sync-now"));
+    expect(syncNow).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a pending-items sync status when the last sync left items unsynced", async () => {
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ assignments: [] }), { status: 200 })) as unknown as typeof fetch;
+
+    const { getByTestId } = await render(
+      <JobsListScreen
+        session={session}
+        onSignedOut={jest.fn()}
+        onSelectJob={jest.fn()}
+        sync={{
+          syncing: false,
+          lastResult: { attempted: 2, acknowledged: 0, retrying: 2, failed: 0, conflicted: 0 },
+          syncNow: jest.fn(async () => {})
+        }}
+      />
+    );
+
+    await waitFor(() => expect(getByTestId("sync-status")).toBeTruthy());
+    expect(getByTestId("sync-status").props.children).toContain("waiting to sync");
+  });
 });
