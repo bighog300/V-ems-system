@@ -500,6 +500,30 @@ export class OrchestrationService {
 
   getAssignmentById(assignmentId) { return this.getAssignment(assignmentId); }
 
+  getAssignmentsForCrewMember(actorId) {
+    const assignments = this.assignments.findActiveByCrewMember(actorId);
+    return assignments.map((assignment) => {
+      const incident = this.incidents.findById(assignment.incident_id);
+      return {
+        assignment_id: assignment.assignment_id,
+        status: assignment.status,
+        vehicle_status: assignment.vehicle_status,
+        vehicle_id: assignment.vehicle_id,
+        crew_ids: assignment.crew_ids,
+        updated_at: assignment.updated_at,
+        incident: incident
+          ? {
+              incident_id: incident.incident_id,
+              priority: incident.priority,
+              status: incident.status,
+              location_summary: incident.address,
+              created_at: incident.created_at
+            }
+          : null
+      };
+    });
+  }
+
 
   async createEncounterForIncident(incidentId, payload, meta) {
     this.getIncident(incidentId);

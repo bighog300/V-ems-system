@@ -48,6 +48,17 @@ export class AssignmentRepository {
     return this.db.queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} AND status IN ('Assigned', 'Accepted', 'Mobilised', 'Active');`).map(mapAssignment);
   }
 
+  findActiveByCrewMember(actorId) {
+    return this.db
+      .queryAll(`
+        SELECT * FROM assignments
+        WHERE status IN ('Assigned', 'Accepted', 'Mobilised', 'Active')
+          AND EXISTS (SELECT 1 FROM json_each(crew_ids_json) WHERE json_each.value = ${sqlValue(actorId)})
+        ORDER BY created_at DESC;
+      `)
+      .map(mapAssignment);
+  }
+
   findByIncidentId(incidentId) {
     return this.db
       .queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} ORDER BY created_at DESC;`)
