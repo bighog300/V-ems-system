@@ -37,6 +37,19 @@ export interface ApiConfig {
   fetchImpl?: typeof fetch;
 }
 
+export async function getPatientCase({
+  apiBaseUrl,
+  authToken,
+  fetchImpl = fetch,
+  patientCaseId
+}: ApiConfig & { patientCaseId: string }): Promise<PatientCase> {
+  const result = await requestJson<PatientCase>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}`, {
+    config: { authToken }
+  });
+  if (!result.data) throw new Error("Patient case fetch returned no data");
+  return result.data;
+}
+
 export async function listPatientCases({ apiBaseUrl, authToken, fetchImpl = fetch, incidentId }: ApiConfig & { incidentId: string }): Promise<PatientCase[]> {
   const result = await requestJson<{ patient_cases: PatientCase[] }>(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-cases`, {
     config: { authToken }

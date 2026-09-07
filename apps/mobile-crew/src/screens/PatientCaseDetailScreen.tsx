@@ -1,16 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
-import { getPatientCaseDemographics, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
+import { getPatientCase, getPatientCaseDemographics, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
 
 export interface PatientCaseDetailScreenProps {
   patientCase: PatientCase;
   session: Session;
   onBack: () => void;
+  onOpenIdentity: (patientCase: PatientCase) => void;
 }
 
-export default function PatientCaseDetailScreen({ patientCase, session, onBack }: PatientCaseDetailScreenProps) {
+export default function PatientCaseDetailScreen({ patientCase: initialCase, session, onBack, onOpenIdentity }: PatientCaseDetailScreenProps) {
+  const [caseState, setCaseState] = useState(initialCase);
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [dob, setDob] = useState("");
@@ -32,26 +36,31 @@ export default function PatientCaseDetailScreen({ patientCase, session, onBack }
     setUnidentified(demographics?.unidentified ?? false);
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const demographics = await getPatientCaseDemographics({
-        apiBaseUrl: session.apiBaseUrl,
-        authToken: session.authToken,
-        patientCaseId: patientCase.patient_case_id
-      });
-      applyDemographics(demographics);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load demographics.");
-    } finally {
-      setLoading(false);
-    }
-  }, [patientCase.patient_case_id, session.apiBaseUrl, session.authToken]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        setLoading(true);
+        setError(null);
+        try {
+          const [refreshedCase, demographics] = await Promise.all([
+            getPatientCase({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
+            getPatientCaseDemographics({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id })
+          ]);
+          if (cancelled) return;
+          setCaseState(refreshedCase);
+          applyDemographics(demographics);
+        } catch (err) {
+          if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load patient case.");
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [initialCase.patient_case_id, session.apiBaseUrl, session.authToken])
+  );
 
   async function handleSave() {
     setSaving(true);
@@ -70,7 +79,7 @@ export default function PatientCaseDetailScreen({ patientCase, session, onBack }
       const saved = await savePatientCaseDemographics({
         apiBaseUrl: session.apiBaseUrl,
         authToken: session.authToken,
-        patientCaseId: patientCase.patient_case_id,
+        patientCaseId: caseState.patient_case_id,
         payload
       });
       applyDemographics(saved);
@@ -89,78 +98,87 @@ export default function PatientCaseDetailScreen({ patientCase, session, onBack }
       </Pressable>
 
       <Text style={styles.title}>
-        Patient {patientCase.patient_sequence}
-        {patientCase.temporary_label ? ` — ${patientCase.temporary_label}` : ""}
+        Patient {caseState.patient_sequence}
+        {caseState.temporary_label ? ` — ${caseState.temporary_label}` : ""}
       </Text>
       <Text style={styles.meta}>
-        {patientCase.patient_case_id} · {patientCase.status}
+        {caseState.patient_case_id} · {caseState.status}
       </Text>
 
       {loading ? (
         <ActivityIndicator style={styles.loading} testID="demographics-loading" />
       ) : (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Demographics</Text>
-
-          {error ? (
-            <Text style={styles.error} testID="demographics-error">
-              {error}
+        <>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Patient identity</Text>
+            {error ? (
+              <Text style={styles.error} testID="demographics-error">
+                {error}
+              </Text>
+            ) : null}
+            <Text style={styles.identityStatus}>
+              {caseState.openemr_patient_id ? `Linked to ${caseState.openemr_patient_id} (${caseState.verification_status})` : "Not yet identified"}
             </Text>
-          ) : null}
-
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Unidentified patient</Text>
-            <Switch value={unidentified} onValueChange={setUnidentified} testID="unidentified-switch" />
+            <Pressable style={styles.button} onPress={() => onOpenIdentity(caseState)} testID="open-identity">
+              <Text style={styles.buttonText}>{caseState.openemr_patient_id ? "View identity" : "Identify patient"}</Text>
+            </Pressable>
           </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="First name"
-            value={firstName}
-            onChangeText={setFirstName}
-            editable={!unidentified}
-            testID="first-name-input"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Last name"
-            value={lastName}
-            onChangeText={setLastName}
-            editable={!unidentified}
-            testID="last-name-input"
-          />
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Demographics</Text>
 
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Date of birth unknown</Text>
-            <Switch value={dobUnknown} onValueChange={setDobUnknown} testID="dob-unknown-switch" />
-          </View>
-          {!dobUnknown ? (
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Unidentified patient</Text>
+              <Switch value={unidentified} onValueChange={setUnidentified} testID="unidentified-switch" />
+            </View>
+
             <TextInput
               style={styles.input}
-              placeholder="DOB (YYYY-MM-DD)"
-              value={dob}
-              onChangeText={setDob}
-              testID="dob-input"
+              placeholder="First name"
+              value={firstName}
+              onChangeText={setFirstName}
+              editable={!unidentified}
+              testID="first-name-input"
             />
-          ) : null}
+            <TextInput
+              style={styles.input}
+              placeholder="Last name"
+              value={lastName}
+              onChangeText={setLastName}
+              editable={!unidentified}
+              testID="last-name-input"
+            />
 
-          <TextInput style={styles.input} placeholder="Sex" value={sex} onChangeText={setSex} testID="sex-input" />
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Date of birth unknown</Text>
+              <Switch value={dobUnknown} onValueChange={setDobUnknown} testID="dob-unknown-switch" />
+            </View>
+            {!dobUnknown ? (
+              <TextInput
+                style={styles.input}
+                placeholder="DOB (YYYY-MM-DD)"
+                value={dob}
+                onChangeText={setDob}
+                testID="dob-input"
+              />
+            ) : null}
 
-          {savedAt ? (
-            <Text style={styles.savedNote} testID="demographics-saved">
-              Saved
-            </Text>
-          ) : null}
+            <TextInput style={styles.input} placeholder="Sex" value={sex} onChangeText={setSex} testID="sex-input" />
 
-          <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={handleSave} disabled={saving} testID="save-demographics">
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save demographics</Text>}
-          </Pressable>
-        </View>
+            {savedAt ? (
+              <Text style={styles.savedNote} testID="demographics-saved">
+                Saved
+              </Text>
+            ) : null}
+
+            <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={handleSave} disabled={saving} testID="save-demographics">
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save demographics</Text>}
+            </Pressable>
+          </View>
+        </>
       )}
 
-      <Text style={styles.placeholder}>
-        Patient identification (OpenEMR search/link), assessment, vitals and handover charting land in the next milestone.
-      </Text>
+      <Text style={styles.placeholder}>Encounter creation and clinical charting land in the next milestone.</Text>
     </ScrollView>
   );
 }
@@ -201,6 +219,11 @@ const styles = StyleSheet.create({
     color: "#555",
     marginBottom: 12,
     textTransform: "uppercase"
+  },
+  identityStatus: {
+    fontSize: 14,
+    color: "#333",
+    marginBottom: 12
   },
   error: {
     fontSize: 13,
