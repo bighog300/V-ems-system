@@ -7,12 +7,16 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "org.vems.mobilecrew",
+      "buildNumber": "1",
       "supportsTablet": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "V-EMS Crew uses Face ID to re-lock the app and protect patient information on this device."
       }
     },
     "android": {
+      "package": "org.vems.mobilecrew",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

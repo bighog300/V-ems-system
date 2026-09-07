@@ -1,0 +1,46 @@
+name: mobile-crew-android-build
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "apps/mobile-crew/**"
+      - ".github/workflows/mobile-crew-android-build.yml"
+  pull_request:
+    paths:
+      - "apps/mobile-crew/**"
+      - ".github/workflows/mobile-crew-android-build.yml"
+  workflow_dispatch:
+
+jobs:
+  android-debug-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile-crew
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install dependencies
+        working-directory: .
+        run: npm ci
+      - name: Prebuild native Android project
+        run: npx expo prebuild --platform android --no-install
+        env:
+          EXPO_NO_TELEMETRY: "1"
+      - name: Assemble debug APK
+        working-directory: apps/mobile-crew/android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-crew-debug-apk
+          path: apps/mobile-crew/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
