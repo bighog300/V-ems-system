@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { authenticateWithAppLock } from "../auth/appLock.ts";
+import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface AppLockScreenProps {
   onUnlocked: () => void;
@@ -35,13 +36,22 @@ export default function AppLockScreen({ onUnlocked }: AppLockScreenProps) {
 
   return (
     <View style={styles.container} testID="app-lock-screen">
-      <Text style={styles.title}>V-EMS Crew is locked</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        V-EMS Crew is locked
+      </Text>
       {error ? (
-        <Text style={styles.error} testID="lock-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="lock-error">
           {error}
         </Text>
       ) : null}
-      <Pressable style={[styles.button, authenticating && styles.buttonDisabled]} onPress={attempt} disabled={authenticating} testID="unlock-button">
+      <Pressable
+        style={[styles.button, authenticating && styles.buttonDisabled]}
+        onPress={attempt}
+        disabled={authenticating}
+        accessibilityRole="button"
+        accessibilityLabel="Unlock"
+        testID="unlock-button"
+      >
         {authenticating ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Unlock</Text>}
       </Pressable>
     </View>
@@ -54,7 +64,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#fff",
-    padding: 24
+    padding: 24,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
   },
   title: {
     fontSize: 20,
@@ -72,7 +85,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 32,
-    alignItems: "center"
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: TOUCH_TARGET_MIN,
+    minWidth: TOUCH_TARGET_MIN * 2
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"

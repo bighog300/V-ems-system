@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import type { AssignedJob } from "../api/assignments.ts";
 import { createPatientCase, listPatientCases, type PatientCase } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
+import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface IncidentDetailScreenProps {
   job: AssignedJob;
@@ -67,11 +68,13 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
 
   return (
     <ScrollView style={styles.container} testID="incident-detail-screen">
-      <Pressable onPress={onBack} testID="back-to-jobs">
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to assigned jobs" style={styles.backLink} testID="back-to-jobs">
         <Text style={styles.back}>‹ Assigned jobs</Text>
       </Pressable>
 
-      <Text style={styles.title}>{incident?.incident_id ?? "Unlinked incident"}</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        {incident?.incident_id ?? "Unlinked incident"}
+      </Text>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Incident</Text>
@@ -100,7 +103,7 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
         ) : (
           <>
             {error ? (
-              <Text style={styles.error} testID="patient-cases-error">
+              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="patient-cases-error">
                 {error}
               </Text>
             ) : null}
@@ -115,6 +118,8 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
                   key={patientCase.patient_case_id}
                   style={styles.caseRow}
                   onPress={() => onSelectPatientCase(patientCase)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Patient ${patientCase.patient_sequence}${patientCase.temporary_label ? ` — ${patientCase.temporary_label}` : ""}, status ${patientCase.status}`}
                   testID={`patient-case-${patientCase.patient_case_id}`}
                 >
                   <Text style={styles.caseLabel}>
@@ -129,11 +134,19 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
             <TextInput
               style={styles.input}
               placeholder="Optional label (e.g. driver, unidentified male)"
+              accessibilityLabel="Optional patient case label"
               value={label}
               onChangeText={setLabel}
               testID="new-case-label"
             />
-            <Pressable style={[styles.button, creating && styles.buttonDisabled]} onPress={handleCreate} disabled={creating} testID="create-patient-case">
+            <Pressable
+              style={[styles.button, creating && styles.buttonDisabled]}
+              onPress={handleCreate}
+              disabled={creating}
+              accessibilityRole="button"
+              accessibilityLabel="New patient case"
+              testID="create-patient-case"
+            >
               {creating ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>New patient case</Text>}
             </Pressable>
           </>
@@ -152,12 +165,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 24
+    padding: 24,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
+  },
+  backLink: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    alignSelf: "flex-start"
   },
   back: {
     color: "#1a4fd6",
-    fontSize: 15,
-    marginBottom: 16
+    fontSize: 15
   },
   title: {
     fontSize: 22,
@@ -210,7 +230,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0"
+    borderBottomColor: "#f0f0f0",
+    minHeight: TOUCH_TARGET_MIN
   },
   caseLabel: {
     fontSize: 14,
@@ -228,14 +249,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginTop: 12,
-    fontSize: 14
+    fontSize: 14,
+    minHeight: TOUCH_TARGET_MIN
   },
   button: {
     backgroundColor: "#1a4fd6",
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
-    marginTop: 10
+    justifyContent: "center",
+    marginTop: 10,
+    minHeight: TOUCH_TARGET_MIN
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"

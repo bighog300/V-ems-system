@@ -11,6 +11,7 @@ import {
   type MedicationAdministration
 } from "../api/interventions.ts";
 import type { Session } from "../auth/session.ts";
+import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface InterventionsScreenProps {
   patientCaseId: string;
@@ -115,45 +116,108 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
 
   return (
     <View style={styles.container} testID="interventions-screen">
-      <Pressable onPress={onBack} testID="back-to-case">
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to patient case" style={styles.backLink} testID="back-to-case">
         <Text style={styles.back}>‹ Patient case</Text>
       </Pressable>
-      <Text style={styles.title}>Interventions</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        Interventions
+      </Text>
 
       <View style={styles.tabRow}>
-        <Pressable style={[styles.tab, tab === "medications" && styles.tabActive]} onPress={() => setTab("medications")} testID="tab-medications">
+        <Pressable
+          style={[styles.tab, tab === "medications" && styles.tabActive]}
+          onPress={() => setTab("medications")}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === "medications" }}
+          testID="tab-medications"
+        >
           <Text style={[styles.tabText, tab === "medications" && styles.tabTextActive]}>Medications</Text>
         </Pressable>
-        <Pressable style={[styles.tab, tab === "procedures" && styles.tabActive]} onPress={() => setTab("procedures")} testID="tab-procedures">
+        <Pressable
+          style={[styles.tab, tab === "procedures" && styles.tabActive]}
+          onPress={() => setTab("procedures")}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === "procedures" }}
+          testID="tab-procedures"
+        >
           <Text style={[styles.tabText, tab === "procedures" && styles.tabTextActive]}>Procedures</Text>
         </Pressable>
       </View>
 
       {error ? (
-        <Text style={styles.error} testID="interventions-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="interventions-error">
           {error}
         </Text>
       ) : null}
 
       {tab === "medications" ? (
         <View style={styles.form}>
-          <TextInput style={styles.input} placeholder="Medication name" value={medName} onChangeText={setMedName} testID="med-name" />
-          <TextInput style={styles.input} placeholder="Dose" value={medDose} onChangeText={setMedDose} testID="med-dose" />
-          <TextInput style={styles.input} placeholder="Dose unit (e.g. mg)" value={medDoseUnit} onChangeText={setMedDoseUnit} testID="med-dose-unit" />
-          <TextInput style={styles.input} placeholder="Route (e.g. IV, IM, oral)" value={medRoute} onChangeText={setMedRoute} testID="med-route" />
-          <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={handleRecordMedication} disabled={saving} testID="record-medication">
+          <TextInput
+            style={styles.input}
+            placeholder="Medication name"
+            accessibilityLabel="Medication name"
+            value={medName}
+            onChangeText={setMedName}
+            testID="med-name"
+          />
+          <TextInput style={styles.input} placeholder="Dose" accessibilityLabel="Dose" value={medDose} onChangeText={setMedDose} testID="med-dose" />
+          <TextInput
+            style={styles.input}
+            placeholder="Dose unit (e.g. mg)"
+            accessibilityLabel="Dose unit"
+            value={medDoseUnit}
+            onChangeText={setMedDoseUnit}
+            testID="med-dose-unit"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Route (e.g. IV, IM, oral)"
+            accessibilityLabel="Route"
+            value={medRoute}
+            onChangeText={setMedRoute}
+            testID="med-route"
+          />
+          <Pressable
+            style={[styles.button, saving && styles.buttonDisabled]}
+            onPress={handleRecordMedication}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Record medication"
+            testID="record-medication"
+          >
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Record medication</Text>}
           </Pressable>
         </View>
       ) : (
         <View style={styles.form}>
-          <TextInput style={styles.input} placeholder="Procedure type" value={procType} onChangeText={setProcType} testID="proc-type" />
-          <TextInput style={styles.input} placeholder="Procedure name" value={procName} onChangeText={setProcName} testID="proc-name" />
+          <TextInput
+            style={styles.input}
+            placeholder="Procedure type"
+            accessibilityLabel="Procedure type"
+            value={procType}
+            onChangeText={setProcType}
+            testID="proc-type"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Procedure name"
+            accessibilityLabel="Procedure name"
+            value={procName}
+            onChangeText={setProcName}
+            testID="proc-name"
+          />
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Successful</Text>
             <Switch value={procSuccess} onValueChange={setProcSuccess} testID="proc-success" />
           </View>
-          <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={handleRecordProcedure} disabled={saving} testID="record-procedure">
+          <Pressable
+            style={[styles.button, saving && styles.buttonDisabled]}
+            onPress={handleRecordProcedure}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Record procedure"
+            testID="record-procedure"
+          >
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Record procedure</Text>}
           </Pressable>
         </View>
@@ -210,12 +274,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 24
+    padding: 24,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
+  },
+  backLink: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    alignSelf: "flex-start"
   },
   back: {
     color: "#1a4fd6",
-    fontSize: 15,
-    marginBottom: 16
+    fontSize: 15
   },
   title: {
     fontSize: 22,
@@ -230,8 +301,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     alignItems: "center",
+    justifyContent: "center",
     borderBottomWidth: 2,
-    borderBottomColor: "#e0e0e0"
+    borderBottomColor: "#e0e0e0",
+    minHeight: TOUCH_TARGET_MIN
   },
   tabActive: {
     borderBottomColor: "#1a4fd6"
@@ -263,7 +336,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 10,
-    fontSize: 14
+    fontSize: 14,
+    minHeight: TOUCH_TARGET_MIN
   },
   switchRow: {
     flexDirection: "row",
@@ -280,7 +354,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
-    marginTop: 4
+    justifyContent: "center",
+    marginTop: 4,
+    minHeight: TOUCH_TARGET_MIN
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"

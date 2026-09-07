@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, Tex
 import { createPatientCaseEncounter, getPatientCaseEncounter, type PatientCaseEncounter } from "../api/encounters.ts";
 import { getPatientCase, getPatientCaseDemographics, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
+import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface PatientCaseDetailScreenProps {
   patientCase: PatientCase;
@@ -136,11 +137,11 @@ export default function PatientCaseDetailScreen({
 
   return (
     <ScrollView style={styles.container} testID="patient-case-detail-screen">
-      <Pressable onPress={onBack} testID="back-to-incident">
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to incident" style={styles.backLink} testID="back-to-incident">
         <Text style={styles.back}>‹ Incident</Text>
       </Pressable>
 
-      <Text style={styles.title}>
+      <Text style={styles.title} accessibilityRole="header">
         Patient {caseState.patient_sequence}
         {caseState.temporary_label ? ` — ${caseState.temporary_label}` : ""}
       </Text>
@@ -155,14 +156,20 @@ export default function PatientCaseDetailScreen({
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Patient identity</Text>
             {error ? (
-              <Text style={styles.error} testID="demographics-error">
+              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="demographics-error">
                 {error}
               </Text>
             ) : null}
             <Text style={styles.identityStatus}>
               {caseState.openemr_patient_id ? `Linked to ${caseState.openemr_patient_id} (${caseState.verification_status})` : "Not yet identified"}
             </Text>
-            <Pressable style={styles.button} onPress={() => onOpenIdentity(caseState)} testID="open-identity">
+            <Pressable
+              style={styles.button}
+              onPress={() => onOpenIdentity(caseState)}
+              accessibilityRole="button"
+              accessibilityLabel={caseState.openemr_patient_id ? "View identity" : "Identify patient"}
+              testID="open-identity"
+            >
               <Text style={styles.buttonText}>{caseState.openemr_patient_id ? "View identity" : "Identify patient"}</Text>
             </Pressable>
           </View>
@@ -178,6 +185,7 @@ export default function PatientCaseDetailScreen({
             <TextInput
               style={styles.input}
               placeholder="First name"
+              accessibilityLabel="First name"
               value={firstName}
               onChangeText={setFirstName}
               editable={!unidentified}
@@ -186,6 +194,7 @@ export default function PatientCaseDetailScreen({
             <TextInput
               style={styles.input}
               placeholder="Last name"
+              accessibilityLabel="Last name"
               value={lastName}
               onChangeText={setLastName}
               editable={!unidentified}
@@ -200,21 +209,29 @@ export default function PatientCaseDetailScreen({
               <TextInput
                 style={styles.input}
                 placeholder="DOB (YYYY-MM-DD)"
+                accessibilityLabel="Date of birth"
                 value={dob}
                 onChangeText={setDob}
                 testID="dob-input"
               />
             ) : null}
 
-            <TextInput style={styles.input} placeholder="Sex" value={sex} onChangeText={setSex} testID="sex-input" />
+            <TextInput style={styles.input} placeholder="Sex" accessibilityLabel="Sex" value={sex} onChangeText={setSex} testID="sex-input" />
 
             {savedAt ? (
-              <Text style={styles.savedNote} testID="demographics-saved">
+              <Text style={styles.savedNote} accessibilityLiveRegion="polite" testID="demographics-saved">
                 Saved
               </Text>
             ) : null}
 
-            <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={handleSave} disabled={saving} testID="save-demographics">
+            <Pressable
+              style={[styles.button, saving && styles.buttonDisabled]}
+              onPress={handleSave}
+              disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="Save demographics"
+              testID="save-demographics"
+            >
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save demographics</Text>}
             </Pressable>
           </View>
@@ -222,7 +239,7 @@ export default function PatientCaseDetailScreen({
             <Text style={styles.cardTitle}>Encounter</Text>
 
             {encounterError ? (
-              <Text style={styles.error} testID="encounter-error">
+              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="encounter-error">
                 {encounterError}
               </Text>
             ) : null}
@@ -233,12 +250,20 @@ export default function PatientCaseDetailScreen({
                   {encounter.encounter_id} · {encounter.status}
                 </Text>
                 <Text style={styles.hint}>Started {encounter.care_started_at}</Text>
-                <Pressable style={[styles.button, styles.spacedButton]} onPress={() => onOpenVitals(caseState.patient_case_id)} testID="open-vitals">
+                <Pressable
+                  style={[styles.button, styles.spacedButton]}
+                  onPress={() => onOpenVitals(caseState.patient_case_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Vitals"
+                  testID="open-vitals"
+                >
                   <Text style={styles.buttonText}>Vitals</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.button, styles.spacedButton]}
                   onPress={() => onOpenInterventions(caseState.patient_case_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Interventions"
                   testID="open-interventions"
                 >
                   <Text style={styles.buttonText}>Interventions</Text>
@@ -246,6 +271,8 @@ export default function PatientCaseDetailScreen({
                 <Pressable
                   style={[styles.button, styles.spacedButton]}
                   onPress={() => onOpenAssessment(caseState.patient_case_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Assessment"
                   testID="open-assessment"
                 >
                   <Text style={styles.buttonText}>Assessment</Text>
@@ -253,6 +280,8 @@ export default function PatientCaseDetailScreen({
                 <Pressable
                   style={[styles.button, styles.spacedButton]}
                   onPress={() => onOpenDisposition(caseState.patient_case_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Disposition"
                   testID="open-disposition"
                 >
                   <Text style={styles.buttonText}>Disposition</Text>
@@ -260,6 +289,8 @@ export default function PatientCaseDetailScreen({
                 <Pressable
                   style={[styles.button, styles.spacedButton]}
                   onPress={() => onOpenEpcr(caseState.patient_case_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="ePCR status"
                   testID="open-epcr"
                 >
                   <Text style={styles.buttonText}>ePCR status</Text>
@@ -274,6 +305,7 @@ export default function PatientCaseDetailScreen({
                 <TextInput
                   style={styles.input}
                   placeholder="Presenting complaint"
+                  accessibilityLabel="Presenting complaint"
                   value={presentingComplaint}
                   onChangeText={setPresentingComplaint}
                   testID="presenting-complaint-input"
@@ -282,6 +314,8 @@ export default function PatientCaseDetailScreen({
                   style={[styles.button, (creatingEncounter || !presentingComplaint.trim()) && styles.buttonDisabled]}
                   onPress={handleCreateEncounter}
                   disabled={creatingEncounter || !presentingComplaint.trim()}
+                  accessibilityRole="button"
+                  accessibilityLabel="Start encounter"
                   testID="start-encounter"
                 >
                   {creatingEncounter ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Start encounter</Text>}
@@ -304,12 +338,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 24
+    padding: 24,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
+  },
+  backLink: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    alignSelf: "flex-start"
   },
   back: {
     color: "#1a4fd6",
-    fontSize: 15,
-    marginBottom: 16
+    fontSize: 15
   },
   title: {
     fontSize: 22,
@@ -368,7 +409,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
-    fontSize: 14
+    fontSize: 14,
+    minHeight: TOUCH_TARGET_MIN
   },
   savedNote: {
     fontSize: 13,
@@ -379,7 +421,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#1a4fd6",
     borderRadius: 8,
     paddingVertical: 12,
-    alignItems: "center"
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: TOUCH_TARGET_MIN
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"
