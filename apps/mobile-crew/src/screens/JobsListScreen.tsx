@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 
 import { listMyAssignments, type AssignedJob } from "../api/assignments.ts";
 import { clearSession, type Session } from "../auth/session.ts";
+import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface JobsListScreenProps {
   session: Session;
@@ -45,13 +46,15 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob }: Jo
     <View style={styles.container} testID="jobs-list-screen">
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Assigned jobs</Text>
+          <Text style={styles.title} accessibilityRole="header">
+            Assigned jobs
+          </Text>
           <Text style={styles.meta}>
             {session.actorId} ({session.actorRole})
           </Text>
         </View>
-        <Pressable onPress={handleSignOut} testID="sign-out">
-          <Text style={styles.signOut}>Sign out</Text>
+        <Pressable onPress={handleSignOut} accessibilityRole="button" accessibilityLabel="Sign out" style={styles.signOut} testID="sign-out">
+          <Text style={styles.signOutText}>Sign out</Text>
         </Pressable>
       </View>
 
@@ -61,10 +64,10 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob }: Jo
         </View>
       ) : error ? (
         <View style={styles.center}>
-          <Text style={styles.error} testID="jobs-error">
+          <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="jobs-error">
             {error}
           </Text>
-          <Pressable style={styles.retryButton} onPress={() => load(false)} testID="jobs-retry">
+          <Pressable style={styles.retryButton} onPress={() => load(false)} accessibilityRole="button" accessibilityLabel="Retry" testID="jobs-retry">
             <Text style={styles.retryButtonText}>Retry</Text>
           </Pressable>
         </View>
@@ -81,7 +84,13 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob }: Jo
             </Text>
           }
           renderItem={({ item }) => (
-            <Pressable style={styles.jobCard} onPress={() => onSelectJob(item)} testID={`job-${item.assignment_id}`}>
+            <Pressable
+              style={styles.jobCard}
+              onPress={() => onSelectJob(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Job ${item.incident?.incident_id ?? "unlinked incident"}, status ${item.status}`}
+              testID={`job-${item.assignment_id}`}
+            >
               <View style={styles.jobCardHeader}>
                 <Text style={styles.jobIncidentId}>{item.incident?.incident_id ?? "Unlinked incident"}</Text>
                 <Text style={styles.jobStatus}>{item.status}</Text>
@@ -101,7 +110,10 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob }: Jo
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff"
+    backgroundColor: "#fff",
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
   },
   header: {
     flexDirection: "row",
@@ -120,6 +132,12 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   signOut: {
+    minHeight: TOUCH_TARGET_MIN,
+    minWidth: TOUCH_TARGET_MIN,
+    alignItems: "flex-end",
+    justifyContent: "center"
+  },
+  signOutText: {
     color: "#b00020",
     fontSize: 14,
     fontWeight: "600"
@@ -140,11 +158,14 @@ const styles = StyleSheet.create({
     borderColor: "#1a4fd6",
     borderRadius: 8,
     paddingHorizontal: 20,
-    paddingVertical: 10
+    paddingVertical: 10,
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center"
   },
   retryButtonText: {
     color: "#1a4fd6",
-    fontWeight: "600"
+    fontWeight: "600",
+    textAlign: "center"
   },
   emptyContainer: {
     flexGrow: 1,
@@ -161,7 +182,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 16,
     marginHorizontal: 16,
-    marginBottom: 12
+    marginBottom: 12,
+    minHeight: TOUCH_TARGET_MIN
   },
   jobCardHeader: {
     flexDirection: "row",

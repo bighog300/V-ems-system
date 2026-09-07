@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
 
 import { verifySession } from "../api/verifySession.ts";
 import { UnauthorizedError } from "../api/apiError.ts";
 import { saveSession, type Session } from "../auth/session.ts";
+import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface LoginScreenProps {
   onSignedIn: (session: Session) => void;
@@ -44,13 +45,16 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
   }
 
   return (
-    <View style={styles.container} testID="login-screen">
-      <Text style={styles.title}>V-EMS Crew</Text>
+    <ScrollView style={styles.container} testID="login-screen">
+      <Text style={styles.title} accessibilityRole="header">
+        V-EMS Crew
+      </Text>
       <Text style={styles.subtitle}>Sign in with your issued session token.</Text>
 
       <TextInput
         style={styles.input}
         placeholder="API base URL"
+        accessibilityLabel="API base URL"
         autoCapitalize="none"
         autoCorrect={false}
         value={apiBaseUrl}
@@ -60,6 +64,7 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
       <TextInput
         style={styles.input}
         placeholder="Session token"
+        accessibilityLabel="Session token"
         autoCapitalize="none"
         autoCorrect={false}
         secureTextEntry
@@ -70,6 +75,7 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
       <TextInput
         style={styles.input}
         placeholder="Crew member ID"
+        accessibilityLabel="Crew member ID"
         autoCapitalize="none"
         autoCorrect={false}
         value={actorId}
@@ -79,6 +85,7 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
       <TextInput
         style={styles.input}
         placeholder="Role (e.g. field_crew)"
+        accessibilityLabel="Role"
         autoCapitalize="none"
         autoCorrect={false}
         value={actorRole}
@@ -87,7 +94,7 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
       />
 
       {error ? (
-        <Text style={styles.error} testID="login-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="login-error">
           {error}
         </Text>
       ) : null}
@@ -96,11 +103,13 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
         style={[styles.button, !canSubmit && styles.buttonDisabled]}
         disabled={!canSubmit}
         onPress={handleSignIn}
+        accessibilityRole="button"
+        accessibilityLabel="Sign in"
         testID="submit-sign-in"
       >
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -109,7 +118,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: 24,
-    backgroundColor: "#fff"
+    backgroundColor: "#fff",
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
   },
   title: {
     fontSize: 28,
@@ -128,7 +140,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
-    fontSize: 16
+    fontSize: 16,
+    minHeight: TOUCH_TARGET_MIN
   },
   error: {
     color: "#b00020",
@@ -139,7 +152,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: "center",
-    marginTop: 8
+    justifyContent: "center",
+    marginTop: 8,
+    minHeight: TOUCH_TARGET_MIN
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"

@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, Vi
 
 import { createPatientCaseObservation, listPatientCaseObservations, type PatientCaseObservation, type VitalSigns } from "../api/observations.ts";
 import type { Session } from "../auth/session.ts";
+import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface VitalsScreenProps {
   patientCaseId: string;
@@ -99,13 +100,15 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
 
   return (
     <View style={styles.container} testID="vitals-screen">
-      <Pressable onPress={onBack} testID="back-to-case">
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to patient case" style={styles.backLink} testID="back-to-case">
         <Text style={styles.back}>‹ Patient case</Text>
       </Pressable>
-      <Text style={styles.title}>Vitals</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        Vitals
+      </Text>
 
       {error ? (
-        <Text style={styles.error} testID="vitals-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="vitals-error">
           {error}
         </Text>
       ) : null}
@@ -116,14 +119,22 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
             key={field.key}
             style={styles.input}
             placeholder={field.label}
+            accessibilityLabel={field.label}
             keyboardType="numeric"
             value={fieldValues[field.key] ?? ""}
             onChangeText={(text) => setFieldValues((prev) => ({ ...prev, [field.key]: text }))}
             testID={`vital-input-${field.key}`}
           />
         ))}
-        <TextInput style={styles.input} placeholder="Notes" value={notes} onChangeText={setNotes} testID="vitals-notes" />
-        <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={handleRecord} disabled={saving} testID="record-vitals">
+        <TextInput style={styles.input} placeholder="Notes" accessibilityLabel="Notes" value={notes} onChangeText={setNotes} testID="vitals-notes" />
+        <Pressable
+          style={[styles.button, saving && styles.buttonDisabled]}
+          onPress={handleRecord}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityLabel="Record vitals"
+          testID="record-vitals"
+        >
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Record vitals</Text>}
         </Pressable>
       </View>
@@ -158,12 +169,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 24
+    padding: 24,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
+  },
+  backLink: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    alignSelf: "flex-start"
   },
   back: {
     color: "#1a4fd6",
-    fontSize: 15,
-    marginBottom: 16
+    fontSize: 15
   },
   title: {
     fontSize: 22,
@@ -189,14 +207,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 10,
-    fontSize: 14
+    fontSize: 14,
+    minHeight: TOUCH_TARGET_MIN
   },
   button: {
     backgroundColor: "#1a4fd6",
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
-    marginTop: 4
+    justifyContent: "center",
+    marginTop: 4,
+    minHeight: TOUCH_TARGET_MIN
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"

@@ -11,6 +11,7 @@ import {
 } from "../api/patientIdentity.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
+import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface PatientIdentityScreenProps {
   patientCase: PatientCase;
@@ -111,10 +112,12 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
   if (patientCase.openemr_patient_id) {
     return (
       <View style={styles.container} testID="patient-identity-screen">
-        <Pressable onPress={onBack} testID="back-to-case">
+        <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to patient case" style={styles.backLink} testID="back-to-case">
           <Text style={styles.back}>‹ Patient case</Text>
         </Pressable>
-        <Text style={styles.title}>Patient identity</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          Patient identity
+        </Text>
         <View style={styles.card}>
           <Text style={styles.linkedNote}>
             Linked to {patientCase.openemr_patient_id} ({patientCase.verification_status})
@@ -126,23 +129,53 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
 
   return (
     <ScrollView style={styles.container} testID="patient-identity-screen">
-      <Pressable onPress={onBack} testID="back-to-case">
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to patient case" style={styles.backLink} testID="back-to-case">
         <Text style={styles.back}>‹ Patient case</Text>
       </Pressable>
-      <Text style={styles.title}>Patient identity</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        Patient identity
+      </Text>
 
       {error ? (
-        <Text style={styles.error} testID="identity-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="identity-error">
           {error}
         </Text>
       ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Search OpenEMR</Text>
-        <TextInput style={styles.input} placeholder="First name" value={firstName} onChangeText={setFirstName} testID="search-first-name" />
-        <TextInput style={styles.input} placeholder="Last name" value={lastName} onChangeText={setLastName} testID="search-last-name" />
-        <TextInput style={styles.input} placeholder="DOB (YYYY-MM-DD)" value={dob} onChangeText={setDob} testID="search-dob" />
-        <Pressable style={[styles.button, searching && styles.buttonDisabled]} onPress={handleSearch} disabled={searching} testID="search-submit">
+        <TextInput
+          style={styles.input}
+          placeholder="First name"
+          accessibilityLabel="First name"
+          value={firstName}
+          onChangeText={setFirstName}
+          testID="search-first-name"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Last name"
+          accessibilityLabel="Last name"
+          value={lastName}
+          onChangeText={setLastName}
+          testID="search-last-name"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="DOB (YYYY-MM-DD)"
+          accessibilityLabel="Date of birth"
+          value={dob}
+          onChangeText={setDob}
+          testID="search-dob"
+        />
+        <Pressable
+          style={[styles.button, searching && styles.buttonDisabled]}
+          onPress={handleSearch}
+          disabled={searching}
+          accessibilityRole="button"
+          accessibilityLabel="Search"
+          testID="search-submit"
+        >
           {searching ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Search</Text>}
         </Pressable>
       </View>
@@ -160,6 +193,8 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
                   style={[styles.smallButton, busy && styles.buttonDisabled]}
                   onPress={() => handleLinkCandidate(candidate)}
                   disabled={busy}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Link ${candidate.display_name}`}
                   testID={`link-${candidate.patient_id}`}
                 >
                   <Text style={styles.smallButtonText}>Link</Text>
@@ -167,7 +202,13 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
               </View>
             ))
           )}
-          <Pressable onPress={() => setShowCreateForm(true)} testID="show-create-form">
+          <Pressable
+            onPress={() => setShowCreateForm(true)}
+            accessibilityRole="button"
+            accessibilityLabel="None of these — create a new patient"
+            style={styles.linkButton}
+            testID="show-create-form"
+          >
             <Text style={styles.linkText}>None of these — create a new patient</Text>
           </Pressable>
         </View>
@@ -176,11 +217,13 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
       {showCreateForm ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Create new patient</Text>
-          <TextInput style={styles.input} placeholder="Sex" value={sex} onChangeText={setSex} testID="create-sex" />
+          <TextInput style={styles.input} placeholder="Sex" accessibilityLabel="Sex" value={sex} onChangeText={setSex} testID="create-sex" />
           <Pressable
             style={[styles.button, busy && styles.buttonDisabled]}
             onPress={handleCreateAndLink}
             disabled={busy || !firstName.trim() || !lastName.trim() || !dob.trim()}
+            accessibilityRole="button"
+            accessibilityLabel="Create and link"
             testID="create-and-link"
           >
             {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create and link</Text>}
@@ -190,7 +233,14 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Unable to identify</Text>
-        <Pressable style={[styles.button, busy && styles.buttonDisabled]} onPress={handleMarkUnidentified} disabled={busy} testID="mark-unidentified">
+        <Pressable
+          style={[styles.button, busy && styles.buttonDisabled]}
+          onPress={handleMarkUnidentified}
+          disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel="Mark as unidentified"
+          testID="mark-unidentified"
+        >
           {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Mark as unidentified</Text>}
         </Pressable>
       </View>
@@ -202,12 +252,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 24
+    padding: 24,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
+  },
+  backLink: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    alignSelf: "flex-start"
   },
   back: {
     color: "#1a4fd6",
-    fontSize: 15,
-    marginBottom: 16
+    fontSize: 15
   },
   title: {
     fontSize: 22,
@@ -240,13 +297,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
-    fontSize: 14
+    fontSize: 14,
+    minHeight: TOUCH_TARGET_MIN
   },
   button: {
     backgroundColor: "#1a4fd6",
     borderRadius: 8,
     paddingVertical: 12,
-    alignItems: "center"
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: TOUCH_TARGET_MIN
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"
@@ -266,28 +326,39 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0"
+    borderBottomColor: "#f0f0f0",
+    minHeight: TOUCH_TARGET_MIN
   },
   candidateName: {
     fontSize: 14,
-    color: "#111"
+    color: "#111",
+    flexShrink: 1,
+    marginRight: 12
   },
   smallButton: {
     borderWidth: 1,
     borderColor: "#1a4fd6",
     borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    minHeight: CHIP_TARGET_MIN,
+    minWidth: CHIP_TARGET_MIN,
+    alignItems: "center",
+    justifyContent: "center"
   },
   smallButtonText: {
     color: "#1a4fd6",
     fontSize: 13,
     fontWeight: "600"
   },
+  linkButton: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    marginTop: 8
+  },
   linkText: {
     color: "#1a4fd6",
-    fontSize: 13,
-    marginTop: 8
+    fontSize: 13
   },
   linkedNote: {
     fontSize: 14,

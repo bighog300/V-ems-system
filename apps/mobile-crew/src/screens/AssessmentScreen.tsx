@@ -4,6 +4,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, Vi
 
 import { createPatientCaseAssessment, listPatientCaseAssessments, type PatientCaseAssessment } from "../api/assessments.ts";
 import type { Session } from "../auth/session.ts";
+import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface AssessmentScreenProps {
   patientCaseId: string;
@@ -73,13 +74,15 @@ export default function AssessmentScreen({ patientCaseId, session, onBack }: Ass
 
   return (
     <View style={styles.container} testID="assessment-screen">
-      <Pressable onPress={onBack} testID="back-to-case">
+      <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to patient case" style={styles.backLink} testID="back-to-case">
         <Text style={styles.back}>‹ Patient case</Text>
       </Pressable>
-      <Text style={styles.title}>Assessment</Text>
+      <Text style={styles.title} accessibilityRole="header">
+        Assessment
+      </Text>
 
       {error ? (
-        <Text style={styles.error} testID="assessment-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="assessment-error">
           {error}
         </Text>
       ) : null}
@@ -91,6 +94,9 @@ export default function AssessmentScreen({ patientCaseId, session, onBack }: Ass
               key={section.key}
               style={[styles.sectionChip, sectionType === section.key && styles.sectionChipActive]}
               onPress={() => setSectionType(section.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sectionType === section.key }}
+              accessibilityLabel={section.label}
               testID={`section-${section.key}`}
             >
               <Text style={[styles.sectionChipText, sectionType === section.key && styles.sectionChipTextActive]}>{section.label}</Text>
@@ -100,12 +106,20 @@ export default function AssessmentScreen({ patientCaseId, session, onBack }: Ass
         <TextInput
           style={[styles.input, styles.notesInput]}
           placeholder="Findings"
+          accessibilityLabel="Findings"
           value={notes}
           onChangeText={setNotes}
           multiline
           testID="assessment-notes"
         />
-        <Pressable style={[styles.button, saving && styles.buttonDisabled]} onPress={handleRecord} disabled={saving} testID="record-assessment">
+        <Pressable
+          style={[styles.button, saving && styles.buttonDisabled]}
+          onPress={handleRecord}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityLabel="Record assessment"
+          testID="record-assessment"
+        >
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Record assessment</Text>}
         </Pressable>
       </View>
@@ -141,12 +155,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 24
+    padding: 24,
+    width: "100%",
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: "center"
+  },
+  backLink: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    alignSelf: "flex-start"
   },
   back: {
     color: "#1a4fd6",
-    fontSize: 15,
-    marginBottom: 16
+    fontSize: 15
   },
   title: {
     fontSize: 22,
@@ -174,10 +195,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ccc",
     borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     marginRight: 8,
-    marginBottom: 8
+    marginBottom: 8,
+    minHeight: CHIP_TARGET_MIN,
+    justifyContent: "center"
   },
   sectionChipActive: {
     backgroundColor: "#1a4fd6",
@@ -198,7 +221,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 10,
-    fontSize: 14
+    fontSize: 14,
+    minHeight: TOUCH_TARGET_MIN
   },
   notesInput: {
     minHeight: 80,
@@ -209,7 +233,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
-    marginTop: 4
+    justifyContent: "center",
+    marginTop: 4,
+    minHeight: TOUCH_TARGET_MIN
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"
