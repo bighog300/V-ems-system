@@ -4,15 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import type { AssignedJob } from "../api/assignments.ts";
+import type { PatientCase } from "../api/patientCases.ts";
 import { loadSession, type Session } from "../auth/session.ts";
 import IncidentDetailScreen from "../screens/IncidentDetailScreen.tsx";
 import JobsListScreen from "../screens/JobsListScreen.tsx";
 import LoginScreen from "../screens/LoginScreen.tsx";
+import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
 
 type RootStackParamList = {
   Login: undefined;
   JobsList: undefined;
   IncidentDetail: { job: AssignedJob };
+  PatientCaseDetail: { patientCase: PatientCase };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -72,7 +75,19 @@ export default function RootNavigator() {
               )}
             </Stack.Screen>
             <Stack.Screen name="IncidentDetail">
-              {({ route, navigation }) => <IncidentDetailScreen job={route.params.job} onBack={() => navigation.goBack()} />}
+              {({ route, navigation }) => (
+                <IncidentDetailScreen
+                  job={route.params.job}
+                  session={session}
+                  onBack={() => navigation.goBack()}
+                  onSelectPatientCase={(patientCase) => navigation.navigate("PatientCaseDetail", { patientCase })}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="PatientCaseDetail">
+              {({ route, navigation }) => (
+                <PatientCaseDetailScreen patientCase={route.params.patientCase} session={session} onBack={() => navigation.goBack()} />
+              )}
             </Stack.Screen>
           </>
         ) : (
