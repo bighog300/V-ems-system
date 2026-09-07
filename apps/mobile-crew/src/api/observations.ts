@@ -1,4 +1,5 @@
 import { requestJson } from "./httpClient.ts";
+import { requestOrQueue } from "./offlineMutation.ts";
 import type { ApiConfig } from "./patientCases.ts";
 
 export interface VitalSigns {
@@ -44,12 +45,25 @@ export async function createPatientCaseObservation({
   vitalSigns,
   notes
 }: ApiConfig & { patientCaseId: string; vitalSigns: VitalSigns; notes?: string }): Promise<PatientCaseObservation> {
-  const result = await requestJson<PatientCaseObservation>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/observations`, {
+  const performedAt = new Date().toISOString();
+  return requestOrQueue<PatientCaseObservation>({
+    fetchImpl,
+    url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/observations`,
     method: "POST",
     payload: { vital_signs: vitalSigns, notes: notes || undefined },
     config: { authToken },
-    headers: { "idempotency-key": `mobile-observation-${patientCaseId}-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+    scope: "observation",
+    patientCaseId,
+    buildOptimisticResult: (entryId) => ({
+      observation_event_id: `LOCAL-${entryId}`,
+      patient_case_id: patientCaseId,
+      encounter_id: "",
+      performed_at: performedAt,
+      clinician_id: null,
+      observations: vitalSigns,
+      notes: notes || null,
+      downstream_status: "pending",
+      created_at: performedAt
+    })
   });
-  if (!result.data) throw new Error("Observation create returned no data");
-  return result.data;
 }

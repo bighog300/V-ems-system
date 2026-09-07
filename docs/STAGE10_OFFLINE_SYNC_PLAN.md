@@ -138,6 +138,25 @@ and testable, and later steps depend on earlier ones' contracts existing.
    offline-aware wrapper: generate `entry_id`, attempt the network call with that
    idempotency key, and on failure (or when already known-offline) write to the outbox
    instead of throwing. Screens keep their existing optimistic-UI patterns.
+
+   Wired into the six mutations that append/update an already-existing patient case
+   (assessment, observation, medication, procedure, disposition, demographics) — done.
+   **Deliberately not wired into `createPatientCase` or `createPatientCaseEncounter`**:
+   both mint a new entity ID that every downstream write for that case depends on
+   (`patient_case_id`, implicitly `encounter_id`), and queuing entity creation safely
+   needs client-side ID remapping — an alias table from a `LOCAL-<entryId>` id to the
+   real server-issued id once that create syncs, plus rewriting any other queued
+   entries that reference the local id before they're sent. That's a real design piece
+   this plan hadn't called out explicitly; it belongs either as its own 10c-follow-up
+   milestone or folded into 10d's ordering logic (10d already needs to send an
+   encounter's create before that case's observations — the same mechanism a
+   patient-case-creation queue would need). Also not wired into `verifySession`,
+   `searchPatients`, or the `createPatient`/`linkPatientToPatientCase`/
+   `createProvisionalPatient` identity-linking flow — these need an immediate response
+   to continue an interactive multi-step workflow, so queuing them silently would break
+   that workflow rather than help it. The ePCR `complete`/`sign`/`submit` family is also
+   excluded for now — workflow-gating, highest conflict risk per the design decisions
+   above, kept synchronous pending a deliberate decision to change that.
 4. **10d — Sync engine.** Processes `queued`/`retrying` entries in creation order per
    `patient_case_id` (ordering matters within a case — e.g. encounter before
    observations), exponential backoff, the trigger set from the design section above.

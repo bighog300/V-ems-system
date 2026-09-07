@@ -1,4 +1,5 @@
 import { requestJson } from "./httpClient.ts";
+import { requestOrQueue } from "./offlineMutation.ts";
 
 export interface PatientCase {
   patient_case_id: string;
@@ -99,11 +100,15 @@ export async function savePatientCaseDemographics({
   patientCaseId,
   payload
 }: ApiConfig & { patientCaseId: string; payload: Partial<PatientCaseDemographics> }): Promise<PatientCaseDemographics> {
-  const result = await requestJson<PatientCaseDemographics>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/demographics`, {
+  const now = new Date().toISOString();
+  return requestOrQueue<PatientCaseDemographics>({
+    fetchImpl,
+    url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/demographics`,
     method: "PUT",
     payload,
-    config: { authToken }
+    config: { authToken },
+    scope: "demographics",
+    patientCaseId,
+    buildOptimisticResult: () => ({ patient_case_id: patientCaseId, ...payload, updated_at: now })
   });
-  if (!result.data) throw new Error("Demographics save returned no data");
-  return result.data;
 }

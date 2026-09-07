@@ -74,10 +74,13 @@ export async function enqueueMutation(
   db: OfflineSqliteLike,
   key: Uint8Array,
   mutation: OutboxMutation,
-  deps: { cryptoModule?: OutboxCryptoModule } = {}
+  deps: { cryptoModule?: OutboxCryptoModule; entryId?: string } = {}
 ): Promise<string> {
   const cryptoModule = deps.cryptoModule ?? (await getCryptoModule());
-  const entryId = cryptoModule.randomUUID();
+  // A caller that already attempted the mutation online (and failed) passes
+  // the entryId it sent as the idempotency-key on that attempt, so the
+  // eventual sync retry reuses the exact same key — never a fresh one.
+  const entryId = deps.entryId ?? cryptoModule.randomUUID();
   const encryptedPayload = await encryptJson(mutation.payload, key, { cryptoModule });
   await insertOutboxEntry(db, {
     entryId,

@@ -1,4 +1,5 @@
 import { requestJson } from "./httpClient.ts";
+import { requestOrQueue } from "./offlineMutation.ts";
 import type { ApiConfig } from "./patientCases.ts";
 
 export const DISPOSITION_OUTCOMES = [
@@ -58,12 +59,27 @@ export async function setPatientCaseDisposition({
   patientCaseId,
   payload
 }: ApiConfig & { patientCaseId: string; payload: SetDispositionPayload }): Promise<PatientCaseDisposition> {
-  const result = await requestJson<PatientCaseDisposition>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/disposition`, {
+  const now = new Date().toISOString();
+  return requestOrQueue<PatientCaseDisposition>({
+    fetchImpl,
+    url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/disposition`,
     method: "POST",
     payload,
     config: { authToken },
-    headers: { "idempotency-key": `mobile-disposition-${patientCaseId}-${Date.now()}` }
+    scope: "disposition",
+    patientCaseId,
+    buildOptimisticResult: (entryId) => ({
+      disposition_id: `LOCAL-${entryId}`,
+      patient_case_id: patientCaseId,
+      encounter_id: null,
+      outcome: payload.outcome,
+      destination_facility: payload.destination_facility ?? null,
+      receiving_provider: payload.receiving_provider ?? null,
+      decision_at: now,
+      reason: payload.reason ?? null,
+      notes: payload.notes ?? null,
+      created_at: now,
+      updated_at: now
+    })
   });
-  if (!result.data) throw new Error("Disposition set returned no data");
-  return result.data;
 }
