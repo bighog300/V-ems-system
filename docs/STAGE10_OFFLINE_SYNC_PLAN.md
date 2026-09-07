@@ -176,6 +176,15 @@ and testable, and later steps depend on earlier ones' contracts existing.
    delivery, out-of-order delivery, token-expiry-mid-queue (re-auth without losing queued
    entries — the queue survives sign-out/sign-in since it's keyed by patient case, not
    session).
+
+   Found and fixed a real bug while writing this suite: a `sending` entry left over from
+   a killed app (process died between marking the entry `sending` and recording the
+   outcome) was invisible to `runSync` forever — its status query only looked at
+   `queued`/`retrying`. Fixed by treating a leftover `sending` row as always due for
+   retry, same as `queued`; safe because a stranded `sending` entry can only mean the
+   process that claimed it is gone (the sync coordinator never lets two passes overlap
+   within a live process), and retrying reuses the same idempotency key as the original
+   attempt.
 8. **10h — Manual verification.** Airplane-mode PCR completion drill: chart a full PCR
    with networking disabled, force-quit the app, relaunch, reconnect, confirm no
    duplicate/lost records server-side. This is issue #67's actual exit gate and needs a
