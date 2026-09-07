@@ -28,6 +28,16 @@ export async function getOfflineDatabase(): Promise<OfflineSqliteLike> {
   return defaultDatabasePromise;
 }
 
+/**
+ * Clears the cached database connection. For tests only — production code
+ * never needs to reopen the database mid-session. Lets each test mock a
+ * fresh `expo-sqlite` response instead of reusing whatever the first test
+ * in the file happened to open.
+ */
+export function __resetOfflineDatabaseCacheForTests(): void {
+  defaultDatabasePromise = null;
+}
+
 export async function migrate(db: OfflineSqliteLike): Promise<void> {
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS outbox_entries (

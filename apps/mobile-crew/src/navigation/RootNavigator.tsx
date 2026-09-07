@@ -17,6 +17,7 @@ import JobsListScreen from "../screens/JobsListScreen.tsx";
 import LoginScreen from "../screens/LoginScreen.tsx";
 import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
 import PatientIdentityScreen from "../screens/PatientIdentityScreen.tsx";
+import SyncStatusScreen from "../screens/SyncStatusScreen.tsx";
 import VitalsScreen from "../screens/VitalsScreen.tsx";
 
 type RootStackParamList = {
@@ -30,6 +31,7 @@ type RootStackParamList = {
   Assessment: { patientCaseId: string };
   Disposition: { patientCaseId: string };
   Epcr: { patientCaseId: string };
+  SyncStatus: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -109,9 +111,13 @@ export default function RootNavigator() {
                   session={session}
                   onSignedOut={handleSignedOut}
                   onSelectJob={(job) => navigation.navigate("IncidentDetail", { job })}
+                  onOpenSyncStatus={() => navigation.navigate("SyncStatus")}
                   sync={sync}
                 />
               )}
+            </Stack.Screen>
+            <Stack.Screen name="SyncStatus">
+              {({ navigation }) => <SyncStatusScreen sync={sync} onBack={() => navigation.goBack()} />}
             </Stack.Screen>
             <Stack.Screen name="IncidentDetail">
               {({ route, navigation }) => (
