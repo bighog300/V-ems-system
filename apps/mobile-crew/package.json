@@ -16,8 +16,13 @@
     "react-native-screens": "^4.27.0"
   },
   "devDependencies": {
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^26.4.1",
     "@types/react": "~19.2.2",
+    "jest": "^30.5.1",
+    "jest-expo": "^57.0.5",
+    "react-test-renderer": "^19.2.3",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -26,7 +31,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test \"test/**/*.test.ts\""
+    "test:unit": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
+    "test:component": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test": "npm run test:unit && npm run test:component"
   },
   "private": true
 }
