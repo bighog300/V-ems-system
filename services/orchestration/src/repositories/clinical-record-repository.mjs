@@ -50,6 +50,11 @@ export class PatientCaseAssessmentRepository {
     const { payload, ...rest } = record;
     insert(this.db, "patient_case_assessments", { ...rest, payload_json: payload ?? {} }, ["payload_json"]);
   }
+  find(id) {
+    const row = this.db.queryOne(`SELECT * FROM patient_case_assessments WHERE assessment_id=${sqlValue(id)};`);
+    if (!row) return undefined;
+    return { ...row, payload: parseJson(row.payload_json, {}) };
+  }
   list(patientCaseId) {
     return this.db.queryAll(`SELECT * FROM patient_case_assessments WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY performed_at, assessment_id;`)
       .map((row) => ({ ...row, payload: parseJson(row.payload_json, {}) }));
@@ -61,6 +66,11 @@ export class ClinicalObservationRepository {
   create(record) {
     const { observations, ...rest } = record;
     insert(this.db, "clinical_observations", { ...rest, observations_json: observations ?? {} }, ["observations_json"]);
+  }
+  find(id) {
+    const row = this.db.queryOne(`SELECT * FROM clinical_observations WHERE observation_event_id=${sqlValue(id)};`);
+    if (!row) return undefined;
+    return { ...row, observations: parseJson(row.observations_json, {}) };
   }
   list(patientCaseId) {
     return this.db.queryAll(`SELECT * FROM clinical_observations WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY performed_at, observation_event_id;`)
