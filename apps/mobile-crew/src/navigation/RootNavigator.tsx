@@ -3,13 +3,16 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
+import type { AssignedJob } from "../api/assignments.ts";
 import { loadSession, type Session } from "../auth/session.ts";
-import HomeScreen from "../screens/HomeScreen.tsx";
+import IncidentDetailScreen from "../screens/IncidentDetailScreen.tsx";
+import JobsListScreen from "../screens/JobsListScreen.tsx";
 import LoginScreen from "../screens/LoginScreen.tsx";
 
 type RootStackParamList = {
   Login: undefined;
-  Home: undefined;
+  JobsList: undefined;
+  IncidentDetail: { job: AssignedJob };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -58,7 +61,20 @@ export default function RootNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {state === "signed-in" && session ? (
-          <Stack.Screen name="Home">{() => <HomeScreen session={session} onSignedOut={handleSignedOut} />}</Stack.Screen>
+          <>
+            <Stack.Screen name="JobsList">
+              {({ navigation }) => (
+                <JobsListScreen
+                  session={session}
+                  onSignedOut={handleSignedOut}
+                  onSelectJob={(job) => navigation.navigate("IncidentDetail", { job })}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="IncidentDetail">
+              {({ route, navigation }) => <IncidentDetailScreen job={route.params.job} onBack={() => navigation.goBack()} />}
+            </Stack.Screen>
+          </>
         ) : (
           <Stack.Screen name="Login">{() => <LoginScreen onSignedIn={handleSignedIn} />}</Stack.Screen>
         )}

@@ -850,6 +850,11 @@ export function createApp(orchestration = new OrchestrationService()) {
         return okJson(res, 201, assignment, context);
       }
 
+      if (method === "GET" && url.pathname === "/api/assignments/mine") {
+        const assignments = orchestration.getAssignmentsForCrewMember(context.actorId);
+        return okJson(res, 200, { assignments }, context);
+      }
+
       const encounterCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/);
       if (encounterCreateMatch && method === "GET") {
         const encounter = orchestration.getEncounterByIncident(encounterCreateMatch[1]);
