@@ -167,7 +167,10 @@ and testable, and later steps depend on earlier ones' contracts existing.
    payloads/PHI — satisfies the "sync diagnostics visible to crew without exposing
    PHI/secrets" acceptance criterion directly. — done, merged (PR #94).
 6. **10f — Read-path caching.** Cached-GET layer + offline indicators on the screens that
-   need it (JobsList, PatientCaseDetail, and the clinical charting screens).
+   need it (JobsList, PatientCaseDetail, and the clinical charting screens). Shipped for
+   the navigation-critical path (assignments, patient cases, patient case + demographics
+   + encounter); the clinical charting screens' own GET lists (observations, medications,
+   procedures, assessments) still read live only. — done, merged (PR #95).
 7. **10g — Hostile-condition test suite.** App-kill mid-write (simulate by not clearing
    in-memory queue state, only re-reading from the DB on next launch), duplicate
    delivery, out-of-order delivery, token-expiry-mid-queue (re-auth without losing queued
