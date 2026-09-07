@@ -1,4 +1,9 @@
 export const RBAC_POLICIES = [
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(readiness|lifecycle|versions|signatures|amendments|reviews|qa-flags|summary)(\/[^/]+)?$/, method: 'GET', roles: ['field_crew','field_crew_lead','clinical_reviewer','supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(complete|versions|signatures|submit)$/, method: 'POST', roles: ['field_crew','field_crew_lead','supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(amendments|qa-flags)$/, method: 'POST', roles: ['field_crew_lead','clinical_reviewer','supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/review$/, method: 'POST', roles: ['clinical_reviewer','supervisor','sys_admin'] },
+  { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/qa-flags\/[^/]+$/, method: 'PATCH', roles: ['clinical_reviewer','supervisor','sys_admin'] },
   { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(demographics|assessments|observations|medications|procedures|disposition|timeline)$/, method: 'GET', roles: ['field_crew','field_crew_lead','clinical_reviewer','supervisor','sys_admin'] },
   { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/demographics$/, method: 'PUT', roles: ['field_crew','field_crew_lead','supervisor','sys_admin'] },
   { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(assessments|observations|medications|procedures|disposition)$/, method: 'POST', roles: ['field_crew','field_crew_lead','supervisor','sys_admin'] },

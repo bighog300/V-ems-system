@@ -44,6 +44,7 @@ export const clinicalRecordMethods = {
   },
   savePatientCaseDemographics(patientCaseId, payload, meta) {
     const current = requiredCase.call(this, patientCaseId);
+    this.assertPatientCaseClinicalMutable(patientCaseId);
     const before = this.clinicalDemographics.find(patientCaseId);
     object(payload);
     const allowed = ["first_name", "middle_name", "last_name", "preferred_name", "dob", "dob_unknown", "estimated_age_years", "sex", "gender_identity", "address_line1", "address_line2", "city", "region", "postal_code", "country_code", "phone", "identity_document_type", "identity_document_value", "identity_source", "identity_confidence", "next_of_kin_name", "next_of_kin_relationship", "next_of_kin_phone", "guardian_name", "guardian_relationship", "guardian_phone", "minor_context", "unidentified"];
@@ -63,6 +64,7 @@ export const clinicalRecordMethods = {
   listPatientCaseAssessments(patientCaseId) { requiredCase.call(this, patientCaseId); return this.clinicalAssessments.list(patientCaseId); },
   createPatientCaseAssessment(patientCaseId, payload, meta) {
     const current = requiredCase.call(this, patientCaseId); object(payload);
+    this.assertPatientCaseClinicalMutable(patientCaseId);
     const sectionType = text(payload.section_type, "section_type");
     const performedAt = iso(payload.performed_at ?? new Date().toISOString(), "performed_at");
     if (!payload.payload || typeof payload.payload !== "object" || Array.isArray(payload.payload)) throw new ApiError("INVALID_PAYLOAD", "payload must be an object", 400);
@@ -76,6 +78,7 @@ export const clinicalRecordMethods = {
   listPatientCaseObservations(patientCaseId) { requiredCase.call(this, patientCaseId); return this.clinicalObservations.list(patientCaseId); },
   async createPatientCaseObservation(patientCaseId, payload, meta) {
     const current = requiredCase.call(this, patientCaseId); object(payload);
+    this.assertPatientCaseClinicalMutable(patientCaseId);
     const performedAt = iso(payload.recorded_at ?? payload.performed_at ?? new Date().toISOString(), "recorded_at");
     const observations = payload.observations ?? payload.vital_signs;
     if (!observations || typeof observations !== "object" || Array.isArray(observations)) throw new ApiError("INVALID_PAYLOAD", "observations or vital_signs is required", 400);
@@ -97,6 +100,7 @@ export const clinicalRecordMethods = {
   listPatientCaseMedications(patientCaseId) { requiredCase.call(this, patientCaseId); return this.clinicalMedications.list(patientCaseId); },
   async createPatientCaseMedication(patientCaseId, payload, meta) {
     const current = requiredCase.call(this, patientCaseId); object(payload);
+    this.assertPatientCaseClinicalMutable(patientCaseId);
     const record = { medication_administration_id: id("MED"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id, medication_name: text(payload.medication_name, "medication_name"), formulation: payload.formulation ?? null, dose: text(String(payload.dose ?? ""), "dose"), dose_unit: text(payload.dose_unit, "dose_unit"), route: text(payload.route, "route"), indication: payload.indication ?? null, performed_at: iso(payload.performed_at ?? new Date().toISOString(), "performed_at"), clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, authorization: payload.authorization ?? null, response: payload.response ?? null, adverse_reaction: payload.adverse_reaction ?? null, stock_item_id: payload.stock_item_id ?? null, vehicle_id: payload.vehicle_id ?? current.vehicle_id ?? null, quantity_used: payload.quantity_used ?? null, openemr_reference_id: null, downstream_status: "not_attempted", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     if (!record.encounter_id) throw new ApiError("CONFLICT", "An encounter is required for medication administration", 409);
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, medication_name: record.medication_name, dose: record.dose, performed_at: record.performed_at, route: record.route });
@@ -114,6 +118,7 @@ export const clinicalRecordMethods = {
   listPatientCaseProcedures(patientCaseId) { requiredCase.call(this, patientCaseId); return this.clinicalProcedures.list(patientCaseId); },
   async createPatientCaseProcedure(patientCaseId, payload, meta) {
     const current = requiredCase.call(this, patientCaseId); object(payload);
+    this.assertPatientCaseClinicalMutable(patientCaseId);
     const record = { procedure_id: id("PROC"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id, procedure_type: text(payload.procedure_type, "procedure_type"), procedure_name: text(payload.procedure_name, "procedure_name"), performed_at: iso(payload.performed_at ?? new Date().toISOString(), "performed_at"), clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, attempts: payload.attempts ?? null, success: payload.success ?? null, complications: payload.complications ?? null, response: payload.response ?? null, stock_item_id: payload.stock_item_id ?? null, vehicle_id: payload.vehicle_id ?? current.vehicle_id ?? null, quantity_used: payload.quantity_used ?? null, openemr_reference_id: null, downstream_status: "not_attempted", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     if (!record.encounter_id) throw new ApiError("CONFLICT", "An encounter is required for procedures", 409);
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, procedure_type: record.procedure_type, procedure_name: record.procedure_name, performed_at: record.performed_at });
@@ -131,6 +136,7 @@ export const clinicalRecordMethods = {
   getPatientCaseDisposition(patientCaseId) { requiredCase.call(this, patientCaseId); return this.clinicalDispositions.find(patientCaseId) ?? null; },
   setPatientCaseDisposition(patientCaseId, payload, meta) {
     const current = requiredCase.call(this, patientCaseId); object(payload);
+    this.assertPatientCaseClinicalMutable(patientCaseId);
     const before = this.clinicalDispositions.find(patientCaseId);
     if (!OUTCOMES.has(payload.outcome)) throw new ApiError("INVALID_PAYLOAD", `outcome must be one of: ${[...OUTCOMES].join(", ")}`, 400);
     const now = new Date().toISOString();

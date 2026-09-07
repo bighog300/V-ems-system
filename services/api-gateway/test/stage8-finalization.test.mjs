@@ -1,0 +1,32 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { OrchestrationService } from "../../orchestration/src/index.mjs";
+import { createApp } from "../src/server.mjs";
+
+test("Stage 8 Patient Case endpoints expose readiness, lifecycle, signatures, review and lock errors", async t => {
+  const dir = mkdtempSync(join(tmpdir(), "vems-stage8-api-"));
+  const service = new OrchestrationService({ dbPath: join(dir, "stage8.sqlite") });
+  const meta = { correlationId: "stage8-api", actorId: "STAFF-001", actorRole: "supervisor" };
+  const incident = service.createIncident({ call: { call_source: "phone", received_at: "2026-09-06T10:00:00Z" }, incident: { category: "medical_emergency", priority: "high", description: "Stage 8", address: "Test", patient_count: 1 } }, meta);
+  const patientCase = service.createPatientCase(incident.incident_id, { temporary_label: "Unknown" }, meta);
+  service.savePatientCaseDemographics(patientCase.patient_case_id, { first_name: "Unknown", unidentified: true, dob_unknown: true }, meta);
+  service.createPatientCaseAssessment(patientCase.patient_case_id, { section_type: "refusal_capacity", payload: { capacity: "documented", refusal: true } }, meta);
+  service.setPatientCaseDisposition(patientCase.patient_case_id, { outcome: "refusal_transport", reason: "declined" }, meta);
+  const server = createApp(service); await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); service.db.db.close(); rmSync(dir, { recursive: true, force: true }); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const request = async (path, method = "GET", body) => { const response = await fetch(base + path, { method, headers: { "content-type": "application/json", "x-user-role": "supervisor", "x-actor-id": "STAFF-001", ...(method !== "GET" ? { "idempotency-key": `${method}-${path}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); return { status: response.status, body: await response.json() }; };
+  const id = patientCase.patient_case_id;
+  assert.equal((await request(`/api/patient-cases/${id}/readiness`)).body.ready, true);
+  assert.equal((await request(`/api/patient-cases/${id}/complete`, "POST", {})).status, 200);
+  assert.equal((await request(`/api/patient-cases/${id}/signatures`, "POST", { signer_role: "treating_clinician", signer_identity: "STAFF-001" })).status, 201);
+  assert.equal((await request(`/api/patient-cases/${id}/submit`, "POST", {})).status, 200);
+  assert.equal((await request(`/api/patient-cases/${id}/review`, "POST", { action: "finalize", comment: "accepted" })).status, 200);
+  const locked = await request(`/api/patient-cases/${id}/assessments`, "POST", { section_type: "late", payload: {} });
+  assert.equal(locked.status, 409);
+  assert.equal(locked.body.error.code, "EPCR_LOCKED");
+  assert.equal((await request(`/api/patient-cases/${id}/summary`)).body.final_version.hash_algorithm, "sha256");
+});
