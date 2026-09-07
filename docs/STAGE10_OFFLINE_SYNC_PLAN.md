@@ -129,11 +129,11 @@ and testable, and later steps depend on earlier ones' contracts existing.
 1. **10a — Backend idempotency completeness.** Add `meta.idempotencyKey` handling to
    `createPatientCaseAssessment`, `createPatientCaseObservation`, and
    `setPatientCaseDisposition`, mirroring the existing medication/procedure pattern in
-   the same file. Backend-only, small, unblocks everything else.
+   the same file. Backend-only, small, unblocks everything else. — done, merged (PR #90).
 2. **10b — Local storage layer.** `src/offline/db.ts` (expo-sqlite schema + migrations),
    `src/offline/crypto.ts` (key generation/retrieval via SecureStore, encrypt/decrypt
    helpers). Unit-testable in isolation, same pattern as `session.ts`'s injectable-store
-   tests.
+   tests. — done, merged (PR #91).
 3. **10c — Outbox write path.** Every mutating call in `src/api/*.ts` gains an
    offline-aware wrapper: generate `entry_id`, attempt the network call with that
    idempotency key, and on failure (or when already known-offline) write to the outbox
@@ -156,14 +156,16 @@ and testable, and later steps depend on earlier ones' contracts existing.
    to continue an interactive multi-step workflow, so queuing them silently would break
    that workflow rather than help it. The ePCR `complete`/`sign`/`submit` family is also
    excluded for now — workflow-gating, highest conflict risk per the design decisions
-   above, kept synchronous pending a deliberate decision to change that.
+   above, kept synchronous pending a deliberate decision to change that. — done, merged
+   (PR #92).
 4. **10d — Sync engine.** Processes `queued`/`retrying` entries in creation order per
    `patient_case_id` (ordering matters within a case — e.g. encounter before
    observations), exponential backoff, the trigger set from the design section above.
+   — done, merged (PR #93).
 5. **10e — Conflict/failure surfacing.** A sync-status affordance (badge + detail screen)
    so `conflict`/`failed` entries are visible to the crew without exposing raw
    payloads/PHI — satisfies the "sync diagnostics visible to crew without exposing
-   PHI/secrets" acceptance criterion directly.
+   PHI/secrets" acceptance criterion directly. — done, merged (PR #94).
 6. **10f — Read-path caching.** Cached-GET layer + offline indicators on the screens that
    need it (JobsList, PatientCaseDetail, and the clinical charting screens).
 7. **10g — Hostile-condition test suite.** App-kill mid-write (simulate by not clearing
