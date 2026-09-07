@@ -11,9 +11,10 @@ export interface PatientCaseDetailScreenProps {
   session: Session;
   onBack: () => void;
   onOpenIdentity: (patientCase: PatientCase) => void;
+  onOpenVitals: (patientCaseId: string) => void;
 }
 
-export default function PatientCaseDetailScreen({ patientCase: initialCase, session, onBack, onOpenIdentity }: PatientCaseDetailScreenProps) {
+export default function PatientCaseDetailScreen({ patientCase: initialCase, session, onBack, onOpenIdentity, onOpenVitals }: PatientCaseDetailScreenProps) {
   const [caseState, setCaseState] = useState(initialCase);
 
   const [firstName, setFirstName] = useState("");
@@ -218,6 +219,9 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
                   {encounter.encounter_id} · {encounter.status}
                 </Text>
                 <Text style={styles.hint}>Started {encounter.care_started_at}</Text>
+                <Pressable style={[styles.button, styles.spacedButton]} onPress={() => onOpenVitals(caseState.patient_case_id)} testID="open-vitals">
+                  <Text style={styles.buttonText}>Vitals</Text>
+                </Pressable>
               </>
             ) : !canStartEncounter ? (
               <Text style={styles.hint} testID="encounter-blocked">
@@ -246,7 +250,7 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
         </>
       )}
 
-      <Text style={styles.placeholder}>Assessment, vitals, interventions and handover charting land in the next milestone.</Text>
+      <Text style={styles.placeholder}>Assessment, interventions, medications and handover charting land in the next milestone.</Text>
     </ScrollView>
   );
 }
@@ -334,6 +338,9 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: "#9aa8e0"
+  },
+  spacedButton: {
+    marginTop: 10
   },
   buttonText: {
     color: "#fff",
