@@ -267,6 +267,10 @@ Before a stage is considered complete:
 
 # Recommended execution order
 
+See [`STAGE_EXECUTION_PLAN.md`](STAGE_EXECUTION_PLAN.md) for the detailed
+milestone-level sequencing, current status snapshot, and open decisions behind the
+summary below.
+
 Execute sequentially where domain dependencies require it:
 
 `Stage 6 -> Stage 7 -> Stage 8 -> Stage 9 -> Stage 10 -> Stage 11 -> Stage 12 -> Stage 13 -> Stage 14`
