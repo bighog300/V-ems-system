@@ -184,7 +184,7 @@ and testable, and later steps depend on earlier ones' contracts existing.
    retry, same as `queued`; safe because a stranded `sending` entry can only mean the
    process that claimed it is gone (the sync coordinator never lets two passes overlap
    within a live process), and retrying reuses the same idempotency key as the original
-   attempt.
+   attempt. — done, merged (PR #96).
 8. **10h — Manual verification.** Airplane-mode PCR completion drill: chart a full PCR
    with networking disabled, force-quit the app, relaunch, reconnect, confirm no
    duplicate/lost records server-side. This is issue #67's actual exit gate and needs a
