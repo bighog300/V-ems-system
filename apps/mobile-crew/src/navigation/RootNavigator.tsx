@@ -1,11 +1,12 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, View } from "react-native";
 
 import type { AssignedJob } from "../api/assignments.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import { loadSession, type Session } from "../auth/session.ts";
+import AppLockScreen from "../screens/AppLockScreen.tsx";
 import AssessmentScreen from "../screens/AssessmentScreen.tsx";
 import DispositionScreen from "../screens/DispositionScreen.tsx";
 import EpcrScreen from "../screens/EpcrScreen.tsx";
@@ -32,11 +33,12 @@ type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-type BootState = "loading" | "signed-out" | "signed-in";
+type BootState = "loading" | "signed-out" | "locked" | "signed-in";
 
 export default function RootNavigator() {
   const [state, setState] = useState<BootState>("loading");
   const [session, setSession] = useState<Session | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +46,7 @@ export default function RootNavigator() {
       if (cancelled) return;
       if (restored) {
         setSession(restored);
-        setState("signed-in");
+        setState("locked");
       } else {
         setState("signed-out");
       }
@@ -52,6 +54,20 @@ export default function RootNavigator() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Re-lock whenever the app returns to the foreground from the background,
+  // so a crew member's session isn't left exposed if the device changes hands.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (next: AppStateStatus) => {
+      const previous = appStateRef.current;
+      appStateRef.current = next;
+      const cameToForeground = previous.match(/inactive|background/) && next === "active";
+      if (cameToForeground) {
+        setState((current) => (current === "signed-in" ? "locked" : current));
+      }
+    });
+    return () => subscription.remove();
   }, []);
 
   const handleSignedIn = useCallback((next: Session) => {
@@ -64,12 +80,20 @@ export default function RootNavigator() {
     setState("signed-out");
   }, []);
 
+  const handleUnlocked = useCallback(() => {
+    setState("signed-in");
+  }, []);
+
   if (state === "loading") {
     return (
       <View style={styles.center} testID="bootstrap-loading">
         <ActivityIndicator size="large" />
       </View>
     );
+  }
+
+  if (state === "locked" && session) {
+    return <AppLockScreen onUnlocked={handleUnlocked} />;
   }
 
   return (
