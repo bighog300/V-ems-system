@@ -1,3 +1,4 @@
+import { withCache, type CachedResult } from "./cachedRequest.ts";
 import { requestJson } from "./httpClient.ts";
 import type { ApiConfig } from "./patientCases.ts";
 
@@ -13,6 +14,15 @@ export interface PatientCaseEncounter {
   care_started_at: string;
   created_at: string;
   updated_at: string;
+}
+
+export async function getPatientCaseEncounterCached({
+  apiBaseUrl,
+  authToken,
+  fetchImpl = fetch,
+  patientCaseId
+}: ApiConfig & { patientCaseId: string }): Promise<CachedResult<PatientCaseEncounter | null>> {
+  return withCache(`patient-case-encounter:${patientCaseId}`, () => getPatientCaseEncounter({ apiBaseUrl, authToken, fetchImpl, patientCaseId }));
 }
 
 export async function getPatientCaseEncounter({

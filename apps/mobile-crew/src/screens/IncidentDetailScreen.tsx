@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { AssignedJob } from "../api/assignments.ts";
-import { createPatientCase, listPatientCases, type PatientCase } from "../api/patientCases.ts";
+import { createPatientCase, listPatientCasesCached, type PatientCase } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
@@ -31,14 +31,16 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
   const [error, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [creating, setCreating] = useState(false);
+  const [showingCached, setShowingCached] = useState(false);
 
   const load = useCallback(async () => {
     if (!incidentId) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await listPatientCases({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, incidentId });
-      setCases(result);
+      const result = await listPatientCasesCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, incidentId });
+      setCases(result.value);
+      setShowingCached(result.cached);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load patient cases.");
     } finally {
@@ -102,6 +104,11 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
           <ActivityIndicator testID="patient-cases-loading" />
         ) : (
           <>
+            {showingCached ? (
+              <Text style={styles.cachedBanner} accessibilityLiveRegion="polite" testID="patient-cases-cached-banner">
+                Showing cached data — offline
+              </Text>
+            ) : null}
             {error ? (
               <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="patient-cases-error">
                 {error}
@@ -222,6 +229,16 @@ const styles = StyleSheet.create({
   error: {
     fontSize: 13,
     color: "#b00020",
+    marginBottom: 8
+  },
+  cachedBanner: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#8a6d00",
+    backgroundColor: "#fff6d9",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     marginBottom: 8
   },
   caseRow: {
