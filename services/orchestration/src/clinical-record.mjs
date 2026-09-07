@@ -68,8 +68,11 @@ export const clinicalRecordMethods = {
     const sectionType = text(payload.section_type, "section_type");
     const performedAt = iso(payload.performed_at ?? new Date().toISOString(), "performed_at");
     if (!payload.payload || typeof payload.payload !== "object" || Array.isArray(payload.payload)) throw new ApiError("INVALID_PAYLOAD", "payload must be an object", 400);
+    const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, section_type: sectionType, performed_at: performedAt, payload: payload.payload });
+    if (meta.idempotencyKey) { const existing = this.idempotency.get("assessment", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalAssessments.find(existing.resource_id); } }
     const record = { assessment_id: id("ASM"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, section_type: sectionType, payload: payload.payload, performed_at: performedAt, clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     this.clinicalAssessments.create(record);
+    if (meta.idempotencyKey) this.idempotency.save("assessment", meta.idempotencyKey, record.assessment_id, record.created_at, fingerprint);
     this.audit("patient_case_assessment", record.assessment_id, "create_assessment", meta.correlationId, undefined, record);
     this.event("PatientCaseAssessmentCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, assessment_id: record.assessment_id, section_type: sectionType });
     appendTimeline(this, { ...record, timeline_event_id: undefined, event_type: "assessment_recorded", source_entity_type: "assessment", source_entity_id: record.assessment_id }, meta);
@@ -82,8 +85,11 @@ export const clinicalRecordMethods = {
     const performedAt = iso(payload.recorded_at ?? payload.performed_at ?? new Date().toISOString(), "recorded_at");
     const observations = payload.observations ?? payload.vital_signs;
     if (!observations || typeof observations !== "object" || Array.isArray(observations)) throw new ApiError("INVALID_PAYLOAD", "observations or vital_signs is required", 400);
-    const record = { observation_event_id: id("OBS"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id, performed_at: performedAt, clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, observations, notes: payload.notes ?? null, openemr_observation_id: null, downstream_status: "pending", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
-    if (!record.encounter_id) throw new ApiError("CONFLICT", "An encounter is required for clinical observations", 409);
+    const encounterId = payload.encounter_id ?? current.openemr_encounter_id;
+    if (!encounterId) throw new ApiError("CONFLICT", "An encounter is required for clinical observations", 409);
+    const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, encounter_id: encounterId, performed_at: performedAt, observations, notes: payload.notes ?? null });
+    if (meta.idempotencyKey) { const existing = this.idempotency.get("observation", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalObservations.find(existing.resource_id); } }
+    const record = { observation_event_id: id("OBS"), patient_case_id: patientCaseId, encounter_id: encounterId, performed_at: performedAt, clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, observations, notes: payload.notes ?? null, openemr_observation_id: null, downstream_status: "pending", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     this.clinicalObservations.create(record);
     let downstreamStatus = "not_attempted";
     try {
@@ -92,6 +98,7 @@ export const clinicalRecordMethods = {
     } catch (error) { downstreamStatus = `failed:${error.code ?? "DOWNSTREAM_UNAVAILABLE"}`; }
     this.db.execute(`UPDATE clinical_observations SET openemr_observation_id=${sqlValue(record.openemr_observation_id)},downstream_status=${sqlValue(downstreamStatus)} WHERE observation_event_id=${sqlValue(record.observation_event_id)};`);
     record.downstream_status = downstreamStatus;
+    if (meta.idempotencyKey) this.idempotency.save("observation", meta.idempotencyKey, record.observation_event_id, record.created_at, fingerprint);
     this.audit("clinical_observation", record.observation_event_id, "create_observation", meta.correlationId, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, performed_at: performedAt, downstream_status: downstreamStatus });
     this.event("PatientCaseObservationCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, observation_id: record.observation_event_id, downstream_status: downstreamStatus });
     appendTimeline(this, { ...record, event_type: "observation_recorded", source_entity_type: "observation", source_entity_id: record.observation_event_id }, meta);
@@ -139,9 +146,12 @@ export const clinicalRecordMethods = {
     this.assertPatientCaseClinicalMutable(patientCaseId);
     const before = this.clinicalDispositions.find(patientCaseId);
     if (!OUTCOMES.has(payload.outcome)) throw new ApiError("INVALID_PAYLOAD", `outcome must be one of: ${[...OUTCOMES].join(", ")}`, 400);
+    const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, outcome: payload.outcome, destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, notes: payload.notes ?? null });
+    if (meta.idempotencyKey) { const existing = this.idempotency.get("disposition", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalDispositions.find(existing.resource_id); } }
     const now = new Date().toISOString();
     const record = { disposition_id: id("DISP"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, outcome: payload.outcome, destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, decision_at: iso(payload.decision_at ?? now, "decision_at"), reason: payload.reason ?? null, notes: payload.notes ?? null, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
     this.clinicalDispositions.save(record);
+    if (meta.idempotencyKey) this.idempotency.save("disposition", meta.idempotencyKey, patientCaseId, now, fingerprint);
     this.audit("patient_case_disposition", patientCaseId, "set_disposition", meta.correlationId, before, record);
     this.event("PatientCaseDispositionSet", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, outcome: record.outcome });
     appendTimeline(this, { ...record, event_type: "disposition_recorded", source_entity_type: "disposition", source_entity_id: record.disposition_id }, meta);
