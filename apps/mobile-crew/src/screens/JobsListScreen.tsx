@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
-import { listMyAssignments, type AssignedJob } from "../api/assignments.ts";
+import { listMyAssignmentsCached, type AssignedJob } from "../api/assignments.ts";
 import { clearSession, type Session } from "../auth/session.ts";
 import type { UseSyncTriggersResult } from "../offline/useSyncTriggers.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
@@ -31,14 +31,16 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob, onOp
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showingCached, setShowingCached] = useState(false);
 
   const load = useCallback(
     async (isRefresh: boolean) => {
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
       try {
-        const result = await listMyAssignments({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken });
-        setJobs(result);
+        const result = await listMyAssignmentsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken });
+        setJobs(result.value);
+        setShowingCached(result.cached);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load assigned jobs.");
       } finally {
@@ -72,6 +74,12 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob, onOp
           <Text style={styles.signOutText}>Sign out</Text>
         </Pressable>
       </View>
+
+      {showingCached ? (
+        <Text style={styles.cachedBanner} accessibilityLiveRegion="polite" testID="jobs-cached-banner">
+          Showing cached data — offline
+        </Text>
+      ) : null}
 
       <View style={styles.syncRow}>
         {syncStatusText(sync) ? (
@@ -171,6 +179,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#555",
     marginTop: 2
+  },
+  cachedBanner: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#8a6d00",
+    backgroundColor: "#fff6d9",
+    paddingVertical: 6,
+    paddingHorizontal: 24
   },
   signOut: {
     minHeight: TOUCH_TARGET_MIN,

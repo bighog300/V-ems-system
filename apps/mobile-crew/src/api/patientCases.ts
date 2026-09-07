@@ -1,3 +1,4 @@
+import { withCache, type CachedResult } from "./cachedRequest.ts";
 import { requestJson } from "./httpClient.ts";
 import { requestOrQueue } from "./offlineMutation.ts";
 
@@ -38,6 +39,15 @@ export interface ApiConfig {
   fetchImpl?: typeof fetch;
 }
 
+export async function getPatientCaseCached({
+  apiBaseUrl,
+  authToken,
+  fetchImpl = fetch,
+  patientCaseId
+}: ApiConfig & { patientCaseId: string }): Promise<CachedResult<PatientCase>> {
+  return withCache(`patient-case:${patientCaseId}`, () => getPatientCase({ apiBaseUrl, authToken, fetchImpl, patientCaseId }));
+}
+
 export async function getPatientCase({
   apiBaseUrl,
   authToken,
@@ -49,6 +59,15 @@ export async function getPatientCase({
   });
   if (!result.data) throw new Error("Patient case fetch returned no data");
   return result.data;
+}
+
+export async function listPatientCasesCached({
+  apiBaseUrl,
+  authToken,
+  fetchImpl = fetch,
+  incidentId
+}: ApiConfig & { incidentId: string }): Promise<CachedResult<PatientCase[]>> {
+  return withCache(`patient-cases:incident:${incidentId}`, () => listPatientCases({ apiBaseUrl, authToken, fetchImpl, incidentId }));
 }
 
 export async function listPatientCases({ apiBaseUrl, authToken, fetchImpl = fetch, incidentId }: ApiConfig & { incidentId: string }): Promise<PatientCase[]> {
@@ -79,6 +98,15 @@ export async function createPatientCase({
   });
   if (!result.data) throw new Error("Patient case create returned no data");
   return result.data;
+}
+
+export async function getPatientCaseDemographicsCached({
+  apiBaseUrl,
+  authToken,
+  fetchImpl = fetch,
+  patientCaseId
+}: ApiConfig & { patientCaseId: string }): Promise<CachedResult<PatientCaseDemographics | null>> {
+  return withCache(`patient-case-demographics:${patientCaseId}`, () => getPatientCaseDemographics({ apiBaseUrl, authToken, fetchImpl, patientCaseId }));
 }
 
 export async function getPatientCaseDemographics({

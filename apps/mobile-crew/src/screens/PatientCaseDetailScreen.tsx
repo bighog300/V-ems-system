@@ -2,8 +2,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
-import { createPatientCaseEncounter, getPatientCaseEncounter, type PatientCaseEncounter } from "../api/encounters.ts";
-import { getPatientCase, getPatientCaseDemographics, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
+import { createPatientCaseEncounter, getPatientCaseEncounterCached, type PatientCaseEncounter } from "../api/encounters.ts";
+import { getPatientCaseCached, getPatientCaseDemographicsCached, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
@@ -43,6 +43,7 @@ export default function PatientCaseDetailScreen({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [showingCached, setShowingCached] = useState(false);
 
   const [encounter, setEncounter] = useState<PatientCaseEncounter | null>(null);
   const [presentingComplaint, setPresentingComplaint] = useState("");
@@ -66,14 +67,15 @@ export default function PatientCaseDetailScreen({
         setError(null);
         try {
           const [refreshedCase, demographics, refreshedEncounter] = await Promise.all([
-            getPatientCase({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
-            getPatientCaseDemographics({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
-            getPatientCaseEncounter({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id })
+            getPatientCaseCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
+            getPatientCaseDemographicsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
+            getPatientCaseEncounterCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id })
           ]);
           if (cancelled) return;
-          setCaseState(refreshedCase);
-          applyDemographics(demographics);
-          setEncounter(refreshedEncounter);
+          setCaseState(refreshedCase.value);
+          applyDemographics(demographics.value);
+          setEncounter(refreshedEncounter.value);
+          setShowingCached(refreshedCase.cached || demographics.cached || refreshedEncounter.cached);
         } catch (err) {
           if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load patient case.");
         } finally {
@@ -153,6 +155,11 @@ export default function PatientCaseDetailScreen({
         <ActivityIndicator style={styles.loading} testID="demographics-loading" />
       ) : (
         <>
+          {showingCached ? (
+            <Text style={styles.cachedBanner} accessibilityLiveRegion="polite" testID="patient-case-cached-banner">
+              Showing cached data — offline
+            </Text>
+          ) : null}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Patient identity</Text>
             {error ? (
@@ -363,6 +370,16 @@ const styles = StyleSheet.create({
   },
   loading: {
     marginTop: 24
+  },
+  cachedBanner: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#8a6d00",
+    backgroundColor: "#fff6d9",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 16
   },
   card: {
     borderWidth: 1,
