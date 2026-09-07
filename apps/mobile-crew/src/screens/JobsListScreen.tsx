@@ -3,15 +3,29 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 
 import { listMyAssignments, type AssignedJob } from "../api/assignments.ts";
 import { clearSession, type Session } from "../auth/session.ts";
+import type { UseSyncTriggersResult } from "../offline/useSyncTriggers.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+
+const NOOP_SYNC: UseSyncTriggersResult = { syncing: false, lastResult: null, syncNow: async () => {} };
 
 export interface JobsListScreenProps {
   session: Session;
   onSignedOut: () => void;
   onSelectJob: (job: AssignedJob) => void;
+  sync?: UseSyncTriggersResult;
 }
 
-export default function JobsListScreen({ session, onSignedOut, onSelectJob }: JobsListScreenProps) {
+function syncStatusText(sync: UseSyncTriggersResult): string | null {
+  if (sync.syncing) return "Syncing…";
+  if (!sync.lastResult) return null;
+  const { retrying, failed, conflicted, acknowledged } = sync.lastResult;
+  const pending = retrying + failed + conflicted;
+  if (pending === 0 && acknowledged === 0) return null;
+  if (pending === 0) return `Synced ${acknowledged} item${acknowledged === 1 ? "" : "s"}`;
+  return `${pending} item${pending === 1 ? "" : "s"} waiting to sync`;
+}
+
+export default function JobsListScreen({ session, onSignedOut, onSelectJob, sync = NOOP_SYNC }: JobsListScreenProps) {
   const [jobs, setJobs] = useState<AssignedJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,6 +69,24 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob }: Jo
         </View>
         <Pressable onPress={handleSignOut} accessibilityRole="button" accessibilityLabel="Sign out" style={styles.signOut} testID="sign-out">
           <Text style={styles.signOutText}>Sign out</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.syncRow}>
+        {syncStatusText(sync) ? (
+          <Text style={styles.syncStatus} accessibilityLiveRegion="polite" testID="sync-status">
+            {syncStatusText(sync)}
+          </Text>
+        ) : null}
+        <Pressable
+          onPress={() => sync.syncNow()}
+          disabled={sync.syncing}
+          accessibilityRole="button"
+          accessibilityLabel="Sync now"
+          style={styles.syncButton}
+          testID="sync-now"
+        >
+          <Text style={styles.syncButtonText}>Sync now</Text>
         </Pressable>
       </View>
 
@@ -139,6 +171,29 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     color: "#b00020",
+    fontSize: 14,
+    fontWeight: "600"
+  },
+  syncRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingBottom: 12
+  },
+  syncStatus: {
+    fontSize: 13,
+    color: "#555",
+    flexShrink: 1,
+    marginRight: 12
+  },
+  syncButton: {
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    paddingHorizontal: 4
+  },
+  syncButtonText: {
+    color: "#1a4fd6",
     fontSize: 14,
     fontWeight: "600"
   },

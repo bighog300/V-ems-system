@@ -6,6 +6,7 @@ import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, View } fr
 import type { AssignedJob } from "../api/assignments.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import { loadSession, type Session } from "../auth/session.ts";
+import { useSyncTriggers } from "../offline/useSyncTriggers.ts";
 import AppLockScreen from "../screens/AppLockScreen.tsx";
 import AssessmentScreen from "../screens/AssessmentScreen.tsx";
 import DispositionScreen from "../screens/DispositionScreen.tsx";
@@ -39,6 +40,7 @@ export default function RootNavigator() {
   const [state, setState] = useState<BootState>("loading");
   const [session, setSession] = useState<Session | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const sync = useSyncTriggers(state === "signed-in" ? session : null);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,6 +109,7 @@ export default function RootNavigator() {
                   session={session}
                   onSignedOut={handleSignedOut}
                   onSelectJob={(job) => navigation.navigate("IncidentDetail", { job })}
+                  sync={sync}
                 />
               )}
             </Stack.Screen>

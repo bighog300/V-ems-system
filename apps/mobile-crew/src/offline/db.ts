@@ -111,7 +111,11 @@ export async function listOutboxEntries(db: OfflineSqliteLike, filter: ListOutbo
     params.push(filter.patientCaseId);
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  return db.getAllAsync<OutboxEntryRow>(`SELECT * FROM outbox_entries ${where} ORDER BY created_at, entry_id;`, params);
+  // entry_id is a random UUID, not a monotonic sequence, so it can't be a
+  // reliable tiebreaker for entries created in the same millisecond — the
+  // implicit SQLite rowid (insertion-ordered) is. Same fix as the backend's
+  // EventOutboxRepository.listAll() for the same underlying reason.
+  return db.getAllAsync<OutboxEntryRow>(`SELECT * FROM outbox_entries ${where} ORDER BY created_at, rowid;`, params);
 }
 
 export interface OutboxEntryPatch {
