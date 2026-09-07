@@ -11,6 +11,7 @@ import JobsListScreen from "../screens/JobsListScreen.tsx";
 import LoginScreen from "../screens/LoginScreen.tsx";
 import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
 import PatientIdentityScreen from "../screens/PatientIdentityScreen.tsx";
+import VitalsScreen from "../screens/VitalsScreen.tsx";
 
 type RootStackParamList = {
   Login: undefined;
@@ -18,6 +19,7 @@ type RootStackParamList = {
   IncidentDetail: { job: AssignedJob };
   PatientCaseDetail: { patientCase: PatientCase };
   PatientIdentity: { patientCase: PatientCase };
+  Vitals: { patientCaseId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -93,6 +95,7 @@ export default function RootNavigator() {
                   session={session}
                   onBack={() => navigation.goBack()}
                   onOpenIdentity={(patientCase) => navigation.navigate("PatientIdentity", { patientCase })}
+                  onOpenVitals={(patientCaseId) => navigation.navigate("Vitals", { patientCaseId })}
                 />
               )}
             </Stack.Screen>
@@ -104,6 +107,11 @@ export default function RootNavigator() {
                   onBack={() => navigation.goBack()}
                   onLinked={() => navigation.goBack()}
                 />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Vitals">
+              {({ route, navigation }) => (
+                <VitalsScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
               )}
             </Stack.Screen>
           </>
