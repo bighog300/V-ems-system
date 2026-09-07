@@ -1,4 +1,5 @@
 import { requestJson } from "./httpClient.ts";
+import { requestOrQueue } from "./offlineMutation.ts";
 import type { ApiConfig } from "./patientCases.ts";
 
 export interface PatientCaseAssessment {
@@ -32,12 +33,24 @@ export async function createPatientCaseAssessment({
   sectionType,
   notes
 }: ApiConfig & { patientCaseId: string; sectionType: string; notes: string }): Promise<PatientCaseAssessment> {
-  const result = await requestJson<PatientCaseAssessment>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/assessments`, {
+  const performedAt = new Date().toISOString();
+  return requestOrQueue<PatientCaseAssessment>({
+    fetchImpl,
+    url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/assessments`,
     method: "POST",
     payload: { section_type: sectionType, payload: { notes } },
     config: { authToken },
-    headers: { "idempotency-key": `mobile-assessment-${patientCaseId}-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+    scope: "assessment",
+    patientCaseId,
+    buildOptimisticResult: (entryId) => ({
+      assessment_id: `LOCAL-${entryId}`,
+      patient_case_id: patientCaseId,
+      encounter_id: "",
+      section_type: sectionType,
+      payload: { notes },
+      performed_at: performedAt,
+      clinician_id: null,
+      created_at: performedAt
+    })
   });
-  if (!result.data) throw new Error("Assessment create returned no data");
-  return result.data;
 }

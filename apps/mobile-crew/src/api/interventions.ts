@@ -1,4 +1,5 @@
 import { requestJson } from "./httpClient.ts";
+import { requestOrQueue } from "./offlineMutation.ts";
 import type { ApiConfig } from "./patientCases.ts";
 
 export interface MedicationAdministration {
@@ -47,14 +48,33 @@ export async function createPatientCaseMedication({
   patientCaseId,
   payload
 }: ApiConfig & { patientCaseId: string; payload: CreateMedicationPayload }): Promise<MedicationAdministration> {
-  const result = await requestJson<MedicationAdministration>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/medications`, {
+  const performedAt = new Date().toISOString();
+  return requestOrQueue<MedicationAdministration>({
+    fetchImpl,
+    url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/medications`,
     method: "POST",
     payload,
     config: { authToken },
-    headers: { "idempotency-key": `mobile-medication-${patientCaseId}-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+    scope: "medication",
+    patientCaseId,
+    buildOptimisticResult: (entryId) => ({
+      medication_administration_id: `LOCAL-${entryId}`,
+      patient_case_id: patientCaseId,
+      encounter_id: "",
+      medication_name: payload.medication_name,
+      formulation: null,
+      dose: payload.dose,
+      dose_unit: payload.dose_unit,
+      route: payload.route,
+      indication: payload.indication ?? null,
+      performed_at: performedAt,
+      clinician_id: null,
+      response: payload.response ?? null,
+      adverse_reaction: null,
+      downstream_status: "pending",
+      created_at: performedAt
+    })
   });
-  if (!result.data) throw new Error("Medication create returned no data");
-  return result.data;
 }
 
 export interface ClinicalProcedure {
@@ -101,12 +121,29 @@ export async function createPatientCaseProcedure({
   patientCaseId,
   payload
 }: ApiConfig & { patientCaseId: string; payload: CreateProcedurePayload }): Promise<ClinicalProcedure> {
-  const result = await requestJson<ClinicalProcedure>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/procedures`, {
+  const performedAt = new Date().toISOString();
+  return requestOrQueue<ClinicalProcedure>({
+    fetchImpl,
+    url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/procedures`,
     method: "POST",
     payload,
     config: { authToken },
-    headers: { "idempotency-key": `mobile-procedure-${patientCaseId}-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+    scope: "procedure",
+    patientCaseId,
+    buildOptimisticResult: (entryId) => ({
+      procedure_id: `LOCAL-${entryId}`,
+      patient_case_id: patientCaseId,
+      encounter_id: "",
+      procedure_type: payload.procedure_type,
+      procedure_name: payload.procedure_name,
+      performed_at: performedAt,
+      clinician_id: null,
+      attempts: payload.attempts ?? null,
+      success: payload.success ?? null,
+      complications: payload.complications ?? null,
+      response: payload.response ?? null,
+      downstream_status: "pending",
+      created_at: performedAt
+    })
   });
-  if (!result.data) throw new Error("Procedure create returned no data");
-  return result.data;
 }
