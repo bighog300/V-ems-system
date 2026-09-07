@@ -50,14 +50,15 @@ Docker/CI baseline are in place. Work has moved to ePCR Stages 6–14:
 |---|---|---|
 | 6 | Multi-patient patient-case domain | Closed |
 | 7 | Complete clinical ePCR record | Closed |
-| 8 | Signatures, finalization, amendments, QA | Open |
-| 9 | Native crew mobile app foundation | Open |
-| 10 | Offline-first sync | Open |
+| 8 | Signatures, finalization, amendments, QA | Closed |
+| 9 | Native crew mobile app foundation | Closed (encrypted local DB deferred to Stage 10 per ADR 0001) |
+| 10 | Offline-first sync | Open — [scoped](STAGE10_OFFLINE_SYNC_PLAN.md) |
 | 11 | Mobile-native field UX/hardware | Open |
 | 12 | Production clinical infrastructure (Postgres, encrypted storage, DR) | Open |
 | 13 | Compliance, reporting, clinical governance | Open |
 | 14 | Field validation and release readiness | Open |
 
-The largest remaining gaps are the native mobile app (Stages 9–11), production
-infrastructure hardening (Stage 12), and compliance/reporting (Stage 13) — none of
-which has started yet.
+Stage 9's mobile app foundation is complete and merged (issue #66, PRs #76–#88). The
+largest remaining gaps are offline-first sync and mobile-native field UX (Stages 10–11),
+production infrastructure hardening (Stage 12), and compliance/reporting (Stage 13) —
+none of which has started yet beyond Stage 10's scoping.
