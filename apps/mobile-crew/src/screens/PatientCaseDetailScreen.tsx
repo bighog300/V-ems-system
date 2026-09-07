@@ -12,9 +12,17 @@ export interface PatientCaseDetailScreenProps {
   onBack: () => void;
   onOpenIdentity: (patientCase: PatientCase) => void;
   onOpenVitals: (patientCaseId: string) => void;
+  onOpenInterventions: (patientCaseId: string) => void;
 }
 
-export default function PatientCaseDetailScreen({ patientCase: initialCase, session, onBack, onOpenIdentity, onOpenVitals }: PatientCaseDetailScreenProps) {
+export default function PatientCaseDetailScreen({
+  patientCase: initialCase,
+  session,
+  onBack,
+  onOpenIdentity,
+  onOpenVitals,
+  onOpenInterventions
+}: PatientCaseDetailScreenProps) {
   const [caseState, setCaseState] = useState(initialCase);
 
   const [firstName, setFirstName] = useState("");
@@ -222,6 +230,13 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
                 <Pressable style={[styles.button, styles.spacedButton]} onPress={() => onOpenVitals(caseState.patient_case_id)} testID="open-vitals">
                   <Text style={styles.buttonText}>Vitals</Text>
                 </Pressable>
+                <Pressable
+                  style={[styles.button, styles.spacedButton]}
+                  onPress={() => onOpenInterventions(caseState.patient_case_id)}
+                  testID="open-interventions"
+                >
+                  <Text style={styles.buttonText}>Interventions</Text>
+                </Pressable>
               </>
             ) : !canStartEncounter ? (
               <Text style={styles.hint} testID="encounter-blocked">
@@ -250,7 +265,7 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
         </>
       )}
 
-      <Text style={styles.placeholder}>Assessment, interventions, medications and handover charting land in the next milestone.</Text>
+      <Text style={styles.placeholder}>Assessment and handover charting land in the next milestone.</Text>
     </ScrollView>
   );
 }
