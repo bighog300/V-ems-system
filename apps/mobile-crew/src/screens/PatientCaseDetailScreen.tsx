@@ -13,6 +13,8 @@ export interface PatientCaseDetailScreenProps {
   onOpenIdentity: (patientCase: PatientCase) => void;
   onOpenVitals: (patientCaseId: string) => void;
   onOpenInterventions: (patientCaseId: string) => void;
+  onOpenAssessment: (patientCaseId: string) => void;
+  onOpenDisposition: (patientCaseId: string) => void;
 }
 
 export default function PatientCaseDetailScreen({
@@ -21,7 +23,9 @@ export default function PatientCaseDetailScreen({
   onBack,
   onOpenIdentity,
   onOpenVitals,
-  onOpenInterventions
+  onOpenInterventions,
+  onOpenAssessment,
+  onOpenDisposition
 }: PatientCaseDetailScreenProps) {
   const [caseState, setCaseState] = useState(initialCase);
 
@@ -237,6 +241,20 @@ export default function PatientCaseDetailScreen({
                 >
                   <Text style={styles.buttonText}>Interventions</Text>
                 </Pressable>
+                <Pressable
+                  style={[styles.button, styles.spacedButton]}
+                  onPress={() => onOpenAssessment(caseState.patient_case_id)}
+                  testID="open-assessment"
+                >
+                  <Text style={styles.buttonText}>Assessment</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.button, styles.spacedButton]}
+                  onPress={() => onOpenDisposition(caseState.patient_case_id)}
+                  testID="open-disposition"
+                >
+                  <Text style={styles.buttonText}>Disposition</Text>
+                </Pressable>
               </>
             ) : !canStartEncounter ? (
               <Text style={styles.hint} testID="encounter-blocked">
@@ -265,7 +283,9 @@ export default function PatientCaseDetailScreen({
         </>
       )}
 
-      <Text style={styles.placeholder}>Assessment and handover charting land in the next milestone.</Text>
+      <Text style={styles.placeholder}>
+        Signatures and ePCR finalization/QA (Stage 8) land in the next milestone.
+      </Text>
     </ScrollView>
   );
 }
