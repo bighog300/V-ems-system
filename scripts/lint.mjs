@@ -1,10 +1,24 @@
-import { readFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
 
-const files = execSync("rg --files -g '*.mjs' -g '*.js' -g '*.sh'", { encoding: "utf8" })
-  .trim()
-  .split("\n")
-  .filter(Boolean);
+const EXTENSIONS = new Set([".mjs", ".js", ".sh"]);
+const SKIP_DIRS = new Set(["node_modules", ".git"]);
+
+function collectFiles(dir, results) {
+  for (const entry of readdirSync(dir)) {
+    if (SKIP_DIRS.has(entry)) continue;
+    const fullPath = path.join(dir, entry);
+    const stats = statSync(fullPath);
+    if (stats.isDirectory()) {
+      collectFiles(fullPath, results);
+    } else if (EXTENSIONS.has(path.extname(entry))) {
+      results.push(fullPath);
+    }
+  }
+  return results;
+}
+
+const files = collectFiles(".", []);
 
 const failures = [];
 for (const file of files) {
