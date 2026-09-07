@@ -194,6 +194,125 @@ test("isEntryDueForRetry: queued is always due; retrying respects exponential ba
   assert.equal(isEntryDueForRetry(entry, now + 2), true);
 });
 
+// --- ID remapping for a patient case created offline -----------------
+//
+// createPatientCase mints a client-side `LOCAL-<entryId>` placeholder id
+// when queued offline, since every downstream write (demographics,
+// encounter, ...) needs *some* patient_case_id to reference immediately.
+// Once the create itself syncs and the server hands back the real id, the
+// sync engine must rewrite every other still-pending entry that referenced
+// the placeholder — in its `patient_case_id` column and in its URL path —
+// before attempting them.
+
+test("runSync remaps a LOCAL patient case id to its real one and sends the dependent entry in the same pass", async () => {
+  const db = await setupDb();
+  const key = new Uint8Array(randomBytes(32));
+  const cryptoModule = fakeCryptoModule();
+  const localCaseId = "LOCAL-abc123";
+
+  await enqueueMutation(
+    db,
+    key,
+    {
+      scope: "patient_case_create",
+      patientCaseId: localCaseId,
+      method: "POST",
+      path: "https://api.example.test/api/incidents/INC-1/patient-cases",
+      payload: { temporary_label: "driver" }
+    },
+    { cryptoModule }
+  );
+  await enqueueMutation(
+    db,
+    key,
+    {
+      scope: "demographics",
+      patientCaseId: localCaseId,
+      method: "PUT",
+      path: `https://api.example.test/api/patient-cases/${localCaseId}/demographics`,
+      payload: { first_name: "Jane" }
+    },
+    { cryptoModule }
+  );
+
+  const calledUrls: string[] = [];
+  const fetchImpl = (async (url: string) => {
+    calledUrls.push(url);
+    if (url.endsWith("/patient-cases")) return new Response(JSON.stringify({ patient_case_id: "PCR-500" }), { status: 201 });
+    return new Response(JSON.stringify({ patient_case_id: "PCR-500", first_name: "Jane" }), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const result = await runSync(db, key, { authToken: "token" }, { fetchImpl });
+
+  assert.deepEqual(result, { attempted: 2, acknowledged: 2, retrying: 0, failed: 0, conflicted: 0 });
+  assert.deepEqual(calledUrls, [
+    "https://api.example.test/api/incidents/INC-1/patient-cases",
+    "https://api.example.test/api/patient-cases/PCR-500/demographics"
+  ]);
+
+  const demographicsEntry = (await listMutations(db, key, { status: ["acknowledged"] })).find((e) => e.scope === "demographics");
+  assert.equal(demographicsEntry?.patientCaseId, "PCR-500");
+});
+
+test("runSync skips a dependent entry (without spending an attempt) while its case's create hasn't synced yet, then sends it once the create succeeds", async () => {
+  const db = await setupDb();
+  const key = new Uint8Array(randomBytes(32));
+  const cryptoModule = fakeCryptoModule();
+  const localCaseId = "LOCAL-def456";
+
+  await enqueueMutation(
+    db,
+    key,
+    {
+      scope: "patient_case_create",
+      patientCaseId: localCaseId,
+      method: "POST",
+      path: "https://api.example.test/api/incidents/INC-1/patient-cases",
+      payload: {}
+    },
+    { cryptoModule }
+  );
+  await enqueueMutation(
+    db,
+    key,
+    {
+      scope: "demographics",
+      patientCaseId: localCaseId,
+      method: "PUT",
+      path: `https://api.example.test/api/patient-cases/${localCaseId}/demographics`,
+      payload: { first_name: "Jane" }
+    },
+    { cryptoModule }
+  );
+
+  let calls = 0;
+  const failingFetch = (async () => {
+    calls += 1;
+    throw new TypeError("Network request failed");
+  }) as unknown as typeof fetch;
+
+  const firstPass = await runSync(db, key, { authToken: "token" }, { fetchImpl: failingFetch });
+  assert.equal(calls, 1, "the dependent entry must not waste a retry on a create that hasn't synced — guaranteed 404");
+  assert.deepEqual(firstPass, { attempted: 1, acknowledged: 0, retrying: 1, failed: 0, conflicted: 0 });
+
+  const stillLocal = (await listMutations(db, key, { status: ["queued"] })).find((e) => e.scope === "demographics");
+  assert.equal(stillLocal?.patientCaseId, localCaseId);
+
+  const calledUrls: string[] = [];
+  const succeedingFetch = (async (url: string) => {
+    calledUrls.push(url);
+    if (url.endsWith("/patient-cases")) return new Response(JSON.stringify({ patient_case_id: "PCR-777" }), { status: 201 });
+    return new Response(JSON.stringify({}), { status: 200 });
+  }) as unknown as typeof fetch;
+
+  const secondPass = await runSync(db, key, { authToken: "token" }, { fetchImpl: succeedingFetch, now: () => Date.now() + 10 * 60_000 });
+  assert.deepEqual(secondPass, { attempted: 2, acknowledged: 2, retrying: 0, failed: 0, conflicted: 0 });
+  assert.deepEqual(calledUrls, [
+    "https://api.example.test/api/incidents/INC-1/patient-cases",
+    "https://api.example.test/api/patient-cases/PCR-777/demographics"
+  ]);
+});
+
 test("no due entries means an empty, no-op sync pass", async () => {
   const db = await setupDb();
   const key = new Uint8Array(randomBytes(32));

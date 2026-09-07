@@ -141,16 +141,17 @@ and testable, and later steps depend on earlier ones' contracts existing.
 
    Wired into the six mutations that append/update an already-existing patient case
    (assessment, observation, medication, procedure, disposition, demographics) — done.
-   **Deliberately not wired into `createPatientCase` or `createPatientCaseEncounter`**:
-   both mint a new entity ID that every downstream write for that case depends on
-   (`patient_case_id`, implicitly `encounter_id`), and queuing entity creation safely
-   needs client-side ID remapping — an alias table from a `LOCAL-<entryId>` id to the
-   real server-issued id once that create syncs, plus rewriting any other queued
-   entries that reference the local id before they're sent. That's a real design piece
-   this plan hadn't called out explicitly; it belongs either as its own 10c-follow-up
-   milestone or folded into 10d's ordering logic (10d already needs to send an
-   encounter's create before that case's observations — the same mechanism a
-   patient-case-creation queue would need). Also not wired into `verifySession`,
+   **Now also wired into `createPatientCase` and `createPatientCaseEncounter`** (closed
+   as a post-10g follow-up, not its own lettered milestone): each mints a client-side
+   `LOCAL-<entryId>` placeholder id when queued offline — the same value already used as
+   its idempotency key — and the sync engine (`syncEngine.ts`) remaps every other queued
+   entry that referenced the placeholder to the real server-issued id once the create
+   itself syncs, rewriting both the `patient_case_id` column and the URL path
+   (`db.ts#remapOutboxPatientCaseId`). A dependent entry whose case hasn't synced yet is
+   skipped without spending a retry attempt (it would only get a guaranteed 404) rather
+   than being sent against a placeholder id. `PatientCaseDetailScreen` skips its network
+   GETs entirely for a still-local case (nothing to fetch yet) and shows a "hasn't synced
+   yet" banner instead. Also not wired into `verifySession`,
    `searchPatients`, or the `createPatient`/`linkPatientToPatientCase`/
    `createProvisionalPatient` identity-linking flow — these need an immediate response
    to continue an interactive multi-step workflow, so queuing them silently would break
