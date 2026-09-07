@@ -62,7 +62,7 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
       await linkPatientToPatientCase({
         ...config,
         patientCaseId: patientCase.patient_case_id,
-        verificationStatus: "matched_existing",
+        verificationStatus: "verified",
         openemrPatientId: candidate.patient_id
       });
       onLinked();
@@ -84,7 +84,7 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
       await linkPatientToPatientCase({
         ...config,
         patientCaseId: patientCase.patient_case_id,
-        verificationStatus: "created_new",
+        verificationStatus: "verified",
         openemrPatientId: created.patient_id
       });
       onLinked();
