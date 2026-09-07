@@ -2,6 +2,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
+import { createPatientCaseEncounter, getPatientCaseEncounter, type PatientCaseEncounter } from "../api/encounters.ts";
 import { getPatientCase, getPatientCaseDemographics, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
 
@@ -27,6 +28,11 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
+  const [encounter, setEncounter] = useState<PatientCaseEncounter | null>(null);
+  const [presentingComplaint, setPresentingComplaint] = useState("");
+  const [creatingEncounter, setCreatingEncounter] = useState(false);
+  const [encounterError, setEncounterError] = useState<string | null>(null);
+
   const applyDemographics = (demographics: PatientCaseDemographics | null) => {
     setFirstName(demographics?.first_name ?? "");
     setLastName(demographics?.last_name ?? "");
@@ -43,13 +49,15 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
         setLoading(true);
         setError(null);
         try {
-          const [refreshedCase, demographics] = await Promise.all([
+          const [refreshedCase, demographics, refreshedEncounter] = await Promise.all([
             getPatientCase({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
-            getPatientCaseDemographics({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id })
+            getPatientCaseDemographics({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
+            getPatientCaseEncounter({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id })
           ]);
           if (cancelled) return;
           setCaseState(refreshedCase);
           applyDemographics(demographics);
+          setEncounter(refreshedEncounter);
         } catch (err) {
           if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load patient case.");
         } finally {
@@ -90,6 +98,26 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
       setSaving(false);
     }
   }
+
+  async function handleCreateEncounter() {
+    setCreatingEncounter(true);
+    setEncounterError(null);
+    try {
+      const created = await createPatientCaseEncounter({
+        apiBaseUrl: session.apiBaseUrl,
+        authToken: session.authToken,
+        patientCaseId: caseState.patient_case_id,
+        payload: { care_started_at: new Date().toISOString(), presenting_complaint: presentingComplaint.trim() }
+      });
+      setEncounter(created);
+    } catch (err) {
+      setEncounterError(err instanceof Error ? err.message : "Failed to start encounter.");
+    } finally {
+      setCreatingEncounter(false);
+    }
+  }
+
+  const canStartEncounter = caseState.openemr_patient_id && ["verified", "provisional"].includes(caseState.verification_status);
 
   return (
     <ScrollView style={styles.container} testID="patient-case-detail-screen">
@@ -175,10 +203,50 @@ export default function PatientCaseDetailScreen({ patientCase: initialCase, sess
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save demographics</Text>}
             </Pressable>
           </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Encounter</Text>
+
+            {encounterError ? (
+              <Text style={styles.error} testID="encounter-error">
+                {encounterError}
+              </Text>
+            ) : null}
+
+            {encounter ? (
+              <>
+                <Text style={styles.identityStatus}>
+                  {encounter.encounter_id} · {encounter.status}
+                </Text>
+                <Text style={styles.hint}>Started {encounter.care_started_at}</Text>
+              </>
+            ) : !canStartEncounter ? (
+              <Text style={styles.hint} testID="encounter-blocked">
+                Identify the patient (verified or unidentified) before starting an encounter.
+              </Text>
+            ) : (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Presenting complaint"
+                  value={presentingComplaint}
+                  onChangeText={setPresentingComplaint}
+                  testID="presenting-complaint-input"
+                />
+                <Pressable
+                  style={[styles.button, (creatingEncounter || !presentingComplaint.trim()) && styles.buttonDisabled]}
+                  onPress={handleCreateEncounter}
+                  disabled={creatingEncounter || !presentingComplaint.trim()}
+                  testID="start-encounter"
+                >
+                  {creatingEncounter ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Start encounter</Text>}
+                </Pressable>
+              </>
+            )}
+          </View>
         </>
       )}
 
-      <Text style={styles.placeholder}>Encounter creation and clinical charting land in the next milestone.</Text>
+      <Text style={styles.placeholder}>Assessment, vitals, interventions and handover charting land in the next milestone.</Text>
     </ScrollView>
   );
 }
@@ -224,6 +292,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#333",
     marginBottom: 12
+  },
+  hint: {
+    fontSize: 13,
+    color: "#999"
   },
   error: {
     fontSize: 13,
