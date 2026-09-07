@@ -7,6 +7,7 @@ import type { AssignedJob } from "../api/assignments.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import { loadSession, type Session } from "../auth/session.ts";
 import IncidentDetailScreen from "../screens/IncidentDetailScreen.tsx";
+import InterventionsScreen from "../screens/InterventionsScreen.tsx";
 import JobsListScreen from "../screens/JobsListScreen.tsx";
 import LoginScreen from "../screens/LoginScreen.tsx";
 import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
@@ -20,6 +21,7 @@ type RootStackParamList = {
   PatientCaseDetail: { patientCase: PatientCase };
   PatientIdentity: { patientCase: PatientCase };
   Vitals: { patientCaseId: string };
+  Interventions: { patientCaseId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -96,6 +98,7 @@ export default function RootNavigator() {
                   onBack={() => navigation.goBack()}
                   onOpenIdentity={(patientCase) => navigation.navigate("PatientIdentity", { patientCase })}
                   onOpenVitals={(patientCaseId) => navigation.navigate("Vitals", { patientCaseId })}
+                  onOpenInterventions={(patientCaseId) => navigation.navigate("Interventions", { patientCaseId })}
                 />
               )}
             </Stack.Screen>
@@ -112,6 +115,11 @@ export default function RootNavigator() {
             <Stack.Screen name="Vitals">
               {({ route, navigation }) => (
                 <VitalsScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Interventions">
+              {({ route, navigation }) => (
+                <InterventionsScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
               )}
             </Stack.Screen>
           </>
