@@ -6,6 +6,8 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import type { AssignedJob } from "../api/assignments.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import { loadSession, type Session } from "../auth/session.ts";
+import AssessmentScreen from "../screens/AssessmentScreen.tsx";
+import DispositionScreen from "../screens/DispositionScreen.tsx";
 import IncidentDetailScreen from "../screens/IncidentDetailScreen.tsx";
 import InterventionsScreen from "../screens/InterventionsScreen.tsx";
 import JobsListScreen from "../screens/JobsListScreen.tsx";
@@ -22,6 +24,8 @@ type RootStackParamList = {
   PatientIdentity: { patientCase: PatientCase };
   Vitals: { patientCaseId: string };
   Interventions: { patientCaseId: string };
+  Assessment: { patientCaseId: string };
+  Disposition: { patientCaseId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -99,6 +103,8 @@ export default function RootNavigator() {
                   onOpenIdentity={(patientCase) => navigation.navigate("PatientIdentity", { patientCase })}
                   onOpenVitals={(patientCaseId) => navigation.navigate("Vitals", { patientCaseId })}
                   onOpenInterventions={(patientCaseId) => navigation.navigate("Interventions", { patientCaseId })}
+                  onOpenAssessment={(patientCaseId) => navigation.navigate("Assessment", { patientCaseId })}
+                  onOpenDisposition={(patientCaseId) => navigation.navigate("Disposition", { patientCaseId })}
                 />
               )}
             </Stack.Screen>
@@ -120,6 +126,16 @@ export default function RootNavigator() {
             <Stack.Screen name="Interventions">
               {({ route, navigation }) => (
                 <InterventionsScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Assessment">
+              {({ route, navigation }) => (
+                <AssessmentScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Disposition">
+              {({ route, navigation }) => (
+                <DispositionScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
               )}
             </Stack.Screen>
           </>
