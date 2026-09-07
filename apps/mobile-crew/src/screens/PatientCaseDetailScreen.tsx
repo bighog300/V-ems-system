@@ -15,6 +15,7 @@ export interface PatientCaseDetailScreenProps {
   onOpenInterventions: (patientCaseId: string) => void;
   onOpenAssessment: (patientCaseId: string) => void;
   onOpenDisposition: (patientCaseId: string) => void;
+  onOpenEpcr: (patientCaseId: string) => void;
 }
 
 export default function PatientCaseDetailScreen({
@@ -25,7 +26,8 @@ export default function PatientCaseDetailScreen({
   onOpenVitals,
   onOpenInterventions,
   onOpenAssessment,
-  onOpenDisposition
+  onOpenDisposition,
+  onOpenEpcr
 }: PatientCaseDetailScreenProps) {
   const [caseState, setCaseState] = useState(initialCase);
 
@@ -255,6 +257,13 @@ export default function PatientCaseDetailScreen({
                 >
                   <Text style={styles.buttonText}>Disposition</Text>
                 </Pressable>
+                <Pressable
+                  style={[styles.button, styles.spacedButton]}
+                  onPress={() => onOpenEpcr(caseState.patient_case_id)}
+                  testID="open-epcr"
+                >
+                  <Text style={styles.buttonText}>ePCR status</Text>
+                </Pressable>
               </>
             ) : !canStartEncounter ? (
               <Text style={styles.hint} testID="encounter-blocked">
@@ -284,7 +293,8 @@ export default function PatientCaseDetailScreen({
       )}
 
       <Text style={styles.placeholder}>
-        Signatures and ePCR finalization/QA (Stage 8) land in the next milestone.
+        Signature capture is a typed attestation for now; a drawn-signature canvas is Stage 11 mobile-native UX work. Clinical
+        review/finalization after submission happens outside this app.
       </Text>
     </ScrollView>
   );
