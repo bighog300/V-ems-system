@@ -22,6 +22,9 @@ export class EventOutboxRepository {
   }
 
   listAll() {
-    return this.db.queryAll("SELECT * FROM event_outbox ORDER BY occurred_at, event_id;").map(mapEvent);
+    // event_id is a random UUID, not a monotonic sequence, so it can't break ties
+    // between events with an identical occurred_at timestamp in insertion order.
+    // rowid (implicit on this table) reflects actual insertion order and is stable.
+    return this.db.queryAll("SELECT * FROM event_outbox ORDER BY occurred_at, rowid;").map(mapEvent);
   }
 }
