@@ -51,9 +51,8 @@ querying/sorting the outbox), with the JSON request payload itself AES-256-GCM e
 before it's written, using a key generated on first launch and held in
 `expo-secure-store` (the same primitive `src/auth/session.ts` already uses for the
 session token). This satisfies "encrypted local database for offline ePCR data" without
-a native toolchain change. Worth a second opinion before committing — this is the one
-decision in this plan with a real alternative (SQLCipher) that trades build complexity
-for defense-in-depth if the SecureStore key itself were ever compromised.
+a native toolchain change. **Decided**: field-level AES over plain `expo-sqlite`, not
+SQLCipher — stays in Expo's managed workflow.
 
 ### Outbox shape
 
@@ -159,17 +158,15 @@ and testable, and later steps depend on earlier ones' contracts existing.
    real device/emulator, which (like Stage 9's device-install acceptance criterion) this
    sandbox can't perform — flag it the same way for follow-up outside this environment.
 
-## Open decisions before 10b starts
+## Decisions made before 10b starts
 
-- **Encryption approach**: field-level AES via SecureStore-held key (recommended above)
-  vs. SQLCipher native plugin. Worth explicit confirmation since it's a real trade-off,
-  not an obvious default.
-- **Retry ceiling**: is there a maximum retry count/age after which a `failed` entry stops
-  auto-retrying and requires explicit crew acknowledgment, or does it retry forever in
-  the background? Affects both the sync engine's state machine and the conflict-UI
-  design in 10e.
-- **Blocking behavior**: should an unresolved conflict/failed entry ever block the crew
-  from continuing to chart the same patient case, or only surface a non-blocking banner?
-  Recommendation: never block charting — only block re-attempting the specific
-  conflicting action (e.g. don't let them re-submit a finalization that already
-  conflicted) — but this is a product call, not just an engineering one.
+- **Encryption approach**: field-level AES via SecureStore-held key over plain
+  `expo-sqlite`, not SQLCipher.
+- **Retry ceiling**: capped. After a fixed number of attempts / time ceiling, an entry
+  moves to a terminal `failed` state requiring explicit crew action (retry now / view
+  detail) rather than retrying forever in the background. The exact cap (attempt count
+  and/or elapsed-time threshold) is a 10d implementation detail, not decided here.
+- **Blocking behavior**: never blocks charting. A `conflict`/`failed` entry surfaces a
+  non-blocking banner/badge (10e); only re-attempting the *specific* conflicting action
+  (e.g. re-submitting a finalization that already conflicted elsewhere) is blocked — the
+  crew can keep charting the rest of the case.
