@@ -1,6 +1,6 @@
 import { withCache, type CachedResult } from "./cachedRequest.ts";
 import { requestJson } from "./httpClient.ts";
-import { requestOrQueue } from "./offlineMutation.ts";
+import { generateEntryId, LOCAL_ID_PREFIX, requestOrQueue, type OfflineMutationDeps } from "./offlineMutation.ts";
 
 export interface PatientCase {
   patient_case_id: string;
@@ -83,21 +83,58 @@ export interface CreatePatientCasePayload {
   temporary_label?: string;
 }
 
-export async function createPatientCase({
-  apiBaseUrl,
-  authToken,
-  fetchImpl = fetch,
-  incidentId,
-  payload
-}: ApiConfig & { incidentId: string; payload: CreatePatientCasePayload }): Promise<PatientCase> {
-  const result = await requestJson<PatientCase>(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-cases`, {
-    method: "POST",
-    payload,
-    config: { authToken },
-    headers: { "idempotency-key": `mobile-create-case-${incidentId}-${Date.now()}-${Math.random().toString(36).slice(2)}` }
-  });
-  if (!result.data) throw new Error("Patient case create returned no data");
-  return result.data;
+/**
+ * Creating a patient case mints a brand-new patient_case_id that every
+ * downstream write for this patient (demographics, encounter, vitals, ...)
+ * depends on. Queuing it offline like any other mutation means the app has
+ * to hand the crew *some* id immediately so charting can continue — a
+ * client-minted `LOCAL-<entryId>` placeholder — and the sync engine remaps
+ * every entry queued against that placeholder to the real id once this
+ * create actually syncs (see syncEngine.ts). The placeholder is exactly the
+ * idempotency key this create itself uses, so it's already unique and
+ * already known before the request is ever attempted.
+ */
+export async function createPatientCase(
+  {
+    apiBaseUrl,
+    authToken,
+    fetchImpl = fetch,
+    incidentId,
+    payload
+  }: ApiConfig & { incidentId: string; payload: CreatePatientCasePayload },
+  deps: OfflineMutationDeps = {}
+): Promise<PatientCase> {
+  const entryId = deps.entryId ?? generateEntryId();
+  const localCaseId = `${LOCAL_ID_PREFIX}${entryId}`;
+  const now = new Date().toISOString();
+
+  return requestOrQueue<PatientCase>(
+    {
+      fetchImpl,
+      url: `${apiBaseUrl}/api/incidents/${incidentId}/patient-cases`,
+      method: "POST",
+      payload,
+      config: { authToken },
+      scope: "patient_case_create",
+      patientCaseId: localCaseId,
+      buildOptimisticResult: () => ({
+        patient_case_id: localCaseId,
+        incident_id: incidentId,
+        patient_sequence: 0,
+        status: payload.temporary_label ? "Patient Identification Pending" : "Created",
+        temporary_label: payload.temporary_label ?? null,
+        assignment_id: payload.assignment_id ?? null,
+        vehicle_id: null,
+        lead_clinician_id: payload.lead_clinician_id ?? null,
+        verification_status: "unknown",
+        openemr_patient_id: null,
+        closure_ready: false,
+        created_at: now,
+        updated_at: now
+      })
+    },
+    { ...deps, entryId }
+  );
 }
 
 export async function getPatientCaseDemographicsCached({

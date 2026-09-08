@@ -16,7 +16,17 @@ function getCryptoModule(): Promise<OutboxCryptoModule> {
   return cryptoModulePromise;
 }
 
-function generateEntryId(): string {
+/**
+ * Prefix marking a client-minted placeholder id (a `${LOCAL_ID_PREFIX}<entryId>`)
+ * that stands in for a server-issued id until the entity that mints it —
+ * currently only createPatientCase — actually syncs. Every optimistic result
+ * built while offline for a resource the server itself IDs uses this same
+ * prefix, but only patient case ids are ever referenced by other queued
+ * entries' URLs, so only those get remapped (see syncEngine.ts).
+ */
+export const LOCAL_ID_PREFIX = "LOCAL-";
+
+export function generateEntryId(): string {
   const random = () => Math.random().toString(16).slice(2).padEnd(8, "0").slice(0, 8);
   return `${random()}-${random().slice(0, 4)}-4${random().slice(0, 3)}-${random().slice(0, 4)}-${random()}${random().slice(0, 4)}`;
 }
@@ -56,6 +66,14 @@ export interface OfflineMutationDeps {
   cryptoModule?: OutboxCryptoModule;
   db?: OfflineSqliteLike;
   encryptionKey?: Uint8Array;
+  /**
+   * Use this exact idempotency key instead of generating one. Needed by
+   * callers (createPatientCase) that must know the key up front, before the
+   * request is even attempted, because it doubles as the LOCAL-<entryId>
+   * placeholder id every downstream write for the not-yet-created case will
+   * reference until the create syncs and the sync engine remaps them.
+   */
+  entryId?: string;
 }
 
 /**
@@ -69,7 +87,7 @@ export interface OfflineMutationDeps {
  * double-applied.
  */
 export async function requestOrQueue<T>(args: OfflineMutationArgs<T>, deps: OfflineMutationDeps = {}): Promise<T> {
-  const entryId = generateEntryId();
+  const entryId = deps.entryId ?? generateEntryId();
 
   try {
     const result = await requestJson<T>(args.fetchImpl, args.url, {

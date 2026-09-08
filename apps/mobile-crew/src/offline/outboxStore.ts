@@ -3,6 +3,7 @@ import {
   getOutboxEntry as getOutboxEntryRow,
   insertOutboxEntry,
   listOutboxEntries as listOutboxEntryRows,
+  remapOutboxPatientCaseId,
   updateOutboxEntry,
   type ListOutboxEntriesFilter,
   type OfflineSqliteLike,
@@ -106,4 +107,13 @@ export async function listMutations(db: OfflineSqliteLike, key: Uint8Array, filt
 
 export async function markMutationStatus(db: OfflineSqliteLike, entryId: string, patch: OutboxEntryPatch): Promise<void> {
   await updateOutboxEntry(db, entryId, patch);
+}
+
+/**
+ * Rewrites every not-yet-sent outbox entry queued against a client-minted
+ * `LOCAL-<entryId>` patient case id to the real id, once that case's own
+ * create entry has synced. See {@link remapOutboxPatientCaseId}.
+ */
+export async function remapPatientCaseId(db: OfflineSqliteLike, fromPatientCaseId: string, toPatientCaseId: string): Promise<void> {
+  await remapOutboxPatientCaseId(db, fromPatientCaseId, toPatientCaseId);
 }

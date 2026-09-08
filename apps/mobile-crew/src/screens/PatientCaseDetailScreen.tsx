@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { createPatientCaseEncounter, getPatientCaseEncounterCached, type PatientCaseEncounter } from "../api/encounters.ts";
+import { LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { getPatientCaseCached, getPatientCaseDemographicsCached, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
@@ -59,8 +60,24 @@ export default function PatientCaseDetailScreen({
     setUnidentified(demographics?.unidentified ?? false);
   };
 
+  const isPendingSync = initialCase.patient_case_id.startsWith(LOCAL_ID_PREFIX);
+
   useFocusEffect(
     useCallback(() => {
+      // A case created offline has no server record to fetch yet — the
+      // create itself is still sitting in the outbox. Skip the network
+      // round-trips entirely (they'd just 404) and show what was captured
+      // locally; the case's own outbox entry surfaces in Sync Status like
+      // any other pending write.
+      if (isPendingSync) {
+        setCaseState(initialCase);
+        applyDemographics(null);
+        setEncounter(null);
+        setShowingCached(false);
+        setLoading(false);
+        return;
+      }
+
       let cancelled = false;
       (async () => {
         setLoading(true);
@@ -85,7 +102,7 @@ export default function PatientCaseDetailScreen({
       return () => {
         cancelled = true;
       };
-    }, [initialCase.patient_case_id, session.apiBaseUrl, session.authToken])
+    }, [isPendingSync, initialCase, session.apiBaseUrl, session.authToken])
   );
 
   async function handleSave() {
@@ -155,7 +172,11 @@ export default function PatientCaseDetailScreen({
         <ActivityIndicator style={styles.loading} testID="demographics-loading" />
       ) : (
         <>
-          {showingCached ? (
+          {isPendingSync ? (
+            <Text style={styles.cachedBanner} accessibilityLiveRegion="polite" testID="patient-case-pending-sync-banner">
+              This patient case hasn't synced yet — it will get its permanent id once you're back online.
+            </Text>
+          ) : showingCached ? (
             <Text style={styles.cachedBanner} accessibilityLiveRegion="polite" testID="patient-case-cached-banner">
               Showing cached data — offline
             </Text>

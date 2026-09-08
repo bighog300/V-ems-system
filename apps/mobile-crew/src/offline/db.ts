@@ -151,6 +151,23 @@ export async function updateOutboxEntry(db: OfflineSqliteLike, entryId: string, 
   );
 }
 
+/**
+ * Rewrites every not-yet-sent outbox entry that referenced a client-minted
+ * `LOCAL-<entryId>` patient case id (queued before that case's own create
+ * had synced) to the real server-issued id, once the create acknowledges.
+ * `path` is a plain column (unlike `encrypted_payload`), so it can be
+ * rewritten directly; no request body in this app embeds a patient case id,
+ * only its URL path does. Acknowledged entries are left untouched — they
+ * already reached the server under whatever path they were sent with, and
+ * rewriting history there would misrepresent what actually happened.
+ */
+export async function remapOutboxPatientCaseId(db: OfflineSqliteLike, fromPatientCaseId: string, toPatientCaseId: string): Promise<void> {
+  await db.runAsync(
+    `UPDATE outbox_entries SET patient_case_id = ?, path = REPLACE(path, ?, ?) WHERE patient_case_id = ? AND status != 'acknowledged';`,
+    [toPatientCaseId, fromPatientCaseId, toPatientCaseId, fromPatientCaseId]
+  );
+}
+
 export interface CachedReadRow {
   cache_key: string;
   encrypted_payload: string;

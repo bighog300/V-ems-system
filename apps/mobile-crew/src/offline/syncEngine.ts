@@ -1,8 +1,11 @@
 import { ApiError } from "../api/apiError.ts";
-import { isQueueableFailure } from "../api/offlineMutation.ts";
+import { isQueueableFailure, LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { requestJson } from "../api/httpClient.ts";
-import { listMutations, markMutationStatus, type OutboxEntry } from "./outboxStore.ts";
+import { listMutations, markMutationStatus, remapPatientCaseId, type OutboxEntry } from "./outboxStore.ts";
 import type { OfflineSqliteLike } from "./db.ts";
+
+/** The only scope that mints a brand-new patient_case_id other entries' URLs reference. */
+const PATIENT_CASE_CREATE_SCOPE = "patient_case_create";
 
 /**
  * How long a "retrying" entry waits before its next attempt, doubling per
@@ -48,7 +51,9 @@ const RESOURCE_ID_FIELDS: Record<string, string> = {
   medication: "medication_administration_id",
   procedure: "procedure_id",
   disposition: "disposition_id",
-  demographics: "patient_case_id"
+  demographics: "patient_case_id",
+  [PATIENT_CASE_CREATE_SCOPE]: "patient_case_id",
+  encounter: "encounter_id"
 };
 
 function extractResourceId(scope: string, data: unknown): string | null {
@@ -100,6 +105,18 @@ export async function runSync(db: OfflineSqliteLike, key: Uint8Array, session: S
   const result: SyncResult = { attempted: 0, acknowledged: 0, retrying: 0, failed: 0, conflicted: 0 };
 
   for (const entry of due) {
+    // A dependent entry queued against a patient case that was itself
+    // created offline (patientCaseId is still a client-minted
+    // LOCAL-<entryId> placeholder) can't be sent yet: its own case doesn't
+    // exist on the server. Its create sibling always sorts earlier in `due`
+    // (same patientCaseId, earlier createdAt) — if that create just
+    // acknowledged this pass, the remap below already rewrote this entry's
+    // patientCaseId/path in place before we reach it here. If it's still
+    // LOCAL-, the create hasn't synced (this pass or ever yet); skip
+    // without spending an attempt — the crew's charting was never blocked,
+    // this is purely about not wasting a retry on a guaranteed 404.
+    if (entry.scope !== PATIENT_CASE_CREATE_SCOPE && entry.patientCaseId.startsWith(LOCAL_ID_PREFIX)) continue;
+
     result.attempted += 1;
     await markMutationStatus(db, entry.entryId, { status: "sending" });
 
@@ -110,13 +127,34 @@ export async function runSync(db: OfflineSqliteLike, key: Uint8Array, session: S
         config: { authToken: session.authToken },
         headers: { "idempotency-key": entry.entryId }
       });
+      const serverResourceId = extractResourceId(entry.scope, response.data);
       await markMutationStatus(db, entry.entryId, {
         status: "acknowledged",
-        serverResourceId: extractResourceId(entry.scope, response.data),
+        serverResourceId,
         lastAttemptedAt: new Date(now()).toISOString(),
         lastError: null
       });
       result.acknowledged += 1;
+
+      if (entry.scope === PATIENT_CASE_CREATE_SCOPE && serverResourceId && entry.patientCaseId.startsWith(LOCAL_ID_PREFIX)) {
+        // Captured before the patch loop below: that loop also matches (and
+        // mutates) `entry` itself, since the create is its own first element
+        // in `due` — comparing against `entry.patientCaseId` directly would
+        // go stale after that first match and silently stop matching every
+        // entry queued after it.
+        const localCaseId = entry.patientCaseId;
+        await remapPatientCaseId(db, localCaseId, serverResourceId);
+        // The remap above only rewrote the DB; `due` was loaded before this
+        // pass started, so the in-memory copies of this case's still-queued
+        // dependents need the same patch to be sent later in this same pass
+        // rather than waiting for the next one.
+        for (const other of due) {
+          if (other.patientCaseId === localCaseId) {
+            other.path = other.path.split(localCaseId).join(serverResourceId);
+            other.patientCaseId = serverResourceId;
+          }
+        }
+      }
     } catch (error) {
       const attemptCount = entry.attemptCount + 1;
       const lastAttemptedAt = new Date(now()).toISOString();

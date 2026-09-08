@@ -2,9 +2,21 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { AssignedJob } from "../api/assignments.ts";
+import { LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { createPatientCase, listPatientCasesCached, type PatientCase } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+
+// A case created while offline gets a client-minted LOCAL-<entryId> id and
+// no patient_sequence yet (that's assigned by the server) — shown as
+// "Pending sync" rather than the misleading "Patient 0" until it syncs and
+// the next list refresh replaces it with the server's real record.
+function patientCaseLabel(patientCase: PatientCase): string {
+  if (patientCase.patient_case_id.startsWith(LOCAL_ID_PREFIX)) {
+    return patientCase.temporary_label ? `Pending sync — ${patientCase.temporary_label}` : "Pending sync";
+  }
+  return `Patient ${patientCase.patient_sequence}${patientCase.temporary_label ? ` — ${patientCase.temporary_label}` : ""}`;
+}
 
 export interface IncidentDetailScreenProps {
   job: AssignedJob;
@@ -126,13 +138,10 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
                   style={styles.caseRow}
                   onPress={() => onSelectPatientCase(patientCase)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Patient ${patientCase.patient_sequence}${patientCase.temporary_label ? ` — ${patientCase.temporary_label}` : ""}, status ${patientCase.status}`}
+                  accessibilityLabel={`${patientCaseLabel(patientCase)}, status ${patientCase.status}`}
                   testID={`patient-case-${patientCase.patient_case_id}`}
                 >
-                  <Text style={styles.caseLabel}>
-                    Patient {patientCase.patient_sequence}
-                    {patientCase.temporary_label ? ` — ${patientCase.temporary_label}` : ""}
-                  </Text>
+                  <Text style={styles.caseLabel}>{patientCaseLabel(patientCase)}</Text>
                   <Text style={styles.caseStatus}>{patientCase.status}</Text>
                 </Pressable>
               ))
