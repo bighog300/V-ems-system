@@ -452,7 +452,9 @@ CREATE TABLE IF NOT EXISTS device_push_tokens (
   staff_id TEXT NOT NULL,
   expo_push_token TEXT NOT NULL UNIQUE,
   platform TEXT NOT NULL,
+  device_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_device_push_tokens_staff_id ON device_push_tokens(staff_id);
+CREATE INDEX IF NOT EXISTS idx_device_push_tokens_device_id ON device_push_tokens(device_id);

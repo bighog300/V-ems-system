@@ -45,6 +45,23 @@ test("POST /api/push-tokens registers a device token for the authenticated crew 
   }
 });
 
+test("POST /api/push-tokens persists device_id when provided", async () => {
+  const { server, base, orchestration } = await startServer();
+  try {
+    const response = await jsonFetch(base, "/api/push-tokens", {
+      method: "POST",
+      headers: { "x-user-role": "field_crew", "x-actor-id": "STAFF-001" },
+      body: JSON.stringify({ expo_push_token: "ExponentPushToken[device-1]", platform: "ios", device_id: "device-uuid-1" })
+    });
+
+    assert.equal(response.status, 201);
+    assert.equal(response.body.device_id, "device-uuid-1");
+    assert.equal(orchestration.pushTokens.listByStaffId("STAFF-001")[0].device_id, "device-uuid-1");
+  } finally {
+    server.close();
+  }
+});
+
 test("POST /api/push-tokens rejects an invalid platform", async () => {
   const { server, base } = await startServer();
   try {

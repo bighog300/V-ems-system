@@ -481,7 +481,7 @@ export class OrchestrationService {
   registerPushToken(payload, meta) {
     if (!DEVICE_PUSH_TOKEN_PLATFORMS.includes(payload.platform)) throw new ApiError("INVALID_PAYLOAD", "Invalid platform", 400);
     if (!payload.expo_push_token) throw new ApiError("INVALID_PAYLOAD", "expo_push_token is required", 400);
-    return this.pushTokens.upsert({ staffId: meta.actorId, expoPushToken: payload.expo_push_token, platform: payload.platform });
+    return this.pushTokens.upsert({ staffId: meta.actorId, expoPushToken: payload.expo_push_token, platform: payload.platform, deviceId: payload.device_id ?? null });
   }
 
 

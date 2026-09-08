@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput }
 
 import { verifySession } from "../api/verifySession.ts";
 import { UnauthorizedError } from "../api/apiError.ts";
+import { getOrCreateDeviceId } from "../auth/deviceIdentity.ts";
 import { saveSession, type Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
@@ -25,11 +26,13 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
     setSubmitting(true);
     try {
       await verifySession({ apiBaseUrl, authToken });
+      const deviceId = await getOrCreateDeviceId();
       const session: Session = {
         apiBaseUrl: apiBaseUrl.trim().replace(/\/$/, ""),
         authToken: authToken.trim(),
         actorId: actorId.trim(),
-        actorRole: actorRole.trim()
+        actorRole: actorRole.trim(),
+        deviceId
       };
       await saveSession(session);
       onSignedIn(session);

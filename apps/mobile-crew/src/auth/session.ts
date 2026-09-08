@@ -5,6 +5,10 @@ export interface Session {
   authToken: string;
   actorId: string;
   actorRole: string;
+  // Optional so a session persisted before device identity existed still
+  // loads: the deep-link/push registration path falls back to
+  // getOrCreateDeviceId() when this is missing.
+  deviceId?: string;
 }
 
 export interface SecureStoreLike {
