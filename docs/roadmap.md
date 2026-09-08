@@ -52,8 +52,8 @@ Docker/CI baseline are in place. Work has moved to ePCR Stages 6–14:
 | 7 | Complete clinical ePCR record | Closed |
 | 8 | Signatures, finalization, amendments, QA | Closed |
 | 9 | Native crew mobile app foundation | Closed (encrypted local DB deferred to Stage 10 per ADR 0001) |
-| 10 | Offline-first sync | Open — [scoped](STAGE10_OFFLINE_SYNC_PLAN.md) |
-| 11 | Mobile-native field UX/hardware | Open |
+| 10 | Offline-first sync | Open — 10a–10g merged; 10h needs a physical device |
+| 11 | Mobile-native field UX/hardware | Open — [scoped](STAGE11_FIELD_UX_PLAN.md) |
 | 12 | Production clinical infrastructure (Postgres, encrypted storage, DR) | Open |
 | 13 | Compliance, reporting, clinical governance | Open |
 | 14 | Field validation and release readiness | Open |
