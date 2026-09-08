@@ -60,3 +60,29 @@ test("setPatientCaseDisposition posts the outcome and optional fields", async ()
   assert.deepEqual(capturedBody, { outcome: "transported", destination_facility: "General Hospital", receiving_provider: "Dr. Smith" });
   assert.equal(saved.disposition_id, "DISP-000001");
 });
+
+test("setPatientCaseDisposition forwards optional location fields, and omits them when not captured", async () => {
+  let capturedBody: unknown;
+  const fetchImpl = async (_url: string, options: any) => {
+    capturedBody = JSON.parse(options.body);
+    return new Response(JSON.stringify(SAMPLE_DISPOSITION), { status: 200 });
+  };
+
+  await setPatientCaseDisposition({
+    apiBaseUrl: "https://api.example.test",
+    authToken: "token",
+    patientCaseId: "PCR-000001",
+    payload: { outcome: "transported", location_lat: 40.7128, location_lng: -74.006, location_accuracy_m: 8 },
+    fetchImpl: fetchImpl as typeof fetch
+  });
+  assert.deepEqual(capturedBody, { outcome: "transported", location_lat: 40.7128, location_lng: -74.006, location_accuracy_m: 8 });
+
+  await setPatientCaseDisposition({
+    apiBaseUrl: "https://api.example.test",
+    authToken: "token",
+    patientCaseId: "PCR-000001",
+    payload: { outcome: "transported" },
+    fetchImpl: fetchImpl as typeof fetch
+  });
+  assert.deepEqual(capturedBody, { outcome: "transported" });
+});

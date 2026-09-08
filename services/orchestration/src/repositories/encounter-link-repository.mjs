@@ -17,6 +17,9 @@ function mapEncounterLink(row) {
     receiving_clinician: row.receiving_clinician,
     handover_notes: row.handover_notes,
     closure_ready: Boolean(row.closure_ready),
+    location_lat: row.location_lat,
+    location_lng: row.location_lng,
+    location_accuracy_m: row.location_accuracy_m,
     created_at: row.created_at,
     updated_at: row.updated_at,
     correlation_id: row.correlation_id
@@ -51,8 +54,8 @@ export class EncounterLinkRepository {
   }
 
   save(record) {
-    this.db.execute(`INSERT INTO patient_case_encounter_links (patient_case_id, incident_id, openemr_patient_id, openemr_encounter_id, encounter_status, care_started_at, handover_time, handover_status, disposition, destination_facility, receiving_clinician, handover_notes, closure_ready, created_at, updated_at, correlation_id)
-      VALUES (${sqlValue(record.patient_case_id)}, ${sqlValue(record.incident_id)}, ${sqlValue(record.openemr_patient_id)}, ${sqlValue(record.openemr_encounter_id)}, ${sqlValue(record.encounter_status)}, ${sqlValue(record.care_started_at)}, ${sqlValue(record.handover_time ?? null)}, ${sqlValue(record.handover_status ?? null)}, ${sqlValue(record.disposition ?? null)}, ${sqlValue(record.destination_facility ?? null)}, ${sqlValue(record.receiving_clinician ?? null)}, ${sqlValue(record.handover_notes ?? null)}, ${sqlValue(record.closure_ready ? 1 : 0)}, ${sqlValue(record.created_at)}, ${sqlValue(record.updated_at)}, ${sqlValue(record.correlation_id)})
+    this.db.execute(`INSERT INTO patient_case_encounter_links (patient_case_id, incident_id, openemr_patient_id, openemr_encounter_id, encounter_status, care_started_at, handover_time, handover_status, disposition, destination_facility, receiving_clinician, handover_notes, closure_ready, location_lat, location_lng, location_accuracy_m, created_at, updated_at, correlation_id)
+      VALUES (${sqlValue(record.patient_case_id)}, ${sqlValue(record.incident_id)}, ${sqlValue(record.openemr_patient_id)}, ${sqlValue(record.openemr_encounter_id)}, ${sqlValue(record.encounter_status)}, ${sqlValue(record.care_started_at)}, ${sqlValue(record.handover_time ?? null)}, ${sqlValue(record.handover_status ?? null)}, ${sqlValue(record.disposition ?? null)}, ${sqlValue(record.destination_facility ?? null)}, ${sqlValue(record.receiving_clinician ?? null)}, ${sqlValue(record.handover_notes ?? null)}, ${sqlValue(record.closure_ready ? 1 : 0)}, ${sqlValue(record.location_lat ?? null)}, ${sqlValue(record.location_lng ?? null)}, ${sqlValue(record.location_accuracy_m ?? null)}, ${sqlValue(record.created_at)}, ${sqlValue(record.updated_at)}, ${sqlValue(record.correlation_id)})
       ON CONFLICT(patient_case_id) DO UPDATE SET
         openemr_patient_id = excluded.openemr_patient_id,
         openemr_encounter_id = excluded.openemr_encounter_id,
@@ -65,6 +68,9 @@ export class EncounterLinkRepository {
         receiving_clinician = excluded.receiving_clinician,
         handover_notes = excluded.handover_notes,
         closure_ready = excluded.closure_ready,
+        location_lat = excluded.location_lat,
+        location_lng = excluded.location_lng,
+        location_accuracy_m = excluded.location_accuracy_m,
         updated_at = excluded.updated_at,
         correlation_id = excluded.correlation_id;`);
   }

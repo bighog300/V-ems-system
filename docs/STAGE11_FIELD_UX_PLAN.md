@@ -81,10 +81,18 @@ testable.
    surface — still calls the same `createPatientCaseObservation`/
    `createPatientCaseMedication`/`createPatientCaseProcedure`.
 3. **11c — Location context.** `expo-location`, with an explicit permission-rationale
-   screen (not a bare OS prompt) satisfying "privacy controls." Location is captured at
+   affordance (`LocationPermissionNotice` — our own explanatory text before the OS prompt,
+   never a bare system dialog) satisfying "privacy controls." Location is captured at
    encounter start and disposition, stored as lat/lon + accuracy fields on those existing
-   payloads. Denying permission never blocks charting — the same "never block charting"
-   principle Stage 10 already established for connectivity applies here to permissions.
+   payloads. Denying permission never blocks charting — `captureLocation()` only ever
+   reads the *current* permission state and never itself triggers the OS prompt, so it
+   can't interrupt a charting action; the same "never block charting" principle Stage 10
+   established for connectivity applies here to permissions. Required a small backend
+   addition (migration 011): `patient_case_encounter_links` and `patient_case_dispositions`
+   gained nullable `location_lat`/`location_lng`/`location_accuracy_m` columns — both
+   tables are local-only (never sent to OpenEMR), and the fields are deliberately excluded
+   from each endpoint's idempotency fingerprint so GPS jitter on a queued retry can never
+   trigger a false "reused with a different request" conflict.
 4. **11d — Attachment capture (camera/document) + local queue.** `expo-image-picker`
    (camera and file picker) plus `offline/attachmentStore.ts`: an encrypted local queue
    of captured files keyed by patient case, mirroring the outbox's

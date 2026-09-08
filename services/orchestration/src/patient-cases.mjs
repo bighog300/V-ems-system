@@ -9,6 +9,19 @@ function objectPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) invalid('Payload must be an object');
 }
 
+// Optional care-location context (Stage 11 milestone 11c): captured
+// client-side via expo-location, never required — a crew that denied the
+// permission or has no fix yet must still be able to chart. Validated
+// loosely (real-world coordinate/accuracy bounds) rather than required.
+function parseLocation(payload) {
+  const { location_lat, location_lng, location_accuracy_m } = payload;
+  if (location_lat === undefined && location_lng === undefined && location_accuracy_m === undefined) return {};
+  if (typeof location_lat !== 'number' || location_lat < -90 || location_lat > 90) invalid('location_lat must be a number between -90 and 90');
+  if (typeof location_lng !== 'number' || location_lng < -180 || location_lng > 180) invalid('location_lng must be a number between -180 and 180');
+  if (location_accuracy_m !== undefined && (typeof location_accuracy_m !== 'number' || location_accuracy_m < 0)) invalid('location_accuracy_m must be a non-negative number');
+  return { location_lat, location_lng, location_accuracy_m: location_accuracy_m ?? null };
+}
+
 const active = a => ['Assigned', 'Accepted', 'Mobilised', 'Active'].includes(a.status);
 
 export const patientCaseMethods = {
@@ -183,6 +196,7 @@ export const patientCaseMethods = {
     if (c.status === 'Closed') conflict('Patient case is closed');
     if (payload.patient_id && payload.patient_id !== c.openemr_patient_id) invalid('patient_id must match linked patient case patient');
     if (!payload.care_started_at || !Number.isFinite(Date.parse(payload.care_started_at)) || typeof payload.presenting_complaint !== 'string' || !payload.presenting_complaint.trim()) invalid('care_started_at and presenting_complaint are required');
+    const location = parseLocation(payload);
     const scope = `patient_case_encounter:${id}`;
     const fingerprint = JSON.stringify({ care_started_at: payload.care_started_at, presenting_complaint: payload.presenting_complaint });
     const existing = this.encounterLinks.findByPatientCaseId(id);
@@ -203,7 +217,7 @@ export const patientCaseMethods = {
       const now = new Date().toISOString();
       const record = { patient_case_id: id, incident_id: c.incident_id, openemr_patient_id: c.openemr_patient_id,
         openemr_encounter_id: created.encounter_id, encounter_status: created.status, care_started_at: payload.care_started_at,
-        created_at: now, updated_at: now, correlation_id: meta.correlationId };
+        ...location, created_at: now, updated_at: now, correlation_id: meta.correlationId };
       this.encounterLinks.save(record);
       this.setPatientCaseStatus(id, 'Encounter Open', meta);
       this.audit('patient_case', id, 'create_encounter', meta.correlationId, undefined, record);
