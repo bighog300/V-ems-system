@@ -34,6 +34,8 @@ export interface EpcrSignature {
   signer_display_name: string | null;
   signed_at: string;
   acknowledgement: string;
+  signature_method?: string;
+  signature_image_ref?: string | null;
 }
 
 export async function getEpcrReadiness({ apiBaseUrl, authToken, fetchImpl = fetch, patientCaseId }: ApiConfig & { patientCaseId: string }): Promise<EpcrReadiness> {
@@ -78,6 +80,10 @@ export interface SignEpcrPayload {
   signer_role: SignatureRole;
   signer_identity: string;
   signer_display_name?: string;
+  /** "drawn" when a signature image was captured; omitted/undefined defaults to "attestation" server-side. */
+  signature_method?: "drawn" | "attestation";
+  /** A PNG data URI from SignaturePad.capture(). The backend column is named `_ref` for future object-storage migration, but today just stores this inline. */
+  signature_image_ref?: string;
 }
 
 export async function signEpcr({

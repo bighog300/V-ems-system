@@ -64,12 +64,16 @@ a follow-up once stock items carry a barcode field.
 Same incremental-PR pattern as Stages 9–10 — each step is independently reviewable and
 testable.
 
-1. **11a — Signature canvas.** `src/components/SignaturePad.tsx`: `PanResponder`-driven
-   touch capture rendered as an SVG path, exported as a PNG data URI. Replaces the typed
-   attestation placeholder in disposition/handover/ePCR completion with an actual drawn
-   signature, stored as part of the existing (already-queueable) mutation payload — no
-   outbox schema change, since the signature image is just another field in an existing
-   JSON body.
+1. **11a — Signature canvas.** `src/components/SignaturePad.tsx`: raw touch-responder
+   handlers (not `PanResponder.create` — this only ever needs one active touch's
+   location, and the raw handlers are simpler to test) capture points rendered live as an
+   SVG path, exported via `react-native-svg`'s `toDataURL` as a PNG data URI. Wired into
+   `EpcrScreen`'s sign step as an optional addition to the existing typed
+   signer-identity/attestation flow — drawing is never required, so nothing regresses for
+   a signer who can't perform the gesture. No backend change needed at all: Stage 8's
+   `epcr_signatures` schema already had `signature_method`/`signature_image_ref` columns
+   and the handler already read `payload.signature_method`/`payload.signature_image_ref`,
+   unused until now.
 2. **11b — Rapid repeat-entry UX.** A "Repeat last vitals" quick-fill on `VitalsScreen`
    (pre-fills the form from the most recent observation for fast serial re-entry — the
    standard every-5-minutes EMS vitals pattern) and equivalent one-tap repeat affordances

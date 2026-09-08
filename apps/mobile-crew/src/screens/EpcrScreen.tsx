@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
@@ -16,6 +16,7 @@ import {
   type SignatureRole
 } from "../api/epcr.ts";
 import type { Session } from "../auth/session.ts";
+import SignaturePad, { type SignaturePadHandle } from "../components/SignaturePad.tsx";
 import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface EpcrScreenProps {
@@ -38,6 +39,7 @@ export default function EpcrScreen({ patientCaseId, session, onBack }: EpcrScree
 
   const [signerRole, setSignerRole] = useState<SignatureRole>("crew_member");
   const [signerIdentity, setSignerIdentity] = useState("");
+  const signaturePadRef = useRef<SignaturePadHandle>(null);
 
   const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
 
@@ -88,9 +90,19 @@ export default function EpcrScreen({ patientCaseId, session, onBack }: EpcrScree
     setBusy(true);
     setError(null);
     try {
-      const updated = await signEpcr({ ...config, patientCaseId, payload: { signer_role: signerRole, signer_identity: signerIdentity.trim() } });
+      const signatureImageRef = await signaturePadRef.current?.capture();
+      const updated = await signEpcr({
+        ...config,
+        patientCaseId,
+        payload: {
+          signer_role: signerRole,
+          signer_identity: signerIdentity.trim(),
+          ...(signatureImageRef ? { signature_method: "drawn" as const, signature_image_ref: signatureImageRef } : {})
+        }
+      });
       setSignatures(updated);
       setSignerIdentity("");
+      signaturePadRef.current?.clear();
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to record signature.");
@@ -193,6 +205,17 @@ export default function EpcrScreen({ patientCaseId, session, onBack }: EpcrScree
             onChangeText={setSignerIdentity}
             testID="signer-identity"
           />
+          <Text style={styles.padLabel}>Signature (optional — draw below, or leave blank for a typed attestation)</Text>
+          <SignaturePad ref={signaturePadRef} testID="signature-pad" />
+          <Pressable
+            style={styles.clearLink}
+            onPress={() => signaturePadRef.current?.clear()}
+            accessibilityRole="button"
+            accessibilityLabel="Clear signature"
+            testID="clear-signature"
+          >
+            <Text style={styles.clearLinkText}>Clear</Text>
+          </Pressable>
           <Pressable
             style={[styles.button, busy && styles.buttonDisabled]}
             onPress={handleSign}
@@ -242,6 +265,7 @@ export default function EpcrScreen({ patientCaseId, session, onBack }: EpcrScree
             <View key={signature.signature_id} style={styles.row} testID={`signature-${signature.signature_id}`}>
               <Text style={styles.rowSummary}>
                 {stateLabel(signature.signer_role)} · {signature.signer_identity}
+                {signature.signature_method === "drawn" ? " · drawn" : ""}
               </Text>
               <Text style={styles.rowTime}>{signature.signed_at}</Text>
             </View>
@@ -349,6 +373,22 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontSize: 14,
     minHeight: TOUCH_TARGET_MIN
+  },
+  padLabel: {
+    fontSize: 12,
+    color: "#777",
+    marginBottom: 8
+  },
+  clearLink: {
+    alignSelf: "flex-start",
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    marginBottom: 4
+  },
+  clearLinkText: {
+    color: "#1a4fd6",
+    fontSize: 13,
+    fontWeight: "600"
   },
   button: {
     backgroundColor: "#1a4fd6",
