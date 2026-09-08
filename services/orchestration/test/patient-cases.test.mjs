@@ -71,7 +71,8 @@ for (const [count, complete, ready] of [[1,1,true],[2,2,true],[2,1,false],[4,4,t
 
 test('assignment context, ambiguity, lead validation and responsibility transfer', async t => {
   const { service: s, incident: i } = await fixture(t);
-  const staff = await Promise.all([1,2].map(n => s.createPersonnel({ staff_id: `STAFF-00${n}`, display_name: `Crew ${n}`, role: 'Paramedic', operational_status: 'Available', home_station: 'Test' }, meta)));
+  const staff = [];
+  for (const n of [1,2]) staff.push(await s.createPersonnel({ staff_id: `STAFF-00${n}`, display_name: `Crew ${n}`, role: 'Paramedic', operational_status: 'Available', home_station: 'Test' }, meta));
   const a = await s.createAssignment(i.incident_id, { vehicle_id: 'AMB-001', crew_ids: [staff[0].staff_id], reason: 'dispatch' }, meta);
   await s.updateAssignment(a.assignment_id, { action: 'confirm_assignment' }, meta);
   const c = await s.createPatientCase(i.incident_id, { lead_clinician_id: staff[0].staff_id }, meta);

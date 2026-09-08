@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 let DatabaseSync;
 try {
@@ -55,7 +56,32 @@ export class SqliteClient {
       this.db.exec("PRAGMA foreign_keys = ON;");
       this.db.exec("PRAGMA journal_mode = WAL;");
     }
+    // node:sqlite exposes one synchronous connection with no real I/O to
+    // await on. Before this class had an async interface, every caller ran
+    // fully synchronously, so two logical operations could never interleave
+    // on this connection. Now that every public method has a real await
+    // point, concurrent callers (e.g. two overlapping withTransaction calls)
+    // can interleave and open two BEGINs on the same connection, which
+    // node:sqlite rejects. This lock serializes all public async access to
+    // restore that same never-interleaves guarantee. AsyncLocalStorage lets
+    // work done *inside* a held transaction's callback reenter without
+    // deadlocking on its own lock.
+    this._lock = Promise.resolve();
+    this._txStorage = new AsyncLocalStorage();
     this.bootstrap();
+  }
+
+  async _withLock(fn) {
+    if (this._txStorage.getStore()) return fn();
+    let release;
+    const previous = this._lock;
+    this._lock = new Promise((resolve) => { release = resolve; });
+    await previous;
+    try {
+      return await this._txStorage.run(true, fn);
+    } finally {
+      release();
+    }
   }
 
   bootstrap() {
@@ -125,46 +151,48 @@ export class SqliteClient {
   // --- async DbClient interface (everything outside bootstrap) ---
 
   async queryAll(sql) {
-    return this.queryAllSync(sql);
+    return this._withLock(() => this.queryAllSync(sql));
   }
 
   async queryOne(sql) {
-    return this.queryOneSync(sql);
+    return this._withLock(() => this.queryOneSync(sql));
   }
 
   async execute(sql) {
-    return this.executeSync(sql);
+    return this._withLock(() => this.executeSync(sql));
   }
 
   async transaction(statements) {
-    return this.transactionSync(statements);
+    return this._withLock(() => this.transactionSync(statements));
   }
 
   async withTransaction(callback) {
-    if (this.db) {
-      this.db.exec("BEGIN IMMEDIATE;");
+    return this._withLock(async () => {
+      if (this.db) {
+        this.db.exec("BEGIN IMMEDIATE;");
+        try {
+          const result = await callback();
+          this.db.exec("COMMIT;");
+          return result;
+        } catch (error) {
+          this.db.exec("ROLLBACK;");
+          throw error;
+        }
+      }
+      this.executeSync("BEGIN IMMEDIATE;");
       try {
         const result = await callback();
-        this.db.exec("COMMIT;");
+        this.executeSync("COMMIT;");
         return result;
       } catch (error) {
-        this.db.exec("ROLLBACK;");
+        try {
+          this.executeSync("ROLLBACK;");
+        } catch {
+          // no-op
+        }
         throw error;
       }
-    }
-    this.executeSync("BEGIN IMMEDIATE;");
-    try {
-      const result = await callback();
-      this.executeSync("COMMIT;");
-      return result;
-    } catch (error) {
-      try {
-        this.executeSync("ROLLBACK;");
-      } catch {
-        // no-op
-      }
-      throw error;
-    }
+    });
   }
 }
 

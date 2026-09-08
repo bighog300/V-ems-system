@@ -9,9 +9,9 @@ function repos(vehicle, item) {
   ];
 }
 
-test("vehicle-stock dependency resolves persisted vems identifiers and remote references", () => {
+test("vehicle-stock dependency resolves persisted vems identifiers and remote references", async () => {
   const [vehicles, items] = repos({ remote_id: "37x1", sync_status: "succeeded" }, { remote_id: "40x1", sync_status: "succeeded" });
-  const result = resolveVehicleStockDependencies({ vems_vehicle_id: "AMB-964", vems_stock_item_id: "ITEM-964" }, vehicles, items);
+  const result = await resolveVehicleStockDependencies({ vems_vehicle_id: "AMB-964", vems_stock_item_id: "ITEM-964" }, vehicles, items);
   assert.equal(result.vehicleId, "AMB-964");
   assert.equal(result.stockItemId, "ITEM-964");
   assert.equal(result.vehicle.remote_id, "37x1");
@@ -23,8 +23,8 @@ for (const [name, vehicle, item] of [
   ["missing stock-item link", { remote_id: "37x1", sync_status: "succeeded" }, undefined],
   ["non-succeeded vehicle link", { remote_id: "37x1", sync_status: "retrying" }, { remote_id: "40x1", sync_status: "succeeded" }]
 ]) {
-  test(`vehicle-stock dependency rejects ${name}`, () => {
+  test(`vehicle-stock dependency rejects ${name}`, async () => {
     const [vehicles, items] = repos(vehicle, item);
-    assert.throws(() => resolveVehicleStockDependencies({ vems_vehicle_id: "AMB-964", vems_stock_item_id: "ITEM-964" }, vehicles, items), (error) => error.code === "VTIGER_DEPENDENCY_PENDING");
+    await assert.rejects(() => resolveVehicleStockDependencies({ vems_vehicle_id: "AMB-964", vems_stock_item_id: "ITEM-964" }, vehicles, items), (error) => error.code === "VTIGER_DEPENDENCY_PENDING");
   });
 }
