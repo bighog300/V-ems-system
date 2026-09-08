@@ -96,4 +96,29 @@ describe("InterventionsScreen — repeat medication/procedure", () => {
     expect(getByTestId("proc-name").props.value).toBe("Oropharyngeal airway");
     expect(getByTestId("proc-success").props.value).toBe(true);
   });
+
+  it("scanning a barcode fills the medication name field with the scanned code", async () => {
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ medications: [], procedures: [] }), { status: 200 })) as unknown as typeof fetch;
+
+    const { getByTestId } = await renderScreen();
+    await waitFor(() => expect(getByTestId("medications-empty")).toBeTruthy());
+
+    await fireEvent.press(getByTestId("scan-med-name"));
+    await fireEvent.press(getByTestId("barcode-camera-view"));
+
+    expect(getByTestId("med-name").props.value).toBe("fake-scanned-code");
+  });
+
+  it("scanning a barcode fills the procedure name field with the scanned code", async () => {
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ medications: [], procedures: [] }), { status: 200 })) as unknown as typeof fetch;
+
+    const { getByTestId } = await renderScreen();
+    await fireEvent.press(getByTestId("tab-procedures"));
+    await waitFor(() => expect(getByTestId("procedures-empty")).toBeTruthy());
+
+    await fireEvent.press(getByTestId("scan-proc-name"));
+    await fireEvent.press(getByTestId("barcode-camera-view"));
+
+    expect(getByTestId("proc-name").props.value).toBe("fake-scanned-code");
+  });
 });

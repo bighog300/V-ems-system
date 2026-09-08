@@ -105,9 +105,12 @@ testable.
    Surfaced on `PatientCaseDetailScreen` as an "Attachments" card ("Take photo"/"Add
    document" plus a captured-files list). No server upload yet (see design decision
    above) — entries sit queued until Stage 12 adds a sync path.
-5. **11e — Barcode/QR scanning.** `expo-camera`'s built-in barcode-scanning API wired
-   into the medication/procedure entry forms: scanning pre-fills a text field with the
-   scanned code rather than free typing it. No backend change.
+5. **11e — Barcode/QR scanning.** `src/scanning/BarcodeScannerModal.tsx`: a full-screen
+   modal wrapping `expo-camera`'s `CameraView`/`useCameraPermissions`, requesting camera
+   access at the point of use (same standard as photo capture in 11d — opening the
+   scanner already states the intent). A "Scan" button next to the medication/procedure
+   name field on `InterventionsScreen` opens it; a scanned code fills that same text
+   field, once per scan, rather than resolving to a catalog record. No backend change.
 6. **11f — Push assignment notifications.** Backend: a `device_push_tokens` table +
    registration endpoint, and a send-on-assignment-create/reassign trigger using Expo's
    push service (`expo-server-sdk`). Mobile: `expo-notifications` permission request,

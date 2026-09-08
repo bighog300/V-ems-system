@@ -11,7 +11,10 @@ import {
   type MedicationAdministration
 } from "../api/interventions.ts";
 import type { Session } from "../auth/session.ts";
+import BarcodeScannerModal from "../scanning/BarcodeScannerModal.tsx";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+
+type ScanTarget = "medication" | "procedure" | null;
 
 export interface InterventionsScreenProps {
   patientCaseId: string;
@@ -39,7 +42,15 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
   const [procName, setProcName] = useState("");
   const [procSuccess, setProcSuccess] = useState(true);
 
+  const [scanTarget, setScanTarget] = useState<ScanTarget>(null);
+
   const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+
+  function handleScanned(code: string) {
+    if (scanTarget === "medication") setMedName(code);
+    else if (scanTarget === "procedure") setProcName(code);
+    setScanTarget(null);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -165,14 +176,25 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
 
       {tab === "medications" ? (
         <View style={styles.form}>
-          <TextInput
-            style={styles.input}
-            placeholder="Medication name"
-            accessibilityLabel="Medication name"
-            value={medName}
-            onChangeText={setMedName}
-            testID="med-name"
-          />
+          <View style={styles.inputWithScanRow}>
+            <TextInput
+              style={[styles.input, styles.inputWithScan]}
+              placeholder="Medication name"
+              accessibilityLabel="Medication name"
+              value={medName}
+              onChangeText={setMedName}
+              testID="med-name"
+            />
+            <Pressable
+              style={styles.scanButton}
+              onPress={() => setScanTarget("medication")}
+              accessibilityRole="button"
+              accessibilityLabel="Scan medication barcode"
+              testID="scan-med-name"
+            >
+              <Text style={styles.scanButtonText}>Scan</Text>
+            </Pressable>
+          </View>
           <TextInput style={styles.input} placeholder="Dose" accessibilityLabel="Dose" value={medDose} onChangeText={setMedDose} testID="med-dose" />
           <TextInput
             style={styles.input}
@@ -211,14 +233,25 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
             onChangeText={setProcType}
             testID="proc-type"
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Procedure name"
-            accessibilityLabel="Procedure name"
-            value={procName}
-            onChangeText={setProcName}
-            testID="proc-name"
-          />
+          <View style={styles.inputWithScanRow}>
+            <TextInput
+              style={[styles.input, styles.inputWithScan]}
+              placeholder="Procedure name"
+              accessibilityLabel="Procedure name"
+              value={procName}
+              onChangeText={setProcName}
+              testID="proc-name"
+            />
+            <Pressable
+              style={styles.scanButton}
+              onPress={() => setScanTarget("procedure")}
+              accessibilityRole="button"
+              accessibilityLabel="Scan procedure barcode"
+              testID="scan-proc-name"
+            >
+              <Text style={styles.scanButtonText}>Scan</Text>
+            </Pressable>
+          </View>
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Successful</Text>
             <Switch value={procSuccess} onValueChange={setProcSuccess} testID="proc-success" />
@@ -301,6 +334,8 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
           )}
         />
       )}
+
+      <BarcodeScannerModal visible={scanTarget !== null} onScanned={handleScanned} onClose={() => setScanTarget(null)} />
     </View>
   );
 }
@@ -373,6 +408,29 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontSize: 14,
     minHeight: TOUCH_TARGET_MIN
+  },
+  inputWithScanRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  inputWithScan: {
+    flex: 1
+  },
+  scanButton: {
+    minHeight: TOUCH_TARGET_MIN,
+    paddingHorizontal: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#1a4fd6",
+    borderRadius: 8,
+    marginBottom: 10
+  },
+  scanButtonText: {
+    color: "#1a4fd6",
+    fontSize: 13,
+    fontWeight: "600"
   },
   switchRow: {
     flexDirection: "row",
