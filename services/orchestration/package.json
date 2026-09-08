@@ -4,7 +4,8 @@
   "type": "module",
   "main": "src/index.mjs",
   "dependencies": {
-    "@vems/shared": "0.1.0"
+    "@vems/shared": "0.1.0",
+    "pg": "8.23.0"
   },
   "scripts": {
     "test": "node --test",

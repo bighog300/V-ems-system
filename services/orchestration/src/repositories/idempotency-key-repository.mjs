@@ -14,7 +14,8 @@ export class IdempotencyKeyRepository {
   }
 
   async save(scope, idempotencyKey, resourceId, createdAt, requestFingerprint = null) {
-    await this.db.execute(`INSERT OR IGNORE INTO idempotency_keys (scope, idempotency_key, resource_id, created_at, request_fingerprint)
-      VALUES (${sqlValue(scope)}, ${sqlValue(idempotencyKey)}, ${sqlValue(resourceId)}, ${sqlValue(createdAt)}, ${sqlValue(requestFingerprint)});`);
+    await this.db.execute(`INSERT INTO idempotency_keys (scope, idempotency_key, resource_id, created_at, request_fingerprint)
+      VALUES (${sqlValue(scope)}, ${sqlValue(idempotencyKey)}, ${sqlValue(resourceId)}, ${sqlValue(createdAt)}, ${sqlValue(requestFingerprint)})
+      ON CONFLICT (scope, idempotency_key) DO NOTHING;`);
   }
 }

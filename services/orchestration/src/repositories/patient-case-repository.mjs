@@ -10,7 +10,7 @@ export class PatientCaseRepository {
   constructor(db) { this.db = db; }
   async nextId() {
     const row = await this.db.queryOne(`INSERT INTO id_sequences(name,next_value) VALUES ('patient_case',2)
-      ON CONFLICT(name) DO UPDATE SET next_value=next_value+1 RETURNING next_value-1 AS value;`);
+      ON CONFLICT(name) DO UPDATE SET next_value = id_sequences.next_value + 1 RETURNING next_value-1 AS value;`);
     return `PCR-${String(row.value).padStart(6, '0')}`;
   }
   async find(id) { return map(await this.db.queryOne(`SELECT * FROM patient_cases WHERE patient_case_id=${sqlValue(id)};`)); }
