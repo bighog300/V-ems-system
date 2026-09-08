@@ -62,6 +62,19 @@ export async function migrate(db: OfflineSqliteLike): Promise<void> {
       encrypted_payload TEXT NOT NULL,
       cached_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS attachments (
+      attachment_id TEXT PRIMARY KEY,
+      patient_case_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      encrypted_content TEXT NOT NULL,
+      status TEXT NOT NULL,
+      captured_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS attachments_patient_case_id ON attachments (patient_case_id);
   `);
 }
 
@@ -184,4 +197,55 @@ export async function setCachedReadRow(db: OfflineSqliteLike, cacheKey: string, 
 
 export async function getCachedReadRow(db: OfflineSqliteLike, cacheKey: string): Promise<CachedReadRow | null> {
   return db.getFirstAsync<CachedReadRow>(`SELECT * FROM cached_reads WHERE cache_key = ?;`, [cacheKey]);
+}
+
+// A local-only queue (Stage 11 milestone 11d): captured photos/documents
+// wait here, encrypted with the same device key as the outbox, until
+// Stage 12 adds real object storage and a sync path. `status` only ever
+// has one value today ("queued") but is modeled as a column now — not
+// hardcoded — so Stage 12 can add uploading/synced states without another
+// migration.
+export type AttachmentKind = "photo" | "document";
+export type AttachmentStatus = "queued";
+
+export interface AttachmentRow {
+  attachment_id: string;
+  patient_case_id: string;
+  kind: AttachmentKind;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  encrypted_content: string;
+  status: AttachmentStatus;
+  captured_at: string;
+}
+
+export interface NewAttachmentRow {
+  attachmentId: string;
+  patientCaseId: string;
+  kind: AttachmentKind;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  encryptedContent: string;
+  capturedAt: string;
+}
+
+export async function insertAttachment(db: OfflineSqliteLike, entry: NewAttachmentRow): Promise<void> {
+  await db.runAsync(
+    `INSERT INTO attachments (attachment_id, patient_case_id, kind, file_name, mime_type, size_bytes, encrypted_content, status, captured_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'queued', ?);`,
+    [entry.attachmentId, entry.patientCaseId, entry.kind, entry.fileName, entry.mimeType, entry.sizeBytes, entry.encryptedContent, entry.capturedAt]
+  );
+}
+
+export async function listAttachmentsByPatientCase(db: OfflineSqliteLike, patientCaseId: string): Promise<AttachmentRow[]> {
+  // Same insertion-order tiebreaker as listOutboxEntries, for the same
+  // reason: captured_at alone isn't monotonic enough for entries recorded
+  // in the same millisecond.
+  return db.getAllAsync<AttachmentRow>(`SELECT * FROM attachments WHERE patient_case_id = ? ORDER BY captured_at, rowid;`, [patientCaseId]);
+}
+
+export async function getAttachmentRow(db: OfflineSqliteLike, attachmentId: string): Promise<AttachmentRow | null> {
+  return db.getFirstAsync<AttachmentRow>(`SELECT * FROM attachments WHERE attachment_id = ?;`, [attachmentId]);
 }
