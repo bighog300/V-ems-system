@@ -20,6 +20,7 @@ module.exports = {
     "^expo-document-picker$": "<rootDir>/test/__mocks__/expo-document-picker.ts",
     "^expo-file-system$": "<rootDir>/test/__mocks__/expo-file-system.ts",
     "^expo-crypto$": "<rootDir>/test/__mocks__/expo-crypto.ts",
-    "^expo-location$": "<rootDir>/test/__mocks__/expo-location.ts"
+    "^expo-location$": "<rootDir>/test/__mocks__/expo-location.ts",
+    "^expo-camera$": "<rootDir>/test/__mocks__/expo-camera.tsx"
   }
 };
