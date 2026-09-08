@@ -17,7 +17,7 @@ test('patient case HTTP contracts, idempotency, legacy ambiguity and role/assign
   t.after(async () => { await new Promise(resolve => server.close(resolve)); s.db.db.close(); rmSync(dir, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;
   const meta = { correlationId: 'http-case' };
-  const incident = s.createIncident({ call: { call_source: 'phone', received_at: '2026-09-06T10:00:00Z' }, incident: { category: 'Medical', priority: 'High', description: 'Exercise', address: 'Test', patient_count: 4 } }, meta);
+  const incident = await s.createIncident({ call: { call_source: 'phone', received_at: '2026-09-06T10:00:00Z' }, incident: { category: 'Medical', priority: 'High', description: 'Exercise', address: 'Test', patient_count: 4 } }, meta);
   async function request(path, method = 'GET', payload, role = 'supervisor', key) {
     const response = await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-user-role': role, 'x-actor-id': 'STAFF-001', ...(key ? { 'idempotency-key': key } : {}) }, ...(payload ? { body: JSON.stringify(payload) } : {}) });
     return { status: response.status, body: await response.json() };

@@ -14,7 +14,7 @@ function createService(openemr) {
   return new OrchestrationService({ dbPath: createDbPath(), openemr });
 }
 
-function createIncident(orchestration, correlationId = "corr-1") {
+async function createIncident(orchestration, correlationId = "corr-1") {
   return orchestration.createIncident({
     call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
     incident: {
@@ -40,8 +40,8 @@ test("observation orchestration creates observation and emits event metadata", a
     createHandover: async () => ({ handover_id: "HND-100", encounter_id: "ENC-100", handover_time: "2026-04-16T10:30:00Z", disposition: "transport_to_facility", handover_status: "Handover Completed" })
   });
 
-  const incident = createIncident(orchestration, "corr-obs-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-obs-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-100"
   }, { correlationId: "corr-obs-2" });
@@ -68,7 +68,7 @@ test("observation orchestration creates observation and emits event metadata", a
     vital_signs: { heart_rate_bpm: 92 }
   }]);
 
-  const events = orchestration.listOutboxEvents();
+  const events = await orchestration.listOutboxEvents();
   assert.equal(events.at(-1).event_type, "ObservationCreated");
   assert.equal(events.at(-1).payload.observation_id, "OBS-100");
 });
@@ -105,8 +105,8 @@ test("intervention orchestration emits audit/event metadata", async () => {
     createHandover: async () => ({ handover_id: "HND-900", encounter_id: "ENC-900", handover_time: "2026-04-16T10:30:00Z", disposition: "transport_to_facility", handover_status: "Handover Completed" })
   });
 
-  const incident = createIncident(orchestration, "corr-int-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-int-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-900"
   }, { correlationId: "corr-int-2" });
@@ -133,11 +133,11 @@ test("intervention orchestration emits audit/event metadata", async () => {
     name: "Aspirin"
   }]);
 
-  const events = orchestration.listOutboxEvents();
+  const events = await orchestration.listOutboxEvents();
   assert.equal(events.at(-1).event_type, "InterventionCreated");
   assert.equal(events.at(-1).payload.intervention_id, "INT-900");
 
-  const syncIntents = orchestration.listSyncIntents();
+  const syncIntents = await orchestration.listSyncIntents();
   assert.equal(syncIntents.length, 1);
   assert.equal(syncIntents.at(-1).intent_type, "createIncidentMirror");
 });
@@ -148,8 +148,8 @@ test("intervention with stock_item_id emits stock usage sync intent", async () =
     createIntervention: async (payload) => ({ intervention_id: "INT-901", encounter_id: payload.encounter_id, status: "recorded" })
   });
 
-  const incident = createIncident(orchestration, "corr-stock-int-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-stock-int-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-901"
   }, { correlationId: "corr-stock-int-2" });
@@ -167,7 +167,7 @@ test("intervention with stock_item_id emits stock usage sync intent", async () =
     stock_item_id: "ITEM-001"
   }, { correlationId: "corr-stock-int-4" });
 
-  const stockIntent = orchestration.listSyncIntents().find((intent) => intent.intent_type === "recordStockUsageMirror");
+  const stockIntent = (await orchestration.listSyncIntents()).find((intent) => intent.intent_type === "recordStockUsageMirror");
   assert.ok(stockIntent);
   assert.equal(stockIntent.entity_type, "stock_usage");
   assert.deepEqual(stockIntent.payload, {
@@ -189,8 +189,8 @@ test("intervention without stock_item_id does not emit stock usage sync intent",
     createIntervention: async (payload) => ({ intervention_id: "INT-902", encounter_id: payload.encounter_id, status: "recorded" })
   });
 
-  const incident = createIncident(orchestration, "corr-stock-none-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-stock-none-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-902"
   }, { correlationId: "corr-stock-none-2" });
@@ -207,7 +207,7 @@ test("intervention without stock_item_id does not emit stock usage sync intent",
     name: "Splinting"
   }, { correlationId: "corr-stock-none-4" });
 
-  const stockIntents = orchestration.listSyncIntents().filter((intent) => intent.intent_type === "recordStockUsageMirror");
+  const stockIntents = (await orchestration.listSyncIntents()).filter((intent) => intent.intent_type === "recordStockUsageMirror");
   assert.equal(stockIntents.length, 0);
 });
 
@@ -241,8 +241,8 @@ test("intervention read uses OpenEMR source and returns normalized list", async 
     }
   });
 
-  const incident = createIncident(orchestration, "corr-int-read-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-int-read-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-920"
   }, { correlationId: "corr-int-read-2" });
@@ -279,8 +279,8 @@ test("intervention read includes stock sync outcome when stock-linked interventi
     ])
   });
 
-  const incident = createIncident(orchestration, "corr-int-stock-read-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-int-stock-read-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-930"
   }, { correlationId: "corr-int-stock-read-2" });
@@ -333,8 +333,8 @@ test("handover orchestration emits audit/event metadata and marks closure readin
     }
   });
 
-  const incident = createIncident(orchestration, "corr-hnd-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-hnd-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-910"
   }, { correlationId: "corr-hnd-2" });
@@ -373,11 +373,11 @@ test("handover orchestration emits audit/event metadata and marks closure readin
     notes: "Transferred to ED"
   }]);
 
-  const events = orchestration.listOutboxEvents();
+  const events = await orchestration.listOutboxEvents();
   assert.equal(events.at(-1).event_type, "HandoverCompleted");
   assert.equal(events.at(-1).payload.closure_ready, true);
 
-  const encounter = orchestration.getEncounterByIncident(incident.incident_id);
+  const encounter = await orchestration.getEncounterByIncident(incident.incident_id);
   assert.equal(encounter.encounter_status, "Handover Completed");
 });
 
@@ -417,8 +417,8 @@ test("handover read returns normalized OpenEMR handover", async () => {
     }
   });
 
-  const incident = createIncident(orchestration, "corr-hnd-read-1");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  const incident = await createIncident(orchestration, "corr-hnd-read-1");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-930"
   }, { correlationId: "corr-hnd-read-2" });
@@ -450,8 +450,8 @@ test("intervention idempotency replays without a second clinical write", async (
     createEncounter: async () => ({ encounter_id: "ENC-IDEMP", status: "Open" }),
     createIntervention: async (payload) => { writes += 1; return { intervention_id: "INT-IDEMP", encounter_id: payload.encounter_id, status: "recorded" }; }
   });
-  const incident = createIncident(orchestration, "corr-idemp-incident");
-  orchestration.linkPatientToIncidentContext(incident.incident_id, { verification_status: "verified", openemr_patient_id: "OE-IDEMP" }, { correlationId: "corr-idemp-link" });
+  const incident = await createIncident(orchestration, "corr-idemp-incident");
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, { verification_status: "verified", openemr_patient_id: "OE-IDEMP" }, { correlationId: "corr-idemp-link" });
   await orchestration.createEncounterForIncident(incident.incident_id, {
     patient_id: "OE-IDEMP", care_started_at: "2026-04-16T10:15:00Z", crew_ids: ["STAFF-001"], presenting_complaint: "Chest pain"
   }, { correlationId: "corr-idemp-enc" });

@@ -113,7 +113,7 @@ test("patient link persistence stores provisional and verified states on inciden
     assert.equal(verified.body.verification_status, "verified");
     assert.equal(verified.body.openemr_patient_id, "OE-003");
 
-    const persisted = orchestration.getPatientLink(incidentId);
+    const persisted = await orchestration.getPatientLink(incidentId);
     assert.equal(persisted.verification_status, "verified");
     assert.equal(persisted.openemr_patient_id, "OE-003");
   } finally {
@@ -186,7 +186,7 @@ test("ambiguous match does not auto-link patient without explicit selection", as
     assert.equal(search.body.match_status, "ambiguous");
     assert.equal(search.body.patient_id, null);
     assert.equal(search.body.candidates.length, 2);
-    assert.equal(orchestration.patientLinks.findByIncidentId(incidentId), undefined);
+    assert.equal(await orchestration.patientLinks.findByIncidentId(incidentId), undefined);
   } finally {
     server.close();
   }

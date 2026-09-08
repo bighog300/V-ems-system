@@ -54,11 +54,11 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function resolveVehicleStockDependencies(payload, vehicleLinks, stockItemLinks) {
+export async function resolveVehicleStockDependencies(payload, vehicleLinks, stockItemLinks) {
   const vehicleId = payload.vehicle_id ?? payload.vems_vehicle_id;
   const stockItemId = payload.stock_item_id ?? payload.vems_stock_item_id;
-  const vehicle = vehicleLinks.findByVehicleId(vehicleId);
-  const item = stockItemLinks.findByStockItemId(stockItemId);
+  const vehicle = await vehicleLinks.findByVehicleId(vehicleId);
+  const item = await stockItemLinks.findByStockItemId(stockItemId);
   if (!vehicle?.remote_id || vehicle.sync_status !== "succeeded" || !item?.remote_id || item.sync_status !== "succeeded") {
     const error = new Error("Vehicle and stock item Vtiger linkages are pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
   }
@@ -87,7 +87,8 @@ export async function runSyncWorkerService(options = {}) {
   const expo = options.expoPushAdapter ?? new ExpoPushAdapterClient({ transport: expoPushTransport ?? transport });
   const workerExpo = {
     async sendPush(payload) {
-      const tokens = pushTokens.listByStaffIds(payload.staff_ids ?? []).map((row) => row.expo_push_token);
+      const rows = await pushTokens.listByStaffIds(payload.staff_ids ?? []);
+      const tokens = rows.map((row) => row.expo_push_token);
       return expo.sendPush({ tokens, title: payload.title, body: payload.body, data: payload.data ?? {} });
     }
   };
@@ -102,24 +103,24 @@ export async function runSyncWorkerService(options = {}) {
     createStockItemMirror: (payload) => vtiger.createStockItemMirror(payload),
     updateStockItemMirror: (...args) => vtiger.updateStockItemMirror(...args),
     createVehicleStockMirror: async (payload) => {
-      const { vehicleId, stockItemId, vehicle, item } = resolveVehicleStockDependencies(payload, vehicleLinks, stockItemLinks);
+      const { vehicleId, stockItemId, vehicle, item } = await resolveVehicleStockDependencies(payload, vehicleLinks, stockItemLinks);
       return vtiger.createVehicleStockMirror({ ...payload, vehicle_id: vehicleId, stock_item_id: stockItemId, vehicle_remote_id: vehicle.remote_id, stock_item_remote_id: item.remote_id, assigned_user_id: payload?.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID });
     },
     updateVehicleStockMirror: async (payload) => {
-      const link = vehicleStockLinks.find(payload.vehicle_id, payload.stock_item_id);
+      const link = await vehicleStockLinks.find(payload.vehicle_id, payload.stock_item_id);
       if (!link?.remote_id) { const error = new Error("Vehicle stock Vtiger linkage is not established"); error.code = "VTIGER_REMOTE_NOT_FOUND"; error.classification = error.code; throw error; }
-      const vehicle = vehicleLinks.findByVehicleId(payload.vehicle_id); const item = stockItemLinks.findByStockItemId(payload.stock_item_id);
+      const vehicle = await vehicleLinks.findByVehicleId(payload.vehicle_id); const item = await stockItemLinks.findByStockItemId(payload.stock_item_id);
       return vtiger.updateVehicleStockMirror({ ...payload, remote_id: link.remote_id, vehicle_remote_id: vehicle?.remote_id, stock_item_remote_id: item?.remote_id, assigned_user_id: payload?.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID });
     },
     recordStockUsageMirror: async (payload) => {
-      const item = stockItemLinks.findByStockItemId(payload.stock_item_id);
+      const item = await stockItemLinks.findByStockItemId(payload.stock_item_id);
       if (!item?.remote_id || item.sync_status !== "succeeded") { const error = new Error("Stock item Vtiger linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error; }
       let vehicleRemoteId = null;
-      if (payload.vehicle_id) { const vehicle = vehicleLinks.findByVehicleId(payload.vehicle_id); if (!vehicle?.remote_id || vehicle.sync_status !== "succeeded") { const error = new Error("Vehicle Vtiger linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error; } vehicleRemoteId = vehicle.remote_id; }
+      if (payload.vehicle_id) { const vehicle = await vehicleLinks.findByVehicleId(payload.vehicle_id); if (!vehicle?.remote_id || vehicle.sync_status !== "succeeded") { const error = new Error("Vehicle Vtiger linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error; } vehicleRemoteId = vehicle.remote_id; }
       return vtiger.recordStockUsageMirror({ ...payload, stock_item_remote_id: item.remote_id, vehicle_remote_id: vehicleRemoteId, assigned_user_id: payload?.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID });
     },
     async createAssignmentMirror(payload) {
-      const incident = vtigerLinks.findByIncidentId(payload.incident_id);
+      const incident = await vtigerLinks.findByIncidentId(payload.incident_id);
       if (!incident?.remote_id || incident.sync_status !== "succeeded") {
         const error = new Error("Incident Vtiger linkage is pending");
         error.code = "VTIGER_DEPENDENCY_PENDING";
@@ -127,15 +128,15 @@ export async function runSyncWorkerService(options = {}) {
         error.retryable = true;
         throw error;
       }
-      const vehicle = vehicleLinks.findByVehicleId(payload.vems_vehicle_id);
+      const vehicle = await vehicleLinks.findByVehicleId(payload.vems_vehicle_id);
       if (!vehicle?.remote_id || vehicle.sync_status !== "succeeded") {
         const error = new Error("Vehicle Vtiger linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
       }
       const crewIds = Array.isArray(payload.crew_ids) ? [...new Set(payload.crew_ids)].sort() : String(payload.vems_crew_ids ?? "").split(",").filter(Boolean).sort();
       const requiredPersonnel = [];
-      const personnelIntegrationActive = personnelLinks.db?.queryOne("SELECT COUNT(*) AS count FROM personnel;")?.count > 0;
+      const personnelIntegrationActive = (await personnelLinks.db?.queryOne("SELECT COUNT(*) AS count FROM personnel;"))?.count > 0;
       for (const staffId of personnelIntegrationActive ? crewIds : []) {
-        const link = personnelLinks.findByStaffId(staffId);
+        const link = await personnelLinks.findByStaffId(staffId);
         if (!link?.remote_id || link.sync_status !== "succeeded") {
           const error = new Error(`Personnel Vtiger linkage is pending for ${staffId}`); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
         }
@@ -144,14 +145,14 @@ export async function runSyncWorkerService(options = {}) {
       return vtiger.createAssignmentMirror({ ...payload, crew_ids: crewIds, incident_remote_id: incident.remote_id, vems_incident_remote_id: incident.remote_id, incident_ref: incident.remote_id, vehicle_ref: vehicle.remote_id, personnel_links: requiredPersonnel });
     },
     async updateAssignmentMirror(payload) {
-      const link = assignmentLinks.findByAssignmentId(payload.assignment_id);
+      const link = await assignmentLinks.findByAssignmentId(payload.assignment_id);
       if (!link?.remote_id) {
         const error = new Error("Assignment Vtiger linkage is not established");
         error.code = "VTIGER_REMOTE_NOT_FOUND";
         error.classification = error.code;
         throw error;
       }
-      const vehicle = vehicleLinks.findByVehicleId(payload.vems_vehicle_id);
+      const vehicle = await vehicleLinks.findByVehicleId(payload.vems_vehicle_id);
       return vtiger.updateAssignmentMirror({ ...payload, remote_id: link.remote_id, incident_remote_id: link.incident_remote_id, vems_incident_remote_id: link.incident_remote_id, vehicle_ref: vehicle?.remote_id ?? null });
     }
   };
@@ -173,53 +174,54 @@ export async function runSyncWorkerService(options = {}) {
       if (intent.target_system !== "vtiger" || !result?.remote_id) return false;
       const now = new Date().toISOString();
       if (intent.entity_type === "assignment") {
-        const current = assignmentLinks.findByAssignmentId(intent.payload.assignment_id);
-        db.withTransaction(() => {
-          assignmentLinks.upsert({ assignment_id: intent.payload.assignment_id, incident_id: intent.payload.incident_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:assignment:${intent.payload.assignment_id}`, incident_remote_id: result.incident_remote_id ?? intent.payload.vems_incident_remote_id ?? current?.incident_remote_id, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
+        const current = await assignmentLinks.findByAssignmentId(intent.payload.assignment_id);
+        await db.withTransaction(async () => {
+          await assignmentLinks.upsert({ assignment_id: intent.payload.assignment_id, incident_id: intent.payload.incident_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:assignment:${intent.payload.assignment_id}`, incident_remote_id: result.incident_remote_id ?? intent.payload.vems_incident_remote_id ?? current?.incident_remote_id, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
           for (const junction of result.junctions ?? []) {
-            assignmentPersonnelLinks.upsert({ assignment_id: intent.payload.assignment_id, staff_id: junction.staff_id, assignment_remote_id: result.remote_id, personnel_remote_id: personnelLinks.findByStaffId(junction.staff_id)?.remote_id ?? null, junction_remote_id: junction.remote_id, junction_remote_number: junction.remote_number ?? null, external_key: junction.external_key, sync_status: "succeeded", last_error_code: null, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, last_synced_at: now, created_at: now, updated_at: now });
+            const personnelLink = await personnelLinks.findByStaffId(junction.staff_id);
+            await assignmentPersonnelLinks.upsert({ assignment_id: intent.payload.assignment_id, staff_id: junction.staff_id, assignment_remote_id: result.remote_id, personnel_remote_id: personnelLink?.remote_id ?? null, junction_remote_id: junction.remote_id, junction_remote_number: junction.remote_number ?? null, external_key: junction.external_key, sync_status: "succeeded", last_error_code: null, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, last_synced_at: now, created_at: now, updated_at: now });
           }
-          syncIntents.markSucceeded(intent.intent_id, now);
+          await syncIntents.markSucceeded(intent.intent_id, now);
         });
         return true;
       }
       if (intent.entity_type === "vehicle") {
-        const current = vehicleLinks.findByVehicleId(intent.payload.vehicle_id);
-        db.withTransaction(() => {
-          vehicleLinks.upsert({ vehicle_id: intent.payload.vehicle_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:vehicle:${intent.payload.vehicle_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
-          syncIntents.markSucceeded(intent.intent_id, now);
+        const current = await vehicleLinks.findByVehicleId(intent.payload.vehicle_id);
+        await db.withTransaction(async () => {
+          await vehicleLinks.upsert({ vehicle_id: intent.payload.vehicle_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:vehicle:${intent.payload.vehicle_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
+          await syncIntents.markSucceeded(intent.intent_id, now);
         });
         return true;
       }
       if (intent.entity_type === "personnel") {
-        const current = personnelLinks.findByStaffId(intent.payload.staff_id);
-        db.withTransaction(() => {
-          personnelLinks.upsert({ staff_id: intent.payload.staff_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:personnel:${intent.payload.staff_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
-          syncIntents.markSucceeded(intent.intent_id, now);
+        const current = await personnelLinks.findByStaffId(intent.payload.staff_id);
+        await db.withTransaction(async () => {
+          await personnelLinks.upsert({ staff_id: intent.payload.staff_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:personnel:${intent.payload.staff_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now });
+          await syncIntents.markSucceeded(intent.intent_id, now);
         });
         return true;
       }
       if (intent.entity_type === "stock_item") {
-        const current = stockItemLinks.findByStockItemId(intent.payload.stock_item_id);
-        db.withTransaction(() => { stockItemLinks.upsert({ stock_item_id: intent.payload.stock_item_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:stock-item:${intent.payload.stock_item_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now }); syncIntents.markSucceeded(intent.intent_id, now); });
+        const current = await stockItemLinks.findByStockItemId(intent.payload.stock_item_id);
+        await db.withTransaction(async () => { await stockItemLinks.upsert({ stock_item_id: intent.payload.stock_item_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:stock-item:${intent.payload.stock_item_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now }); await syncIntents.markSucceeded(intent.intent_id, now); });
         return true;
       }
       if (intent.entity_type === "vehicle_stock") {
         const vehicleId = intent.payload.vehicle_id ?? intent.payload.vems_vehicle_id;
         const stockItemId = intent.payload.stock_item_id ?? intent.payload.vems_stock_item_id;
-        const current = vehicleStockLinks.find(vehicleId, stockItemId);
-        db.withTransaction(() => { vehicleStockLinks.upsert({ vehicle_id: vehicleId, stock_item_id: stockItemId, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:vehicle-stock:${vehicleId}:${stockItemId}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now }); syncIntents.markSucceeded(intent.intent_id, now); });
+        const current = await vehicleStockLinks.find(vehicleId, stockItemId);
+        await db.withTransaction(async () => { await vehicleStockLinks.upsert({ vehicle_id: vehicleId, stock_item_id: stockItemId, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:vehicle-stock:${vehicleId}:${stockItemId}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now }); await syncIntents.markSucceeded(intent.intent_id, now); });
         return true;
       }
       if (intent.entity_type === "stock_usage") {
-        const current = stockUsageLinks.find(intent.payload.stock_usage_id);
-        db.withTransaction(() => { stockUsageLinks.upsert({ stock_usage_id: intent.payload.stock_usage_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:stock-usage:${intent.payload.stock_usage_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now }); syncIntents.markSucceeded(intent.intent_id, now); });
+        const current = await stockUsageLinks.find(intent.payload.stock_usage_id);
+        await db.withTransaction(async () => { await stockUsageLinks.upsert({ stock_usage_id: intent.payload.stock_usage_id, remote_id: result.remote_id, remote_number: result.remote_number ?? null, external_key: result.external_key ?? current?.external_key ?? `${process.env.VTIGER_SOURCE_NAMESPACE ?? "vems"}:stock-usage:${intent.payload.stock_usage_id}`, create_correlation_id: current?.create_correlation_id ?? intent.correlation_id, last_correlation_id: intent.correlation_id, sync_status: "succeeded", last_error_code: null, last_synced_at: now, created_at: current?.created_at ?? now, updated_at: now }); await syncIntents.markSucceeded(intent.intent_id, now); });
         return true;
       }
       if (intent.entity_type !== "incident") return false;
-      const link = vtigerLinks.findByIncidentId(intent.payload.incident_id);
-      db.withTransaction(() => {
-        vtigerLinks.upsert({
+      const link = await vtigerLinks.findByIncidentId(intent.payload.incident_id);
+      await db.withTransaction(async () => {
+        await vtigerLinks.upsert({
           incident_id: intent.payload.incident_id,
           remote_id: result.remote_id,
           remote_number: result.remote_number ?? null,
@@ -232,31 +234,31 @@ export async function runSyncWorkerService(options = {}) {
           created_at: link?.created_at ?? now,
           updated_at: now
         });
-        syncIntents.markSucceeded(intent.intent_id, now);
+        await syncIntents.markSucceeded(intent.intent_id, now);
       });
       return true;
     },
-    onFailure: (intent, error, state) => {
+    onFailure: async (intent, error, state) => {
       if (intent.target_system !== "vtiger") return;
       if (intent.entity_type === "assignment") {
-        assignmentLinks.markFailure(intent.payload.assignment_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
+        await assignmentLinks.markFailure(intent.payload.assignment_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
         return;
       }
       if (intent.entity_type === "vehicle") {
-        vehicleLinks.markFailure(intent.payload.vehicle_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
+        await vehicleLinks.markFailure(intent.payload.vehicle_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
         return;
       }
       if (intent.entity_type === "personnel") {
-        personnelLinks.markFailure(intent.payload.staff_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
+        await personnelLinks.markFailure(intent.payload.staff_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString());
         return;
       }
-      if (intent.entity_type === "stock_item") { stockItemLinks.markFailure(intent.payload.stock_item_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString()); return; }
-      if (intent.entity_type === "vehicle_stock") { vehicleStockLinks.markFailure(intent.payload.vehicle_id ?? intent.payload.vems_vehicle_id, intent.payload.stock_item_id ?? intent.payload.vems_stock_item_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString()); return; }
-      if (intent.entity_type === "stock_usage") { stockUsageLinks.markFailure(intent.payload.stock_usage_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString()); return; }
+      if (intent.entity_type === "stock_item") { await stockItemLinks.markFailure(intent.payload.stock_item_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString()); return; }
+      if (intent.entity_type === "vehicle_stock") { await vehicleStockLinks.markFailure(intent.payload.vehicle_id ?? intent.payload.vems_vehicle_id, intent.payload.stock_item_id ?? intent.payload.vems_stock_item_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString()); return; }
+      if (intent.entity_type === "stock_usage") { await stockUsageLinks.markFailure(intent.payload.stock_usage_id, error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE", state.status, new Date().toISOString()); return; }
       if (intent.entity_type !== "incident") return;
-      const existing = vtigerLinks.findByIncidentId(intent.payload.incident_id);
+      const existing = await vtigerLinks.findByIncidentId(intent.payload.incident_id);
       if (!existing) return;
-      vtigerLinks.markFailure(
+      await vtigerLinks.markFailure(
         intent.payload.incident_id,
         error?.code ?? error?.classification ?? "DOWNSTREAM_UNAVAILABLE",
         state.status,

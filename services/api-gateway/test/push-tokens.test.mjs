@@ -39,7 +39,7 @@ test("POST /api/push-tokens registers a device token for the authenticated crew 
     assert.equal(response.status, 201);
     assert.equal(response.body.staff_id, "STAFF-001");
     assert.equal(response.body.expo_push_token, "ExponentPushToken[device-1]");
-    assert.equal(orchestration.pushTokens.listByStaffId("STAFF-001").length, 1);
+    assert.equal((await orchestration.pushTokens.listByStaffId("STAFF-001")).length, 1);
   } finally {
     server.close();
   }
@@ -56,7 +56,7 @@ test("POST /api/push-tokens persists device_id when provided", async () => {
 
     assert.equal(response.status, 201);
     assert.equal(response.body.device_id, "device-uuid-1");
-    assert.equal(orchestration.pushTokens.listByStaffId("STAFF-001")[0].device_id, "device-uuid-1");
+    assert.equal((await orchestration.pushTokens.listByStaffId("STAFF-001"))[0].device_id, "device-uuid-1");
   } finally {
     server.close();
   }

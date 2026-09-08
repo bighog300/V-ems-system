@@ -20,7 +20,7 @@ function service(dbPath = createDbPath("orchestration")) {
   return new OrchestrationService({ dbPath });
 }
 
-function incident(o, address = "test") {
+async function incident(o, address = "test") {
   return o.createIncident(
     { call: { call_source: "phone", received_at: "2026-09-08T00:00:00Z" }, incident: { category: "medical_emergency", priority: "high", description: "test", address, patient_count: 1 } },
     { correlationId: `incident-${address}` }
@@ -40,88 +40,88 @@ async function withServer(handler, fn) {
 
 // --- DevicePushTokenRepository ---
 
-test("DevicePushTokenRepository upsert reassigns ownership when a token re-registers under a different staff member", () => {
+test("DevicePushTokenRepository upsert reassigns ownership when a token re-registers under a different staff member", async () => {
   const db = new SqliteClient(createDbPath("repo"));
   const repo = new DevicePushTokenRepository(db);
 
-  repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[shared-device]", platform: "ios" });
-  assert.equal(repo.listByStaffId("STAFF-001").length, 1);
+  await repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[shared-device]", platform: "ios" });
+  assert.equal((await repo.listByStaffId("STAFF-001")).length, 1);
 
-  repo.upsert({ staffId: "STAFF-002", expoPushToken: "ExponentPushToken[shared-device]", platform: "ios" });
-  assert.equal(repo.listByStaffId("STAFF-001").length, 0);
-  assert.equal(repo.listByStaffId("STAFF-002").length, 1);
+  await repo.upsert({ staffId: "STAFF-002", expoPushToken: "ExponentPushToken[shared-device]", platform: "ios" });
+  assert.equal((await repo.listByStaffId("STAFF-001")).length, 0);
+  assert.equal((await repo.listByStaffId("STAFF-002")).length, 1);
 });
 
-test("DevicePushTokenRepository upsert stores and updates device_id", () => {
+test("DevicePushTokenRepository upsert stores and updates device_id", async () => {
   const db = new SqliteClient(createDbPath("repo-device-id"));
   const repo = new DevicePushTokenRepository(db);
 
-  const first = repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios", deviceId: "device-uuid-1" });
+  const first = await repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios", deviceId: "device-uuid-1" });
   assert.equal(first.device_id, "device-uuid-1");
 
-  const updated = repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios", deviceId: "device-uuid-2" });
+  const updated = await repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios", deviceId: "device-uuid-2" });
   assert.equal(updated.device_id, "device-uuid-2");
 });
 
-test("DevicePushTokenRepository upsert defaults device_id to null when omitted", () => {
+test("DevicePushTokenRepository upsert defaults device_id to null when omitted", async () => {
   const db = new SqliteClient(createDbPath("repo-device-id-null"));
   const repo = new DevicePushTokenRepository(db);
-  const token = repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios" });
+  const token = await repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios" });
   assert.equal(token.device_id, null);
 });
 
-test("DevicePushTokenRepository listByStaffIds fans out across multiple crew members", () => {
+test("DevicePushTokenRepository listByStaffIds fans out across multiple crew members", async () => {
   const db = new SqliteClient(createDbPath("repo-fanout"));
   const repo = new DevicePushTokenRepository(db);
-  repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios" });
-  repo.upsert({ staffId: "STAFF-002", expoPushToken: "ExponentPushToken[b]", platform: "android" });
-  repo.upsert({ staffId: "STAFF-003", expoPushToken: "ExponentPushToken[c]", platform: "android" });
+  await repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios" });
+  await repo.upsert({ staffId: "STAFF-002", expoPushToken: "ExponentPushToken[b]", platform: "android" });
+  await repo.upsert({ staffId: "STAFF-003", expoPushToken: "ExponentPushToken[c]", platform: "android" });
 
-  const tokens = repo.listByStaffIds(["STAFF-001", "STAFF-002"]).map((row) => row.expo_push_token).sort();
+  const tokens = (await repo.listByStaffIds(["STAFF-001", "STAFF-002"])).map((row) => row.expo_push_token).sort();
   assert.deepEqual(tokens, ["ExponentPushToken[a]", "ExponentPushToken[b]"]);
 });
 
-test("DevicePushTokenRepository listByStaffIds returns an empty list for an empty input", () => {
+test("DevicePushTokenRepository listByStaffIds returns an empty list for an empty input", async () => {
   const db = new SqliteClient(createDbPath("repo-empty"));
   const repo = new DevicePushTokenRepository(db);
-  assert.deepEqual(repo.listByStaffIds([]), []);
+  assert.deepEqual(await repo.listByStaffIds([]), []);
 });
 
 // --- OrchestrationService.registerPushToken ---
 
-test("registerPushToken persists a device token for the authenticated actor", () => {
+test("registerPushToken persists a device token for the authenticated actor", async () => {
   const o = service();
-  const token = o.registerPushToken({ expo_push_token: "ExponentPushToken[device-1]", platform: "ios" }, { actorId: "STAFF-001" });
+  const token = await o.registerPushToken({ expo_push_token: "ExponentPushToken[device-1]", platform: "ios" }, { actorId: "STAFF-001" });
   assert.equal(token.staff_id, "STAFF-001");
   assert.equal(token.expo_push_token, "ExponentPushToken[device-1]");
   assert.equal(token.platform, "ios");
   assert.equal(token.device_id, null);
 });
 
-test("registerPushToken persists the device_id when provided, as groundwork for future revocation", () => {
+test("registerPushToken persists the device_id when provided, as groundwork for future revocation", async () => {
   const o = service();
-  const token = o.registerPushToken({ expo_push_token: "ExponentPushToken[device-1]", platform: "ios", device_id: "device-uuid-1" }, { actorId: "STAFF-001" });
+  const token = await o.registerPushToken({ expo_push_token: "ExponentPushToken[device-1]", platform: "ios", device_id: "device-uuid-1" }, { actorId: "STAFF-001" });
   assert.equal(token.device_id, "device-uuid-1");
 });
 
-test("registerPushToken rejects an invalid platform", () => {
+test("registerPushToken rejects an invalid platform", async () => {
   const o = service();
-  assert.throws(() => o.registerPushToken({ expo_push_token: "ExponentPushToken[device-1]", platform: "windows" }, { actorId: "STAFF-001" }), /platform/i);
+  await assert.rejects(() => o.registerPushToken({ expo_push_token: "ExponentPushToken[device-1]", platform: "windows" }, { actorId: "STAFF-001" }), /platform/i);
 });
 
-test("registerPushToken rejects a missing token", () => {
+test("registerPushToken rejects a missing token", async () => {
   const o = service();
-  assert.throws(() => o.registerPushToken({ platform: "ios" }, { actorId: "STAFF-001" }), /expo_push_token/);
+  await assert.rejects(() => o.registerPushToken({ platform: "ios" }, { actorId: "STAFF-001" }), /expo_push_token/);
 });
 
 // --- push intents queued on assignment create/update ---
 
-test("createAssignment queues a push intent addressed to the assigned crew", () => {
+test("createAssignment queues a push intent addressed to the assigned crew", async () => {
   const o = service();
-  const inc = incident(o);
-  const assignment = o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-002", "STAFF-001"], reason: "Dispatch" }, { correlationId: "corr-1" });
+  const inc = await incident(o);
+  const assignment = await o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-002", "STAFF-001"], reason: "Dispatch" }, { correlationId: "corr-1" });
 
-  const intents = o.syncIntents.listAll().filter((i) => i.target_system === "expo");
+  const intents = (await o.syncIntents.listAll()).filter((i) => i.target_system === "expo");
   assert.equal(intents.length, 1);
   assert.deepEqual(intents[0].payload.staff_ids, ["STAFF-001", "STAFF-002"]);
   assert.equal(intents[0].payload.data.assignment_id, assignment.assignment_id);
@@ -130,38 +130,38 @@ test("createAssignment queues a push intent addressed to the assigned crew", () 
   assert.match(intents[0].payload.title, /assignment/i);
 });
 
-test("updateAssignment queues a push intent on every status transition", () => {
+test("updateAssignment queues a push intent on every status transition", async () => {
   const o = service();
-  const inc = incident(o);
-  const assignment = o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-001"], reason: "Dispatch" }, { correlationId: "corr-2" });
-  o.updateAssignment(assignment.assignment_id, { action: "confirm_assignment" }, { correlationId: "confirm" });
+  const inc = await incident(o);
+  const assignment = await o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-001"], reason: "Dispatch" }, { correlationId: "corr-2" });
+  await o.updateAssignment(assignment.assignment_id, { action: "confirm_assignment" }, { correlationId: "confirm" });
 
-  const intents = o.syncIntents.listAll().filter((i) => i.target_system === "expo");
+  const intents = (await o.syncIntents.listAll()).filter((i) => i.target_system === "expo");
   assert.equal(intents.length, 2);
   assert.deepEqual(intents[1].payload.staff_ids, ["STAFF-001"]);
   assert.match(intents[1].payload.body, /Assigned/);
 });
 
-test("updateAssignment reassignment queues a push intent with a reassignment-specific title", () => {
+test("updateAssignment reassignment queues a push intent with a reassignment-specific title", async () => {
   const o = service();
-  const inc = incident(o);
-  const assignment = o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-001"], reason: "Dispatch" }, { correlationId: "corr-3" });
-  o.updateAssignment(assignment.assignment_id, { action: "confirm_assignment" }, { correlationId: "confirm" });
-  o.updateAssignment(assignment.assignment_id, { action: "accept_assignment" }, { correlationId: "accept" });
-  o.updateAssignment(assignment.assignment_id, { action: "mobilise_unit" }, { correlationId: "mobilise" });
-  o.updateAssignment(assignment.assignment_id, { action: "activate_assignment" }, { correlationId: "activate" });
-  o.updateAssignment(assignment.assignment_id, { action: "reassign_assignment" }, { correlationId: "reassign" });
+  const inc = await incident(o);
+  const assignment = await o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-001"], reason: "Dispatch" }, { correlationId: "corr-3" });
+  await o.updateAssignment(assignment.assignment_id, { action: "confirm_assignment" }, { correlationId: "confirm" });
+  await o.updateAssignment(assignment.assignment_id, { action: "accept_assignment" }, { correlationId: "accept" });
+  await o.updateAssignment(assignment.assignment_id, { action: "mobilise_unit" }, { correlationId: "mobilise" });
+  await o.updateAssignment(assignment.assignment_id, { action: "activate_assignment" }, { correlationId: "activate" });
+  await o.updateAssignment(assignment.assignment_id, { action: "reassign_assignment" }, { correlationId: "reassign" });
 
-  const intents = o.syncIntents.listAll().filter((i) => i.target_system === "expo");
+  const intents = (await o.syncIntents.listAll()).filter((i) => i.target_system === "expo");
   const last = intents.at(-1);
   assert.equal(last.payload.title, "Assignment reassigned");
 });
 
-test("createAssignment queues no push intent when no crew is assigned", () => {
+test("createAssignment queues no push intent when no crew is assigned", async () => {
   const o = service();
-  const inc = incident(o);
-  o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: [], reason: "Dispatch" }, { correlationId: "corr-4" });
-  assert.equal(o.syncIntents.listAll().filter((i) => i.target_system === "expo").length, 0);
+  const inc = await incident(o);
+  await o.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: [], reason: "Dispatch" }, { correlationId: "corr-4" });
+  assert.equal((await o.syncIntents.listAll()).filter((i) => i.target_system === "expo").length, 0);
 });
 
 // --- ExpoPushAdapterClient ---
@@ -241,12 +241,12 @@ test("a queued assignment push intent is dispatched to every registered token fo
   const syncIntents = new SyncIntentRepository(sharedDb);
   const pushTokens = new DevicePushTokenRepository(sharedDb);
 
-  orchestration.registerPushToken({ expo_push_token: "ExponentPushToken[phone-1]", platform: "ios" }, { actorId: "STAFF-001" });
-  orchestration.registerPushToken({ expo_push_token: "ExponentPushToken[tablet-1]", platform: "android" }, { actorId: "STAFF-001" });
-  orchestration.registerPushToken({ expo_push_token: "ExponentPushToken[phone-2]", platform: "ios" }, { actorId: "STAFF-002" });
+  await orchestration.registerPushToken({ expo_push_token: "ExponentPushToken[phone-1]", platform: "ios" }, { actorId: "STAFF-001" });
+  await orchestration.registerPushToken({ expo_push_token: "ExponentPushToken[tablet-1]", platform: "android" }, { actorId: "STAFF-001" });
+  await orchestration.registerPushToken({ expo_push_token: "ExponentPushToken[phone-2]", platform: "ios" }, { actorId: "STAFF-002" });
 
-  const inc = incident(orchestration, "Push E2E");
-  orchestration.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-001", "STAFF-002"], reason: "Dispatch" }, { correlationId: "corr-e2e" });
+  const inc = await incident(orchestration, "Push E2E");
+  await orchestration.createAssignment(inc.incident_id, { vehicle_id: "AMB-901", crew_ids: ["STAFF-001", "STAFF-002"], reason: "Dispatch" }, { correlationId: "corr-e2e" });
 
   const sentMessages = [];
   const worker = new SyncWorker({
@@ -254,7 +254,7 @@ test("a queued assignment push intent is dispatched to every registered token fo
     maxAttempts: 3,
     expo: {
       async sendPush(payload) {
-        const tokens = pushTokens.listByStaffIds(payload.staff_ids).map((row) => row.expo_push_token);
+        const tokens = (await pushTokens.listByStaffIds(payload.staff_ids)).map((row) => row.expo_push_token);
         sentMessages.push({ tokens, title: payload.title });
       }
     },
@@ -263,7 +263,8 @@ test("a queued assignment push intent is dispatched to every registered token fo
   });
 
   const results = await worker.processPending(10);
-  const pushResult = results.find((r) => syncIntents.listAll().find((i) => i.intent_id === r.intent_id)?.target_system === "expo");
+  const allIntents = await syncIntents.listAll();
+  const pushResult = results.find((r) => allIntents.find((i) => i.intent_id === r.intent_id)?.target_system === "expo");
   assert.equal(pushResult.status, "succeeded");
   assert.equal(sentMessages.length, 1);
   assert.deepEqual(sentMessages[0].tokens.sort(), ["ExponentPushToken[phone-1]", "ExponentPushToken[phone-2]", "ExponentPushToken[tablet-1]"].sort());

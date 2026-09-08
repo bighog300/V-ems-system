@@ -23,27 +23,27 @@ function createIncidentPayload(description) {
   };
 }
 
-test("incident IDs remain unique and monotonic even after deleting highest record", () => {
+test("incident IDs remain unique and monotonic even after deleting highest record", async () => {
   const orchestration = new OrchestrationService({ dbPath: createDbPath() });
-  const first = orchestration.createIncident(createIncidentPayload("First"), { correlationId: "corr-id-1" });
-  const second = orchestration.createIncident(createIncidentPayload("Second"), { correlationId: "corr-id-2" });
+  const first = await orchestration.createIncident(createIncidentPayload("First"), { correlationId: "corr-id-1" });
+  const second = await orchestration.createIncident(createIncidentPayload("Second"), { correlationId: "corr-id-2" });
 
-  orchestration.db.execute(`DELETE FROM incidents WHERE incident_id = '${second.incident_id}';`);
+  await orchestration.db.execute(`DELETE FROM incidents WHERE incident_id = '${second.incident_id}';`);
 
-  const third = orchestration.createIncident(createIncidentPayload("Third"), { correlationId: "corr-id-3" });
+  const third = await orchestration.createIncident(createIncidentPayload("Third"), { correlationId: "corr-id-3" });
 
   assert.equal(first.incident_id, "INC-000001");
   assert.equal(second.incident_id, "INC-000002");
   assert.equal(third.incident_id, "INC-000003");
 });
 
-test("assignment IDs remain unique across rapid create calls", () => {
+test("assignment IDs remain unique across rapid create calls", async () => {
   const orchestration = new OrchestrationService({ dbPath: createDbPath() });
-  const incident = orchestration.createIncident(createIncidentPayload("Assignments"), { correlationId: "corr-id-assignment-1" });
+  const incident = await orchestration.createIncident(createIncidentPayload("Assignments"), { correlationId: "corr-id-assignment-1" });
 
   const ids = [];
   for (let i = 0; i < 5; i += 1) {
-    const assignment = orchestration.createAssignment(incident.incident_id, {
+    const assignment = await orchestration.createAssignment(incident.incident_id, {
       vehicle_id: `AMB-${100 + i}`,
       crew_ids: [`STAFF-${100 + i}`],
       reason: "dispatch"

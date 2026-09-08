@@ -7,11 +7,17 @@ function map(row) {
 
 export class PersonnelRepository {
   constructor(db) { this.db = db; }
-  create(personnel) {
-    this.db.execute(`INSERT INTO personnel (staff_id,display_name,role,operational_status,home_station,callsign,phone,email,notes,created_at,updated_at,correlation_id) VALUES (${sqlValue(personnel.staff_id)},${sqlValue(personnel.display_name)},${sqlValue(personnel.role)},${sqlValue(personnel.operational_status)},${sqlValue(personnel.home_station)},${sqlValue(personnel.callsign)},${sqlValue(personnel.phone)},${sqlValue(personnel.email)},${sqlValue(personnel.notes)},${sqlValue(personnel.created_at)},${sqlValue(personnel.updated_at)},${sqlValue(personnel.correlation_id)});`);
+  async create(personnel) {
+    await this.db.execute(`INSERT INTO personnel (staff_id,display_name,role,operational_status,home_station,callsign,phone,email,notes,created_at,updated_at,correlation_id) VALUES (${sqlValue(personnel.staff_id)},${sqlValue(personnel.display_name)},${sqlValue(personnel.role)},${sqlValue(personnel.operational_status)},${sqlValue(personnel.home_station)},${sqlValue(personnel.callsign)},${sqlValue(personnel.phone)},${sqlValue(personnel.email)},${sqlValue(personnel.notes)},${sqlValue(personnel.created_at)},${sqlValue(personnel.updated_at)},${sqlValue(personnel.correlation_id)});`);
   }
-  findById(id) { return map(this.db.queryOne(`SELECT * FROM personnel WHERE staff_id=${sqlValue(id)};`)); }
-  list() { return this.db.queryAll("SELECT * FROM personnel ORDER BY staff_id;").map(map); }
-  update(personnel) { this.db.execute(`UPDATE personnel SET display_name=${sqlValue(personnel.display_name)},role=${sqlValue(personnel.role)},operational_status=${sqlValue(personnel.operational_status)},home_station=${sqlValue(personnel.home_station)},callsign=${sqlValue(personnel.callsign)},phone=${sqlValue(personnel.phone)},email=${sqlValue(personnel.email)},notes=${sqlValue(personnel.notes)},updated_at=${sqlValue(personnel.updated_at)},correlation_id=${sqlValue(personnel.correlation_id)} WHERE staff_id=${sqlValue(personnel.staff_id)};`); }
-  countActiveAssignments(staffId) { return Number(this.db.queryOne(`SELECT COUNT(*) AS count FROM assignments a WHERE a.status IN ('Assigned','Accepted','Mobilised','Active') AND EXISTS (SELECT 1 FROM json_each(a.crew_ids_json) WHERE json_each.value=${sqlValue(staffId)});`)?.count ?? 0); }
+  async findById(id) { return map(await this.db.queryOne(`SELECT * FROM personnel WHERE staff_id=${sqlValue(id)};`)); }
+  async list() {
+    const rows = await this.db.queryAll("SELECT * FROM personnel ORDER BY staff_id;");
+    return rows.map(map);
+  }
+  async update(personnel) { await this.db.execute(`UPDATE personnel SET display_name=${sqlValue(personnel.display_name)},role=${sqlValue(personnel.role)},operational_status=${sqlValue(personnel.operational_status)},home_station=${sqlValue(personnel.home_station)},callsign=${sqlValue(personnel.callsign)},phone=${sqlValue(personnel.phone)},email=${sqlValue(personnel.email)},notes=${sqlValue(personnel.notes)},updated_at=${sqlValue(personnel.updated_at)},correlation_id=${sqlValue(personnel.correlation_id)} WHERE staff_id=${sqlValue(personnel.staff_id)};`); }
+  async countActiveAssignments(staffId) {
+    const row = await this.db.queryOne(`SELECT COUNT(*) AS count FROM assignments a WHERE a.status IN ('Assigned','Accepted','Mobilised','Active') AND EXISTS (SELECT 1 FROM json_each(a.crew_ids_json) WHERE json_each.value=${sqlValue(staffId)});`);
+    return Number(row?.count ?? 0);
+  }
 }

@@ -19,7 +19,7 @@ test("orchestration persisted intent is dispatched once and completed by worker"
   const sharedDb = new SqliteClient(dbPath);
   const syncIntents = new SyncIntentRepository(sharedDb);
 
-  const incident = orchestration.createIncident({
+  const incident = await orchestration.createIncident({
     call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
     incident: {
       category: "medical_emergency",
@@ -30,7 +30,7 @@ test("orchestration persisted intent is dispatched once and completed by worker"
     }
   }, { correlationId: "corr-sync-int-1" });
 
-  const [pendingIntent] = syncIntents.listPending();
+  const [pendingIntent] = await syncIntents.listPending();
   assert.equal(pendingIntent.intent_type, "createIncidentMirror");
   assert.equal(pendingIntent.status, "pending");
 
@@ -49,7 +49,7 @@ test("orchestration persisted intent is dispatched once and completed by worker"
   const firstRun = await worker.processPending(10);
   assert.equal(firstRun.length, 1);
 
-  const [processedIntent] = syncIntents.listAll();
+  const [processedIntent] = await syncIntents.listAll();
   assert.equal(dispatchCalls.length, 1);
   assert.equal(dispatchCalls[0].incident_id, incident.incident_id);
   assert.equal(processedIntent.status, "succeeded");
@@ -87,7 +87,7 @@ test("stock usage intent flows from intervention create through worker completio
   const sharedDb = new SqliteClient(dbPath);
   const syncIntents = new SyncIntentRepository(sharedDb);
 
-  const incident = orchestration.createIncident({
+  const incident = await orchestration.createIncident({
     call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
     incident: {
       category: "medical_emergency",
@@ -97,7 +97,7 @@ test("stock usage intent flows from intervention create through worker completio
       patient_count: 1
     }
   }, { correlationId: "corr-stock-flow-1" });
-  orchestration.linkPatientToIncidentContext(incident.incident_id, {
+  await orchestration.linkPatientToIncidentContext(incident.incident_id, {
     verification_status: "verified",
     openemr_patient_id: "OE-600"
   }, { correlationId: "corr-stock-flow-2" });
@@ -114,7 +114,7 @@ test("stock usage intent flows from intervention create through worker completio
     stock_item_id: "ITEM-600"
   }, { correlationId: "corr-stock-flow-4" });
 
-  const pendingStockIntent = syncIntents.listAll().find((intent) => intent.intent_type === "recordStockUsageMirror");
+  const pendingStockIntent = (await syncIntents.listAll()).find((intent) => intent.intent_type === "recordStockUsageMirror");
   assert.ok(pendingStockIntent);
   assert.equal(pendingStockIntent.status, "pending");
   assert.equal(pendingStockIntent.payload.quantity_used, 1);

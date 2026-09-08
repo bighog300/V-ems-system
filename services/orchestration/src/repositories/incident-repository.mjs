@@ -24,8 +24,8 @@ export class IncidentRepository {
     this.db = db;
   }
 
-  nextIncidentId() {
-    const row = this.db.queryOne(`
+  async nextIncidentId() {
+    const row = await this.db.queryOne(`
       INSERT INTO id_sequences (name, next_value)
       VALUES ('incident', 2)
       ON CONFLICT(name) DO UPDATE SET next_value = id_sequences.next_value + 1
@@ -34,8 +34,8 @@ export class IncidentRepository {
     return `INC-${String(row.next_id).padStart(6, "0")}`;
   }
 
-  nextCallId() {
-    const row = this.db.queryOne(`
+  async nextCallId() {
+    const row = await this.db.queryOne(`
       INSERT INTO id_sequences (name, next_value)
       VALUES ('call', 2)
       ON CONFLICT(name) DO UPDATE SET next_value = id_sequences.next_value + 1
@@ -44,22 +44,21 @@ export class IncidentRepository {
     return `CALL-${String(row.next_id).padStart(6, "0")}`;
   }
 
-  create(record) {
-    this.db.execute(`INSERT INTO incidents (incident_id, call_id, status, category, priority, description, address, patient_count, created_at, updated_at, correlation_id)
+  async create(record) {
+    await this.db.execute(`INSERT INTO incidents (incident_id, call_id, status, category, priority, description, address, patient_count, created_at, updated_at, correlation_id)
       VALUES (${sqlValue(record.incident_id)}, ${sqlValue(record.call_id)}, ${sqlValue(record.status)}, ${sqlValue(record.category)}, ${sqlValue(record.priority)}, ${sqlValue(record.description)}, ${sqlValue(record.address)}, ${sqlValue(record.patient_count)}, ${sqlValue(record.created_at)}, ${sqlValue(record.updated_at)}, ${sqlValue(record.correlation_id)});`);
   }
 
-  findById(incidentId) {
-    return mapIncident(this.db.queryOne(`SELECT incidents.*, calls.call_source, calls.received_at FROM incidents LEFT JOIN calls ON calls.call_id=incidents.call_id WHERE incidents.incident_id = ${sqlValue(incidentId)};`));
+  async findById(incidentId) {
+    return mapIncident(await this.db.queryOne(`SELECT incidents.*, calls.call_source, calls.received_at FROM incidents LEFT JOIN calls ON calls.call_id=incidents.call_id WHERE incidents.incident_id = ${sqlValue(incidentId)};`));
   }
 
-  listAll() {
-    return this.db
-      .queryAll("SELECT incidents.*, calls.call_source, calls.received_at FROM incidents LEFT JOIN calls ON calls.call_id=incidents.call_id ORDER BY incidents.created_at DESC;")
-      .map(mapIncident);
+  async listAll() {
+    const rows = await this.db.queryAll("SELECT incidents.*, calls.call_source, calls.received_at FROM incidents LEFT JOIN calls ON calls.call_id=incidents.call_id ORDER BY incidents.created_at DESC;");
+    return rows.map(mapIncident);
   }
 
-  updateStatus(incidentId, status, updatedAt, correlationId) {
-    this.db.execute(`UPDATE incidents SET status = ${sqlValue(status)}, updated_at = ${sqlValue(updatedAt)}, correlation_id = ${sqlValue(correlationId)} WHERE incident_id = ${sqlValue(incidentId)};`);
+  async updateStatus(incidentId, status, updatedAt, correlationId) {
+    await this.db.execute(`UPDATE incidents SET status = ${sqlValue(status)}, updated_at = ${sqlValue(updatedAt)}, correlation_id = ${sqlValue(correlationId)} WHERE incident_id = ${sqlValue(incidentId)};`);
   }
 }
