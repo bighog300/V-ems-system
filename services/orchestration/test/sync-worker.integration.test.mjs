@@ -19,7 +19,7 @@ test("orchestration persisted intent is dispatched once and completed by worker"
   const sharedDb = new SqliteClient(dbPath);
   const syncIntents = new SyncIntentRepository(sharedDb);
 
-  const incident = orchestration.createIncident({
+  const incident = await orchestration.createIncident({
     call: { call_source: "phone", received_at: "2026-04-16T10:00:00Z" },
     incident: {
       category: "medical_emergency",
@@ -30,7 +30,7 @@ test("orchestration persisted intent is dispatched once and completed by worker"
     }
   }, { correlationId: "corr-sync-int-1" });
 
-  const [pendingIntent] = syncIntents.listPending();
+  const [pendingIntent] = await syncIntents.listPending();
   assert.equal(pendingIntent.intent_type, "createIncidentMirror");
   assert.equal(pendingIntent.status, "pending");
 

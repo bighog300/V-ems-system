@@ -33,12 +33,12 @@ export class SyncWorker {
   }
 
   async processPending(limit = 100) {
-    const intents = this.syncIntents.listPending(limit);
+    const intents = await this.syncIntents.listPending(limit);
     const results = [];
 
     for (const intent of intents) {
       const token = `${process.pid}-${Date.now()}-${intent.intent_id}`;
-      if (typeof this.syncIntents.claim === "function" && !this.syncIntents.claim(intent.intent_id, token, this.leaseMs ?? 30000)) continue;
+      if (typeof this.syncIntents.claim === "function" && !(await this.syncIntents.claim(intent.intent_id, token, this.leaseMs ?? 30000))) continue;
       results.push(await this.processIntent({ ...intent, claim_token: token }));
     }
 
@@ -82,7 +82,7 @@ export class SyncWorker {
     try {
       const result = await adapter[methodName](intent.payload);
       const handled = this.onSuccess ? await this.onSuccess(intent, result) : false;
-      if (!handled) this.syncIntents.markSucceeded(intent.intent_id, new Date().toISOString());
+      if (!handled) await this.syncIntents.markSucceeded(intent.intent_id, new Date().toISOString());
       this.metrics.succeeded_intents += 1;
       return { intent_id: intent.intent_id, status: "succeeded" };
     } catch (error) {
@@ -90,10 +90,10 @@ export class SyncWorker {
     }
   }
 
-  handleFailure(intent, error) {
+  async handleFailure(intent, error) {
     if (error?.code === "VTIGER_DEPENDENCY_PENDING") {
       const nextAttemptAt = new Date(Date.now() + Math.max(1000, this.baseBackoffMs || 1000)).toISOString();
-      this.syncIntents.markFailed(intent.intent_id, {
+      await this.syncIntents.markFailed(intent.intent_id, {
         status: "pending",
         attempt_count: intent.attempt_count,
         last_error: error.message,
@@ -103,7 +103,7 @@ export class SyncWorker {
         retryable: true,
         outcome_unknown: false
       });
-      if (this.onFailure) this.onFailure(intent, error, { status: "pending", attemptCount: intent.attempt_count, retryable: true, nextAttemptAt });
+      if (this.onFailure) await this.onFailure(intent, error, { status: "pending", attemptCount: intent.attempt_count, retryable: true, nextAttemptAt });
       return { intent_id: intent.intent_id, status: "pending" };
     }
     const attemptCount = intent.attempt_count + 1;
@@ -120,7 +120,7 @@ export class SyncWorker {
       : Math.max(1000, Math.min(this.maxBackoffMs, this.baseBackoffMs * (2 ** Math.max(0, attemptCount - 1)) + Math.floor(Math.random() * 250)));
     const nextAttemptAt = deadLettered ? null : new Date(Date.now() + delayMs).toISOString();
 
-    this.syncIntents.markFailed(intent.intent_id, {
+    await this.syncIntents.markFailed(intent.intent_id, {
       status: deadLettered ? "dead_lettered" : "pending",
       attempt_count: attemptCount,
       last_error: error?.message ?? "Unknown sync failure",
@@ -130,7 +130,7 @@ export class SyncWorker {
       retryable,
       outcome_unknown: Boolean(error?.outcomeUnknown)
     });
-    if (this.onFailure) this.onFailure(intent, error, { status: deadLettered ? "dead_lettered" : "retrying", attemptCount, retryable, nextAttemptAt });
+    if (this.onFailure) await this.onFailure(intent, error, { status: deadLettered ? "dead_lettered" : "retrying", attemptCount, retryable, nextAttemptAt });
 
     this.metrics.failed_intents += 1;
     if (deadLettered) this.metrics.dead_lettered_intents += 1;

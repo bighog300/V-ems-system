@@ -31,30 +31,31 @@ export class EncounterLinkRepository {
     this.db = db;
   }
 
-  findByPatientCaseId(id) {
-    return mapEncounterLink(this.db.queryOne(`SELECT * FROM patient_case_encounter_links WHERE patient_case_id = ${sqlValue(id)};`));
+  async findByPatientCaseId(id) {
+    return mapEncounterLink(await this.db.queryOne(`SELECT * FROM patient_case_encounter_links WHERE patient_case_id = ${sqlValue(id)};`));
   }
 
-  listByIncidentId(id) {
-    return this.db.queryAll(`SELECT * FROM patient_case_encounter_links WHERE incident_id = ${sqlValue(id)};`).map(mapEncounterLink);
+  async listByIncidentId(id) {
+    const rows = await this.db.queryAll(`SELECT * FROM patient_case_encounter_links WHERE incident_id = ${sqlValue(id)};`);
+    return rows.map(mapEncounterLink);
   }
 
-  findByIncidentId(incidentId) {
-    const records = this.listByIncidentId(incidentId);
+  async findByIncidentId(incidentId) {
+    const records = await this.listByIncidentId(incidentId);
     if (records.length > 1) throw new ApiError('CONFLICT', 'Multiple patient cases: patient_case_id is required', 409);
     return records[0];
   }
 
-  findByEncounterId(encounterId) {
-    return mapEncounterLink(this.db.queryOne(`SELECT * FROM patient_case_encounter_links WHERE openemr_encounter_id = ${sqlValue(encounterId)};`));
+  async findByEncounterId(encounterId) {
+    return mapEncounterLink(await this.db.queryOne(`SELECT * FROM patient_case_encounter_links WHERE openemr_encounter_id = ${sqlValue(encounterId)};`));
   }
 
-  findByIncidentAndPatient(incidentId, patientId) {
-    return mapEncounterLink(this.db.queryOne(`SELECT * FROM patient_case_encounter_links WHERE incident_id = ${sqlValue(incidentId)} AND openemr_patient_id = ${sqlValue(patientId)};`));
+  async findByIncidentAndPatient(incidentId, patientId) {
+    return mapEncounterLink(await this.db.queryOne(`SELECT * FROM patient_case_encounter_links WHERE incident_id = ${sqlValue(incidentId)} AND openemr_patient_id = ${sqlValue(patientId)};`));
   }
 
-  save(record) {
-    this.db.execute(`INSERT INTO patient_case_encounter_links (patient_case_id, incident_id, openemr_patient_id, openemr_encounter_id, encounter_status, care_started_at, handover_time, handover_status, disposition, destination_facility, receiving_clinician, handover_notes, closure_ready, location_lat, location_lng, location_accuracy_m, created_at, updated_at, correlation_id)
+  async save(record) {
+    await this.db.execute(`INSERT INTO patient_case_encounter_links (patient_case_id, incident_id, openemr_patient_id, openemr_encounter_id, encounter_status, care_started_at, handover_time, handover_status, disposition, destination_facility, receiving_clinician, handover_notes, closure_ready, location_lat, location_lng, location_accuracy_m, created_at, updated_at, correlation_id)
       VALUES (${sqlValue(record.patient_case_id)}, ${sqlValue(record.incident_id)}, ${sqlValue(record.openemr_patient_id)}, ${sqlValue(record.openemr_encounter_id)}, ${sqlValue(record.encounter_status)}, ${sqlValue(record.care_started_at)}, ${sqlValue(record.handover_time ?? null)}, ${sqlValue(record.handover_status ?? null)}, ${sqlValue(record.disposition ?? null)}, ${sqlValue(record.destination_facility ?? null)}, ${sqlValue(record.receiving_clinician ?? null)}, ${sqlValue(record.handover_notes ?? null)}, ${sqlValue(record.closure_ready ? 1 : 0)}, ${sqlValue(record.location_lat ?? null)}, ${sqlValue(record.location_lng ?? null)}, ${sqlValue(record.location_accuracy_m ?? null)}, ${sqlValue(record.created_at)}, ${sqlValue(record.updated_at)}, ${sqlValue(record.correlation_id)})
       ON CONFLICT(patient_case_id) DO UPDATE SET
         openemr_patient_id = excluded.openemr_patient_id,

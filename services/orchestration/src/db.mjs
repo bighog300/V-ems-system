@@ -35,6 +35,17 @@ function migrationFiles() {
     }));
 }
 
+/**
+ * SqliteClient implements the shared async DbClient interface
+ * (queryOne/queryAll/execute/transaction/withTransaction, all
+ * Promise-returning) that Stage 12's PostgresClient will implement
+ * alongside it. node:sqlite itself has no real async I/O to wait on, so
+ * this is a pure interface-level change — every public method just wraps
+ * the same synchronous work in a resolved Promise. Migration bootstrap
+ * still runs entirely through the sync primitives below: it happens inside
+ * the constructor, which can't be async, so it can never go through the
+ * public async methods.
+ */
 export class SqliteClient {
   constructor(dbPath = process.env.VEMS_DB_PATH ?? ".data/platform.sqlite") {
     this.dbPath = resolve(dbPath);
@@ -48,34 +59,36 @@ export class SqliteClient {
   }
 
   bootstrap() {
-    this.execute(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    this.executeSync(`CREATE TABLE IF NOT EXISTS schema_migrations (
       id TEXT PRIMARY KEY,
       applied_at TEXT NOT NULL
     );`);
 
     for (const migration of migrationFiles()) {
-      const existing = this.queryOne(`SELECT id FROM schema_migrations WHERE id = ${sqlValue(migration.id)};`);
+      const existing = this.queryOneSync(`SELECT id FROM schema_migrations WHERE id = ${sqlValue(migration.id)};`);
       if (existing) continue;
       const sql = readFileSync(migration.file, "utf8");
-      this.transaction([
+      this.transactionSync([
         sql,
         `INSERT INTO schema_migrations (id, applied_at) VALUES (${sqlValue(migration.id)}, ${sqlValue(new Date().toISOString())});`
       ]);
     }
   }
 
-  queryAll(sql) {
+  // --- sync primitives (bootstrap only — never called from repositories/OrchestrationService) ---
+
+  queryAllSync(sql) {
     if (this.db) return this.db.prepare(sql).all();
     const output = runSqlite(this.dbPath, ["-json"], sql);
     return output.trim() ? JSON.parse(output) : [];
   }
 
-  queryOne(sql) {
+  queryOneSync(sql) {
     if (this.db) return this.db.prepare(sql).get();
-    return this.queryAll(sql)[0];
+    return this.queryAllSync(sql)[0];
   }
 
-  execute(sql) {
+  executeSync(sql) {
     if (this.db) {
       this.db.exec(sql);
       return;
@@ -83,7 +96,7 @@ export class SqliteClient {
     runSqlite(this.dbPath, [], sql);
   }
 
-  transaction(statements) {
+  transactionSync(statements) {
     if (this.db) {
       this.db.exec("BEGIN IMMEDIATE;");
       try {
@@ -98,10 +111,10 @@ export class SqliteClient {
 
     const script = ["BEGIN IMMEDIATE;", ...statements, "COMMIT;"].join("\n");
     try {
-      this.execute(script);
+      this.executeSync(script);
     } catch (error) {
       try {
-        this.execute("ROLLBACK;");
+        this.executeSync("ROLLBACK;");
       } catch {
         // no-op
       }
@@ -109,11 +122,29 @@ export class SqliteClient {
     }
   }
 
-  withTransaction(callback) {
+  // --- async DbClient interface (everything outside bootstrap) ---
+
+  async queryAll(sql) {
+    return this.queryAllSync(sql);
+  }
+
+  async queryOne(sql) {
+    return this.queryOneSync(sql);
+  }
+
+  async execute(sql) {
+    return this.executeSync(sql);
+  }
+
+  async transaction(statements) {
+    return this.transactionSync(statements);
+  }
+
+  async withTransaction(callback) {
     if (this.db) {
       this.db.exec("BEGIN IMMEDIATE;");
       try {
-        const result = callback();
+        const result = await callback();
         this.db.exec("COMMIT;");
         return result;
       } catch (error) {
@@ -121,13 +152,17 @@ export class SqliteClient {
         throw error;
       }
     }
-    this.execute("BEGIN IMMEDIATE;");
+    this.executeSync("BEGIN IMMEDIATE;");
     try {
-      const result = callback();
-      this.execute("COMMIT;");
+      const result = await callback();
+      this.executeSync("COMMIT;");
       return result;
     } catch (error) {
-      try { this.execute("ROLLBACK;"); } catch {}
+      try {
+        this.executeSync("ROLLBACK;");
+      } catch {
+        // no-op
+      }
       throw error;
     }
   }

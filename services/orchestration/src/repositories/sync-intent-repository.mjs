@@ -30,35 +30,37 @@ export class SyncIntentRepository {
     this.db = db;
   }
 
-  append(intent) {
+  async append(intent) {
     const createdAt = intent.created_at;
-    this.db.execute(`INSERT INTO sync_intents (target_system, intent_type, entity_type, operation, correlation_id, created_at, status, attempt_count, next_attempt_at, payload_json)
+    await this.db.execute(`INSERT INTO sync_intents (target_system, intent_type, entity_type, operation, correlation_id, created_at, status, attempt_count, next_attempt_at, payload_json)
       VALUES (${sqlValue(intent.target_system)}, ${sqlValue(intent.intent_type ?? intent.operation)}, ${sqlValue(intent.entity_type)}, ${sqlValue(intent.operation)}, ${sqlValue(intent.correlation_id)}, ${sqlValue(createdAt)}, 'pending', 0, ${sqlValue(createdAt)}, ${sqlValue(JSON.stringify(intent.payload))});`);
   }
 
-  listAll() {
-    return this.db.queryAll("SELECT * FROM sync_intents ORDER BY intent_id;").map(mapIntent);
+  async listAll() {
+    const rows = await this.db.queryAll("SELECT * FROM sync_intents ORDER BY intent_id;");
+    return rows.map(mapIntent);
   }
 
-  listPending(limit = 100) {
-    return this.db.queryAll(
+  async listPending(limit = 100) {
+    const rows = await this.db.queryAll(
       `SELECT * FROM sync_intents WHERE (status = 'pending' OR (status='processing' AND lease_expires_at IS NOT NULL AND julianday(lease_expires_at) <= julianday('now'))) AND (next_attempt_at IS NULL OR julianday(next_attempt_at) <= julianday('now')) ORDER BY intent_id LIMIT ${sqlValue(limit)};`
-    ).map(mapIntent);
+    );
+    return rows.map(mapIntent);
   }
 
-  claim(intentId, token, leaseMs = 30000) {
+  async claim(intentId, token, leaseMs = 30000) {
     const now = new Date().toISOString();
     const expires = new Date(Date.now() + leaseMs).toISOString();
-    return this.db.withTransaction(() => {
-      const current = this.db.queryOne(`SELECT status,claim_token,lease_expires_at FROM sync_intents WHERE intent_id=${sqlValue(intentId)};`);
+    return this.db.withTransaction(async () => {
+      const current = await this.db.queryOne(`SELECT status,claim_token,lease_expires_at FROM sync_intents WHERE intent_id=${sqlValue(intentId)};`);
       if (!current || (current.status === "processing" && current.lease_expires_at > now && current.claim_token !== token)) return false;
-      this.db.execute(`UPDATE sync_intents SET status='processing', claim_token=${sqlValue(token)}, claimed_at=${sqlValue(now)}, lease_expires_at=${sqlValue(expires)} WHERE intent_id=${sqlValue(intentId)};`);
+      await this.db.execute(`UPDATE sync_intents SET status='processing', claim_token=${sqlValue(token)}, claimed_at=${sqlValue(now)}, lease_expires_at=${sqlValue(expires)} WHERE intent_id=${sqlValue(intentId)};`);
       return true;
     });
   }
 
-  markSucceeded(intentId, processedAt) {
-    this.db.execute(`UPDATE sync_intents
+  async markSucceeded(intentId, processedAt) {
+    await this.db.execute(`UPDATE sync_intents
       SET status = 'succeeded',
           processed_at = ${sqlValue(processedAt)},
           last_error = NULL,
@@ -70,8 +72,8 @@ export class SyncIntentRepository {
       WHERE intent_id = ${sqlValue(intentId)};`);
   }
 
-  markFailed(intentId, failure) {
-    this.db.execute(`UPDATE sync_intents
+  async markFailed(intentId, failure) {
+    await this.db.execute(`UPDATE sync_intents
       SET status = ${sqlValue(failure.status)},
           attempt_count = ${sqlValue(failure.attempt_count)},
           last_error = ${sqlValue(failure.last_error)},
@@ -86,8 +88,8 @@ export class SyncIntentRepository {
       WHERE intent_id = ${sqlValue(intentId)};`);
   }
 
-  replayDeadLetter(intentId) {
-    this.db.execute(`UPDATE sync_intents
+  async replayDeadLetter(intentId) {
+    await this.db.execute(`UPDATE sync_intents
       SET status = 'pending',
           attempt_count = 0,
           last_error = NULL,

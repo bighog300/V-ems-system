@@ -21,8 +21,8 @@ export class AssignmentRepository {
     this.db = db;
   }
 
-  nextAssignmentId() {
-    const row = this.db.queryOne(`
+  async nextAssignmentId() {
+    const row = await this.db.queryOne(`
       INSERT INTO id_sequences (name, next_value)
       VALUES ('assignment', 2)
       ON CONFLICT(name) DO UPDATE SET next_value = id_sequences.next_value + 1
@@ -31,37 +31,36 @@ export class AssignmentRepository {
     return `ASN-${String(row.next_id).padStart(6, "0")}`;
   }
 
-  create(record) {
-    this.db.execute(`INSERT INTO assignments (assignment_id, incident_id, status, vehicle_status, vehicle_id, crew_ids_json, reason, created_at, updated_at, correlation_id)
+  async create(record) {
+    await this.db.execute(`INSERT INTO assignments (assignment_id, incident_id, status, vehicle_status, vehicle_id, crew_ids_json, reason, created_at, updated_at, correlation_id)
       VALUES (${sqlValue(record.assignment_id)}, ${sqlValue(record.incident_id)}, ${sqlValue(record.status)}, ${sqlValue(record.vehicle_status)}, ${sqlValue(record.vehicle_id)}, ${sqlValue(JSON.stringify(record.crew_ids))}, ${sqlValue(record.reason)}, ${sqlValue(record.created_at)}, ${sqlValue(record.updated_at)}, ${sqlValue(record.correlation_id)});`);
   }
 
-  findById(assignmentId) {
-    return mapAssignment(this.db.queryOne(`SELECT * FROM assignments WHERE assignment_id = ${sqlValue(assignmentId)};`));
+  async findById(assignmentId) {
+    return mapAssignment(await this.db.queryOne(`SELECT * FROM assignments WHERE assignment_id = ${sqlValue(assignmentId)};`));
   }
 
-  updateStatus(assignmentId, status, updatedAt, correlationId) {
-    this.db.execute(`UPDATE assignments SET status = ${sqlValue(status)}, updated_at = ${sqlValue(updatedAt)}, correlation_id = ${sqlValue(correlationId)} WHERE assignment_id = ${sqlValue(assignmentId)};`);
+  async updateStatus(assignmentId, status, updatedAt, correlationId) {
+    await this.db.execute(`UPDATE assignments SET status = ${sqlValue(status)}, updated_at = ${sqlValue(updatedAt)}, correlation_id = ${sqlValue(correlationId)} WHERE assignment_id = ${sqlValue(assignmentId)};`);
   }
 
-  findActiveByIncident(incidentId) {
-    return this.db.queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} AND status IN ('Assigned', 'Accepted', 'Mobilised', 'Active');`).map(mapAssignment);
+  async findActiveByIncident(incidentId) {
+    const rows = await this.db.queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} AND status IN ('Assigned', 'Accepted', 'Mobilised', 'Active');`);
+    return rows.map(mapAssignment);
   }
 
-  findActiveByCrewMember(actorId) {
-    return this.db
-      .queryAll(`
+  async findActiveByCrewMember(actorId) {
+    const rows = await this.db.queryAll(`
         SELECT * FROM assignments
         WHERE status IN ('Assigned', 'Accepted', 'Mobilised', 'Active')
           AND EXISTS (SELECT 1 FROM json_each(crew_ids_json) WHERE json_each.value = ${sqlValue(actorId)})
         ORDER BY created_at DESC;
-      `)
-      .map(mapAssignment);
+      `);
+    return rows.map(mapAssignment);
   }
 
-  findByIncidentId(incidentId) {
-    return this.db
-      .queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} ORDER BY created_at DESC;`)
-      .map(mapAssignment);
+  async findByIncidentId(incidentId) {
+    const rows = await this.db.queryAll(`SELECT * FROM assignments WHERE incident_id = ${sqlValue(incidentId)} ORDER BY created_at DESC;`);
+    return rows.map(mapAssignment);
   }
 }

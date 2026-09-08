@@ -17,8 +17,8 @@ function createIntentRepository() {
   return new SyncIntentRepository(db);
 }
 
-function appendIntent(syncIntents, intent) {
-  syncIntents.append({
+async function appendIntent(syncIntents, intent) {
+  await syncIntents.append({
     target_system: intent.target_system,
     intent_type: intent.intent_type,
     entity_type: intent.entity_type ?? "incident",
@@ -28,12 +28,12 @@ function appendIntent(syncIntents, intent) {
     payload: intent.payload ?? { id: "x" }
   });
 
-  return syncIntents.listAll().at(-1);
+  return (await syncIntents.listAll()).at(-1);
 }
 
 test("pending intent gets processed successfully", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "createIncidentMirror",
     payload: { incident_id: "INC-000001" }
@@ -52,7 +52,7 @@ test("pending intent gets processed successfully", async () => {
 
   await worker.processPending();
 
-  const [intent] = syncIntents.listAll();
+  const [intent] = await syncIntents.listAll();
   assert.equal(calls.length, 1);
   assert.equal(intent.status, "succeeded");
   assert.equal(intent.processed_at !== null, true);
@@ -61,7 +61,7 @@ test("pending intent gets processed successfully", async () => {
 
 test("failed intent increments retry count and keeps error classification", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "updateIncidentMirror",
     payload: { incident_id: "INC-000002" }
@@ -82,7 +82,7 @@ test("failed intent increments retry count and keeps error classification", asyn
 
   await worker.processPending();
 
-  const [intent] = syncIntents.listAll();
+  const [intent] = await syncIntents.listAll();
   assert.equal(intent.status, "pending");
   assert.equal(intent.attempt_count, 1);
   assert.equal(intent.last_error, "temporary upstream outage");
@@ -91,7 +91,7 @@ test("failed intent increments retry count and keeps error classification", asyn
 
 test("intent dead-letters after max attempts", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "createAssignmentMirror",
     payload: { assignment_id: "ASN-000001" }
@@ -111,7 +111,7 @@ test("intent dead-letters after max attempts", async () => {
   await worker.processPending();
   await worker.processPending();
 
-  const [intent] = syncIntents.listAll();
+  const [intent] = await syncIntents.listAll();
   assert.equal(intent.status, "dead_lettered");
   assert.equal(intent.attempt_count, 2);
   assert.equal(intent.dead_lettered_at !== null, true);
@@ -119,19 +119,19 @@ test("intent dead-letters after max attempts", async () => {
 
 test("worker dispatches to correct adapter method based on target_system and intent_type", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "updateAssignmentMirror",
     payload: { assignment_id: "ASN-100" }
   });
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "openemr",
     intent_type: "createEncounter",
     entity_type: "encounter",
     operation: "createEncounter",
     payload: { encounter_id: "ENC-100" }
   });
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "recordStockUsageMirror",
     entity_type: "stock_usage",
@@ -168,7 +168,7 @@ test("worker dispatches to correct adapter method based on target_system and int
 
 test("failed stock usage sync intent retries and dead-letters at max attempts", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "recordStockUsageMirror",
     entity_type: "stock_usage",
@@ -190,13 +190,13 @@ test("failed stock usage sync intent retries and dead-letters at max attempts", 
   });
 
   await worker.processPending();
-  let [intent] = syncIntents.listAll();
+  let [intent] = await syncIntents.listAll();
   assert.equal(intent.status, "pending");
   assert.equal(intent.attempt_count, 1);
   assert.equal(intent.last_error_classification, "DOWNSTREAM_TIMEOUT");
 
   await worker.processPending();
-  [intent] = syncIntents.listAll();
+  [intent] = await syncIntents.listAll();
   assert.equal(intent.status, "dead_lettered");
   assert.equal(intent.attempt_count, 2);
   assert.equal(intent.dead_lettered_at !== null, true);
@@ -204,7 +204,7 @@ test("failed stock usage sync intent retries and dead-letters at max attempts", 
 
 test("worker does not reprocess already completed intents", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "createIncidentMirror",
     payload: { incident_id: "INC-000003" }
@@ -225,23 +225,23 @@ test("worker does not reprocess already completed intents", async () => {
   await worker.processPending();
 
   assert.equal(count, 1);
-  const [intent] = syncIntents.listAll();
+  const [intent] = await syncIntents.listAll();
   assert.equal(intent.status, "succeeded");
 });
 
 test("worker metrics track processed, succeeded, failed, and dead-lettered intents", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "createIncidentMirror",
     payload: { incident_id: "INC-200001" }
   });
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "updateIncidentMirror",
     payload: { incident_id: "INC-200002" }
   });
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "openemr",
     intent_type: "createEncounter",
     operation: "createEncounter",
@@ -271,7 +271,7 @@ test("worker metrics track processed, succeeded, failed, and dead-lettered inten
 
 test("processCycle returns a metrics snapshot", async () => {
   const syncIntents = createIntentRepository();
-  appendIntent(syncIntents, {
+  await appendIntent(syncIntents, {
     target_system: "vtiger",
     intent_type: "createIncidentMirror",
     payload: { incident_id: "INC-300001" }

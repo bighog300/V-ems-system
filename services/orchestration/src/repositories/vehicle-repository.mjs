@@ -7,11 +7,17 @@ function map(row) {
 
 export class VehicleRepository {
   constructor(db) { this.db = db; }
-  create(vehicle) {
-    this.db.execute(`INSERT INTO vehicles (vehicle_id,callsign,vehicle_type,operational_status,service_status,home_station,notes,created_at,updated_at,correlation_id) VALUES (${sqlValue(vehicle.vehicle_id)},${sqlValue(vehicle.callsign)},${sqlValue(vehicle.vehicle_type)},${sqlValue(vehicle.operational_status)},${sqlValue(vehicle.service_status)},${sqlValue(vehicle.home_station)},${sqlValue(vehicle.notes)},${sqlValue(vehicle.created_at)},${sqlValue(vehicle.updated_at)},${sqlValue(vehicle.correlation_id)});`);
+  async create(vehicle) {
+    await this.db.execute(`INSERT INTO vehicles (vehicle_id,callsign,vehicle_type,operational_status,service_status,home_station,notes,created_at,updated_at,correlation_id) VALUES (${sqlValue(vehicle.vehicle_id)},${sqlValue(vehicle.callsign)},${sqlValue(vehicle.vehicle_type)},${sqlValue(vehicle.operational_status)},${sqlValue(vehicle.service_status)},${sqlValue(vehicle.home_station)},${sqlValue(vehicle.notes)},${sqlValue(vehicle.created_at)},${sqlValue(vehicle.updated_at)},${sqlValue(vehicle.correlation_id)});`);
   }
-  findById(id) { return map(this.db.queryOne(`SELECT * FROM vehicles WHERE vehicle_id=${sqlValue(id)};`)); }
-  list() { return this.db.queryAll("SELECT * FROM vehicles ORDER BY vehicle_id;").map(map); }
-  update(vehicle) { this.db.execute(`UPDATE vehicles SET callsign=${sqlValue(vehicle.callsign)},vehicle_type=${sqlValue(vehicle.vehicle_type)},operational_status=${sqlValue(vehicle.operational_status)},service_status=${sqlValue(vehicle.service_status)},home_station=${sqlValue(vehicle.home_station)},notes=${sqlValue(vehicle.notes)},updated_at=${sqlValue(vehicle.updated_at)},correlation_id=${sqlValue(vehicle.correlation_id)} WHERE vehicle_id=${sqlValue(vehicle.vehicle_id)};`); }
-  countActiveAssignments(vehicleId) { return Number(this.db.queryOne(`SELECT COUNT(*) AS count FROM assignments WHERE vehicle_id=${sqlValue(vehicleId)} AND status NOT IN ('Completed','Cancelled','Stood Down');`)?.count ?? 0); }
+  async findById(id) { return map(await this.db.queryOne(`SELECT * FROM vehicles WHERE vehicle_id=${sqlValue(id)};`)); }
+  async list() {
+    const rows = await this.db.queryAll("SELECT * FROM vehicles ORDER BY vehicle_id;");
+    return rows.map(map);
+  }
+  async update(vehicle) { await this.db.execute(`UPDATE vehicles SET callsign=${sqlValue(vehicle.callsign)},vehicle_type=${sqlValue(vehicle.vehicle_type)},operational_status=${sqlValue(vehicle.operational_status)},service_status=${sqlValue(vehicle.service_status)},home_station=${sqlValue(vehicle.home_station)},notes=${sqlValue(vehicle.notes)},updated_at=${sqlValue(vehicle.updated_at)},correlation_id=${sqlValue(vehicle.correlation_id)} WHERE vehicle_id=${sqlValue(vehicle.vehicle_id)};`); }
+  async countActiveAssignments(vehicleId) {
+    const row = await this.db.queryOne(`SELECT COUNT(*) AS count FROM assignments WHERE vehicle_id=${sqlValue(vehicleId)} AND status NOT IN ('Completed','Cancelled','Stood Down');`);
+    return Number(row?.count ?? 0);
+  }
 }
