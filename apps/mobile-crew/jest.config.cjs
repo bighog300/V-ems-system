@@ -2,6 +2,11 @@
 module.exports = {
   preset: "jest-expo",
   testMatch: ["<rootDir>/test/**/*.jest.test.tsx"],
+  // CI runs jest workers in parallel under real resource contention, and the
+  // default 5000ms budget has been observed to trip on an otherwise-passing
+  // render under that load (not a hang) — give tests headroom without
+  // masking a genuine one.
+  testTimeout: 20000,
   transformIgnorePatterns: [
     "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@noble/.*)"
   ],
