@@ -2,12 +2,16 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
+import { captureDocument, capturePhoto } from "../attachments/captureAttachment.ts";
 import { createPatientCaseEncounter, getPatientCaseEncounterCached, type PatientCaseEncounter } from "../api/encounters.ts";
 import { LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { getPatientCaseCached, getPatientCaseDemographicsCached, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
 import LocationPermissionNotice from "../components/LocationPermissionNotice.tsx";
 import { captureLocation, getLocationPermissionStatus, requestLocationPermission, type LocationPermissionStatus } from "../location/captureLocation.ts";
+import { getOrCreateEncryptionKey } from "../offline/crypto.ts";
+import { getOfflineDatabase } from "../offline/db.ts";
+import { enqueueAttachment, listAttachments, type AttachmentMetadata } from "../offline/attachmentStore.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface PatientCaseDetailScreenProps {
@@ -67,6 +71,56 @@ export default function PatientCaseDetailScreen({
       setLocationPermissionStatus(await requestLocationPermission());
     } finally {
       setEnablingLocation(false);
+    }
+  }
+
+  const [attachments, setAttachments] = useState<AttachmentMetadata[]>([]);
+  const [capturingPhoto, setCapturingPhoto] = useState(false);
+  const [capturingDocument, setCapturingDocument] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  const loadAttachments = useCallback(async () => {
+    const db = await getOfflineDatabase();
+    setAttachments(await listAttachments(db, initialCase.patient_case_id));
+  }, [initialCase.patient_case_id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAttachments();
+    }, [loadAttachments])
+  );
+
+  async function handleTakePhoto() {
+    setCapturingPhoto(true);
+    setAttachmentError(null);
+    try {
+      const photo = await capturePhoto();
+      if (!photo) return;
+      const db = await getOfflineDatabase();
+      const key = await getOrCreateEncryptionKey();
+      await enqueueAttachment(db, key, { patientCaseId: initialCase.patient_case_id, ...photo });
+      await loadAttachments();
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : "Failed to capture photo.");
+    } finally {
+      setCapturingPhoto(false);
+    }
+  }
+
+  async function handleAddDocument() {
+    setCapturingDocument(true);
+    setAttachmentError(null);
+    try {
+      const document = await captureDocument();
+      if (!document) return;
+      const db = await getOfflineDatabase();
+      const key = await getOrCreateEncryptionKey();
+      await enqueueAttachment(db, key, { patientCaseId: initialCase.patient_case_id, ...document });
+      await loadAttachments();
+    } catch (err) {
+      setAttachmentError(err instanceof Error ? err.message : "Failed to add document.");
+    } finally {
+      setCapturingDocument(false);
     }
   }
 
@@ -372,6 +426,54 @@ export default function PatientCaseDetailScreen({
               </>
             )}
           </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Attachments</Text>
+
+            {attachmentError ? (
+              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="attachment-error">
+                {attachmentError}
+              </Text>
+            ) : null}
+
+            {attachments.length === 0 ? (
+              <Text style={styles.hint} testID="attachments-empty">
+                No attachments captured yet.
+              </Text>
+            ) : (
+              attachments.map((attachment) => (
+                <View key={attachment.attachmentId} style={styles.attachmentRow} testID={`attachment-${attachment.attachmentId}`}>
+                  <Text style={styles.attachmentName} testID={`attachment-name-${attachment.fileName}`}>
+                    {attachment.fileName}
+                  </Text>
+                  <Text style={styles.hint}>
+                    {attachment.kind === "photo" ? "Photo" : "Document"} · queued — will upload once available
+                  </Text>
+                </View>
+              ))
+            )}
+
+            <Pressable
+              style={[styles.button, styles.spacedButton, capturingPhoto && styles.buttonDisabled]}
+              onPress={handleTakePhoto}
+              disabled={capturingPhoto}
+              accessibilityRole="button"
+              accessibilityLabel="Take photo"
+              testID="take-photo"
+            >
+              {capturingPhoto ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Take photo</Text>}
+            </Pressable>
+            <Pressable
+              style={[styles.button, styles.spacedButton, capturingDocument && styles.buttonDisabled]}
+              onPress={handleAddDocument}
+              disabled={capturingDocument}
+              accessibilityRole="button"
+              accessibilityLabel="Add document"
+              testID="add-document"
+            >
+              {capturingDocument ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Add document</Text>}
+            </Pressable>
+          </View>
         </>
       )}
 
@@ -445,6 +547,16 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 13,
     color: "#999"
+  },
+  attachmentRow: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0"
+  },
+  attachmentName: {
+    fontSize: 14,
+    color: "#111",
+    fontWeight: "600"
   },
   error: {
     fontSize: 13,

@@ -93,12 +93,18 @@ testable.
    tables are local-only (never sent to OpenEMR), and the fields are deliberately excluded
    from each endpoint's idempotency fingerprint so GPS jitter on a queued retry can never
    trigger a false "reused with a different request" conflict.
-4. **11d — Attachment capture (camera/document) + local queue.** `expo-image-picker`
-   (camera and file picker) plus `offline/attachmentStore.ts`: an encrypted local queue
-   of captured files keyed by patient case, mirroring the outbox's
-   encrypt-with-the-same-device-key pattern. Surfaced on `PatientCaseDetailScreen` as an
-   attachments list. No server upload yet (see design decision above) — entries sit
-   queued until Stage 12 adds a sync path.
+4. **11d — Attachment capture (camera/document) + local queue.** `src/offline/db.ts`
+   gains an `attachments` table (per-patient-case, indexed on `patient_case_id`) and
+   `src/offline/attachmentStore.ts` reuses the outbox's `encryptJson`/`decryptJson`
+   device-key crypto — a base64-encoded file is just another JSON-serializable string —
+   to encrypt captured content before it ever touches SQLite; `listAttachments` returns
+   metadata only, decryption happens on demand via `getAttachmentContent`.
+   `src/attachments/captureAttachment.ts` wraps `expo-image-picker` (camera, permission
+   requested inline at the point of use) and `expo-document-picker` +
+   `expo-file-system` (document read, since the document picker has no base64 option).
+   Surfaced on `PatientCaseDetailScreen` as an "Attachments" card ("Take photo"/"Add
+   document" plus a captured-files list). No server upload yet (see design decision
+   above) — entries sit queued until Stage 12 adds a sync path.
 5. **11e — Barcode/QR scanning.** `expo-camera`'s built-in barcode-scanning API wired
    into the medication/procedure entry forms: scanning pre-fills a text field with the
    scanned code rather than free typing it. No backend change.
