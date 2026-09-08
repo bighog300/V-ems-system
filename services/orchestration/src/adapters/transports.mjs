@@ -347,4 +347,22 @@ export function createVtigerTransportFromEnv(env = process.env) {
   };
 }
 
+export function createExpoPushTransportFromEnv(env = process.env) {
+  if (env.EXPO_PUSH_DISABLED === "true") return undefined;
+  const baseUrl = env.EXPO_PUSH_BASE_URL ?? "https://exp.host/--/api/v2/push/send";
+  const token = env.EXPO_ACCESS_TOKEN;
+  const timeoutMs = Number(env.EXPO_PUSH_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
+
+  return async ({ method, payload }) => {
+    if (method !== "sendPush") throw new Error(`Expo push route not configured for method ${method}`);
+    const headers = { "content-type": "application/json", accept: "application/json" };
+    if (token) headers.authorization = `Bearer ${token}`;
+    return requestJson(baseUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload)
+    }, "expo", method, timeoutMs);
+  };
+}
+
 export { requiredEnv };

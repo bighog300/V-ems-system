@@ -1,8 +1,9 @@
 import { SqliteClient } from "./db.mjs";
 import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
 import { SyncWorker } from "./sync-worker.mjs";
-import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv } from "./adapters/transports.mjs";
+import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv, createExpoPushTransportFromEnv } from "./adapters/transports.mjs";
 import { VtigerAdapterClient } from "./adapters/vtiger/vtiger-adapter-client.mjs";
+import { ExpoPushAdapterClient } from "./adapters/expo/expo-push-adapter-client.mjs";
 import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
 import { AssignmentVtigerLinkRepository } from "./repositories/assignment-vtiger-link-repository.mjs";
 import { VehicleVtigerLinkRepository } from "./repositories/vehicle-vtiger-link-repository.mjs";
@@ -11,6 +12,7 @@ import { AssignmentPersonnelVtigerLinkRepository } from "./repositories/assignme
 import { StockItemVtigerLinkRepository } from "./repositories/stock-item-vtiger-link-repository.mjs";
 import { VehicleStockVtigerLinkRepository } from "./repositories/vehicle-stock-vtiger-link-repository.mjs";
 import { StockUsageVtigerLinkRepository } from "./repositories/stock-usage-vtiger-link-repository.mjs";
+import { DevicePushTokenRepository } from "./repositories/device-push-token-repository.mjs";
 
 function parsePositiveInt(value, fallback) {
   if (value === undefined) return fallback;
@@ -75,11 +77,20 @@ export async function runSyncWorkerService(options = {}) {
   const stockItemLinks = options.stockItemLinks ?? new StockItemVtigerLinkRepository(db);
   const vehicleStockLinks = options.vehicleStockLinks ?? new VehicleStockVtigerLinkRepository(db);
   const stockUsageLinks = options.stockUsageLinks ?? new StockUsageVtigerLinkRepository(db);
+  const pushTokens = options.pushTokens ?? new DevicePushTokenRepository(db);
   const transport = options.transport ?? unsupportedTransport;
   const openemrTransport = options.openemrTransport ?? createOpenEmrTransportFromEnv() ?? transport;
   const vtigerTransport = options.vtigerTransport ?? createVtigerTransportFromEnv() ?? transport;
+  const expoPushTransport = options.expoPushTransport ?? createExpoPushTransportFromEnv();
 
   const vtiger = options.vtiger ?? new VtigerAdapterClient({ transport: vtigerTransport });
+  const expo = options.expoPushAdapter ?? new ExpoPushAdapterClient({ transport: expoPushTransport ?? transport });
+  const workerExpo = {
+    async sendPush(payload) {
+      const tokens = pushTokens.listByStaffIds(payload.staff_ids ?? []).map((row) => row.expo_push_token);
+      return expo.sendPush({ tokens, title: payload.title, body: payload.body, data: payload.data ?? {} });
+    }
+  };
   const workerVtiger = {
     createIncidentMirror: (...args) => vtiger.createIncidentMirror(...args),
     updateIncidentMirror: (...args) => vtiger.updateIncidentMirror(...args),
@@ -150,6 +161,7 @@ export async function runSyncWorkerService(options = {}) {
     baseBackoffMs: config.baseBackoffMs,
     maxBackoffMs: config.maxBackoffMs,
     vtiger: workerVtiger,
+    expo: workerExpo,
     openemr: options.openemr ?? createAdapterProxy("openemr", [
       "createPatient",
       "createEncounter",

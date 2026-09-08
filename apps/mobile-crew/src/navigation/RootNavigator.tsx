@@ -1,11 +1,19 @@
-import { NavigationContainer } from "@react-navigation/native";
+import { createNavigationContainerRef, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, View } from "react-native";
+import { ActivityIndicator, AppState, type AppStateStatus, Platform, StyleSheet, View } from "react-native";
 
-import type { AssignedJob } from "../api/assignments.ts";
+import { listMyAssignmentsCached, type AssignedJob } from "../api/assignments.ts";
 import type { PatientCase } from "../api/patientCases.ts";
+import { registerPushToken } from "../api/pushTokens.ts";
 import { loadSession, type Session } from "../auth/session.ts";
+import {
+  configureForegroundNotificationHandler,
+  getLaunchDeepLink,
+  getPushToken,
+  subscribeToNotificationTaps,
+  type AssignmentDeepLink
+} from "../notifications/pushNotifications.ts";
 import { useSyncTriggers } from "../offline/useSyncTriggers.ts";
 import AppLockScreen from "../screens/AppLockScreen.tsx";
 import AssessmentScreen from "../screens/AssessmentScreen.tsx";
@@ -35,14 +43,83 @@ type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 type BootState = "loading" | "signed-out" | "locked" | "signed-in";
 
 export default function RootNavigator() {
   const [state, setState] = useState<BootState>("loading");
   const [session, setSession] = useState<Session | null>(null);
+  const [navigatorReady, setNavigatorReady] = useState(false);
+  const [pendingDeepLink, setPendingDeepLink] = useState<AssignmentDeepLink | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const sync = useSyncTriggers(state === "signed-in" ? session : null);
+
+  // Configures the foreground notification handler once, captures the deep
+  // link that caused a cold start (if any), and subscribes for taps while
+  // the app is already running.
+  useEffect(() => {
+    let cancelled = false;
+    configureForegroundNotificationHandler().catch(() => {});
+    getLaunchDeepLink().then((deepLink) => {
+      if (!cancelled && deepLink) setPendingDeepLink(deepLink);
+    });
+    let unsubscribe: (() => void) | undefined;
+    subscribeToNotificationTaps((deepLink) => setPendingDeepLink(deepLink)).then((unsub) => {
+      if (cancelled) unsub();
+      else unsubscribe = unsub;
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  // Registers this device's push token once per genuine sign-in (session
+  // identity is stable across a lock/unlock cycle, so this doesn't re-fire
+  // on every unlock). Best-effort: a failed registration never blocks
+  // sign-in, and just means no push until the next one.
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    (async () => {
+      const token = await getPushToken();
+      if (cancelled || !token) return;
+      try {
+        await registerPushToken({
+          apiBaseUrl: session.apiBaseUrl,
+          authToken: session.authToken,
+          expoPushToken: token,
+          platform: Platform.OS === "ios" ? "ios" : "android"
+        });
+      } catch {
+        // best-effort — see comment above
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  // Resolves a pending deep link to a full assignment once the crew member
+  // is actually signed in and the navigator has mounted the authenticated
+  // stack (IncidentDetail doesn't exist as a route before then).
+  useEffect(() => {
+    if (!pendingDeepLink || state !== "signed-in" || !session || !navigatorReady) return;
+    let cancelled = false;
+    (async () => {
+      const jobs = await listMyAssignmentsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken });
+      if (cancelled) return;
+      const job = jobs.value.find((candidate) => candidate.assignment_id === pendingDeepLink.assignmentId) ?? null;
+      if (job && navigationRef.isReady()) {
+        navigationRef.navigate("IncidentDetail", { job });
+      }
+      setPendingDeepLink(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingDeepLink, state, session, navigatorReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +178,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={() => setNavigatorReady(true)}>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {state === "signed-in" && session ? (
           <>

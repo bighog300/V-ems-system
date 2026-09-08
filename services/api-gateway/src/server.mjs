@@ -855,6 +855,12 @@ export function createApp(orchestration = new OrchestrationService()) {
         return okJson(res, 200, { assignments }, context);
       }
 
+      if (method === "POST" && url.pathname === "/api/push-tokens") {
+        const payload = await parseJson(req);
+        const token = orchestration.registerPushToken(payload, { actorId: context.actorId, correlationId: context.correlationId });
+        return okJson(res, 201, token, context);
+      }
+
       const encounterCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/);
       if (encounterCreateMatch && method === "GET") {
         const encounter = orchestration.getEncounterByIncident(encounterCreateMatch[1]);
