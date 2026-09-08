@@ -65,6 +65,19 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
     }, [load])
   );
 
+  function handleRepeatMedication(item: MedicationAdministration) {
+    setMedName(item.medication_name);
+    setMedDose(item.dose);
+    setMedDoseUnit(item.dose_unit);
+    setMedRoute(item.route);
+  }
+
+  function handleRepeatProcedure(item: ClinicalProcedure) {
+    setProcType(item.procedure_type);
+    setProcName(item.procedure_name);
+    setProcSuccess(item.success ?? true);
+  }
+
   async function handleRecordMedication() {
     if (!medName.trim() || !medDose.trim() || !medDoseUnit.trim() || !medRoute.trim()) {
       setError("Medication name, dose, dose unit and route are required.");
@@ -238,11 +251,22 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
           }
           renderItem={({ item }) => (
             <View style={styles.row} testID={`medication-${item.medication_administration_id}`}>
-              <Text style={styles.rowTime}>{item.performed_at}</Text>
-              <Text style={styles.rowSummary}>
-                {item.medication_name} · {item.dose}
-                {item.dose_unit} {item.route}
-              </Text>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTime}>{item.performed_at}</Text>
+                <Text style={styles.rowSummary}>
+                  {item.medication_name} · {item.dose}
+                  {item.dose_unit} {item.route}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.repeatButton}
+                onPress={() => handleRepeatMedication(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Repeat ${item.medication_name}`}
+                testID={`repeat-medication-${item.medication_administration_id}`}
+              >
+                <Text style={styles.repeatButtonText}>Repeat</Text>
+              </Pressable>
             </View>
           )}
         />
@@ -258,10 +282,21 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
           }
           renderItem={({ item }) => (
             <View style={styles.row} testID={`procedure-${item.procedure_id}`}>
-              <Text style={styles.rowTime}>{item.performed_at}</Text>
-              <Text style={styles.rowSummary}>
-                {item.procedure_name} · {item.success ? "Successful" : "Unsuccessful"}
-              </Text>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowTime}>{item.performed_at}</Text>
+                <Text style={styles.rowSummary}>
+                  {item.procedure_name} · {item.success ? "Successful" : "Unsuccessful"}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.repeatButton}
+                onPress={() => handleRepeatProcedure(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Repeat ${item.procedure_name}`}
+                testID={`repeat-procedure-${item.procedure_id}`}
+              >
+                <Text style={styles.repeatButtonText}>Repeat</Text>
+              </Pressable>
             </View>
           )}
         />
@@ -378,9 +413,16 @@ const styles = StyleSheet.create({
     color: "#999"
   },
   row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0"
+  },
+  rowContent: {
+    flex: 1,
+    marginRight: 12
   },
   rowTime: {
     fontSize: 12,
@@ -389,6 +431,17 @@ const styles = StyleSheet.create({
   rowSummary: {
     fontSize: 14,
     color: "#111",
+    fontWeight: "600"
+  },
+  repeatButton: {
+    minHeight: TOUCH_TARGET_MIN,
+    minWidth: TOUCH_TARGET_MIN,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  repeatButtonText: {
+    color: "#1a4fd6",
+    fontSize: 13,
     fontWeight: "600"
   }
 });

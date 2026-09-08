@@ -70,6 +70,17 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
     }, [load])
   );
 
+  function handleRepeatLast() {
+    const last = observations[0];
+    if (!last) return;
+    const nextValues: Record<string, string> = {};
+    for (const field of VITAL_FIELDS) {
+      const value = last.observations[field.key];
+      if (value !== undefined) nextValues[field.key] = String(value);
+    }
+    setFieldValues(nextValues);
+  }
+
   async function handleRecord() {
     const vitalSigns: VitalSigns = {};
     for (const field of VITAL_FIELDS) {
@@ -114,6 +125,17 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
       ) : null}
 
       <View style={styles.form}>
+        {observations.length > 0 ? (
+          <Pressable
+            style={styles.repeatButton}
+            onPress={handleRepeatLast}
+            accessibilityRole="button"
+            accessibilityLabel="Repeat last vitals"
+            testID="repeat-last-vitals"
+          >
+            <Text style={styles.repeatButtonText}>Repeat last vitals</Text>
+          </Pressable>
+        ) : null}
         {VITAL_FIELDS.map((field) => (
           <TextInput
             key={field.key}
@@ -209,6 +231,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontSize: 14,
     minHeight: TOUCH_TARGET_MIN
+  },
+  repeatButton: {
+    alignSelf: "flex-start",
+    minHeight: TOUCH_TARGET_MIN,
+    justifyContent: "center",
+    marginBottom: 10
+  },
+  repeatButtonText: {
+    color: "#1a4fd6",
+    fontSize: 13,
+    fontWeight: "600"
   },
   button: {
     backgroundColor: "#1a4fd6",
