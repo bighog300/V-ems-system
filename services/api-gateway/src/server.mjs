@@ -190,12 +190,12 @@ function evaluateAlertStates(metricsSum, syncSum, thresholds) {
   };
 }
 
-function supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds) {
+async function supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds) {
   const metricsSum = metricsSummary(metrics);
-  const syncSum = syncIntentSummary(orchestration);
+  const syncSum = await syncIntentSummary(orchestration);
   return {
     generated_at: new Date().toISOString(),
-    readiness_summary: readinessReport(orchestration, diagnostics),
+    readiness_summary: await readinessReport(orchestration, diagnostics),
     metrics_summary: metricsSum,
     sync_intent_summary: syncSum,
     upstream_validation_status: {
@@ -662,7 +662,7 @@ export function createApp(orchestration = new OrchestrationService()) {
 
     try {
       if (method === "GET" && url.pathname === "/api/support/readiness") {
-        return okJson(res, 200, readinessReport(orchestration, diagnostics), context);
+        return okJson(res, 200, await readinessReport(orchestration, diagnostics), context);
       }
 
       if (method === "GET" && url.pathname === "/api/support/metrics") {
@@ -677,7 +677,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       if (method === "GET" && url.pathname === "/api/support/diagnostics") {
-        return okJson(res, 200, supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds), context);
+        return okJson(res, 200, await supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds), context);
       }
 
       const replayMatch = url.pathname.match(/^\/api\/support\/sync-intents\/([0-9]+)\/replay$/);
@@ -790,9 +790,9 @@ export function createApp(orchestration = new OrchestrationService()) {
       const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline))?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
-        const incidentId = caseListMatch?.[1] ?? await orchestration.getPatientCase(id).incident_id;
+        const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
         if (['field_crew','field_crew_lead'].includes(context.role)) {
-          const assigned = await orchestration.assignments.findActiveByIncident(incidentId).some(a => a.crew_ids.includes(context.actorId));
+          const assigned = (await orchestration.assignments.findActiveByIncident(incidentId)).some(a => a.crew_ids.includes(context.actorId));
           if (!assigned) throw new ApiError('FORBIDDEN', 'Crew member must be assigned to this incident', 403);
         }
         const meta = { correlationId: context.correlationId, actorId: context.actorId, actorRole: context.role, idempotencyKey };

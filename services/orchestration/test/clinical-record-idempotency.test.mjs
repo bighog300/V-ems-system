@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { OrchestrationService } from "../src/index.mjs";
 
-function setup(openemr = {}) {
+async function setup(openemr = {}) {
   const service = new OrchestrationService({
     dbPath: join(mkdtempSync(join(tmpdir(), "vems-clinical-idempotency-")), "platform.sqlite"),
     openemr: {
@@ -17,12 +17,12 @@ function setup(openemr = {}) {
     }
   });
   const meta = { correlationId: "clinical-idempotency-test", actorId: "STAFF-001", actorRole: "field_crew" };
-  const incident = service.createIncident({
+  const incident = await service.createIncident({
     call: { call_source: "phone", received_at: "2026-09-06T10:00:00Z" },
     incident: { category: "medical_emergency", priority: "high", description: "Idempotency", address: "Test", patient_count: 1 }
   }, meta);
-  const patientCase = service.createPatientCase(incident.incident_id, { temporary_label: "Unknown patient" }, meta);
-  service.linkPatientToPatientCase(patientCase.patient_case_id, { verification_status: "verified", openemr_patient_id: "OE-500" }, meta);
+  const patientCase = await service.createPatientCase(incident.incident_id, { temporary_label: "Unknown patient" }, meta);
+  await service.linkPatientToPatientCase(patientCase.patient_case_id, { verification_status: "verified", openemr_patient_id: "OE-500" }, meta);
   return { service, patientCase, meta };
 }
 
@@ -35,23 +35,23 @@ async function withEncounter(setupResult) {
   return setupResult;
 }
 
-test("createPatientCaseAssessment replays without creating a duplicate", () => {
-  const { service, patientCase, meta } = setup();
+test("createPatientCaseAssessment replays without creating a duplicate", async () => {
+  const { service, patientCase, meta } = await setup();
   const payload = { section_type: "primary_survey", performed_at: "2026-09-06T10:08:00Z", payload: { airway: "patent" } };
-  const first = service.createPatientCaseAssessment(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "assessment-key-1" });
-  const replay = service.createPatientCaseAssessment(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "assessment-key-1" });
+  const first = await service.createPatientCaseAssessment(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "assessment-key-1" });
+  const replay = await service.createPatientCaseAssessment(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "assessment-key-1" });
   assert.equal(replay.assessment_id, first.assessment_id);
-  assert.equal(service.listPatientCaseAssessments(patientCase.patient_case_id).length, 1);
+  assert.equal((await service.listPatientCaseAssessments(patientCase.patient_case_id)).length, 1);
 });
 
-test("createPatientCaseAssessment rejects a reused key with a different payload", () => {
-  const { service, patientCase, meta } = setup();
-  service.createPatientCaseAssessment(
+test("createPatientCaseAssessment rejects a reused key with a different payload", async () => {
+  const { service, patientCase, meta } = await setup();
+  await service.createPatientCaseAssessment(
     patientCase.patient_case_id,
     { section_type: "primary_survey", performed_at: "2026-09-06T10:08:00Z", payload: { airway: "patent" } },
     { ...meta, idempotencyKey: "assessment-key-2" }
   );
-  assert.throws(
+  await assert.rejects(
     () => service.createPatientCaseAssessment(
       patientCase.patient_case_id,
       { section_type: "secondary_survey", performed_at: "2026-09-06T10:08:00Z", payload: { airway: "obstructed" } },
@@ -62,17 +62,17 @@ test("createPatientCaseAssessment rejects a reused key with a different payload"
 });
 
 test("createPatientCaseObservation replays without creating a duplicate", async () => {
-  const setupResult = await withEncounter(setup());
+  const setupResult = await withEncounter(await setup());
   const { service, patientCase, meta } = setupResult;
   const payload = { recorded_at: "2026-09-06T10:10:00Z", vital_signs: { heart_rate_bpm: 88 } };
   const first = await service.createPatientCaseObservation(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "observation-key-1" });
   const replay = await service.createPatientCaseObservation(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "observation-key-1" });
   assert.equal(replay.observation_event_id, first.observation_event_id);
-  assert.equal(service.listPatientCaseObservations(patientCase.patient_case_id).length, 1);
+  assert.equal((await service.listPatientCaseObservations(patientCase.patient_case_id)).length, 1);
 });
 
 test("createPatientCaseObservation rejects a reused key with a different payload", async () => {
-  const setupResult = await withEncounter(setup());
+  const setupResult = await withEncounter(await setup());
   const { service, patientCase, meta } = setupResult;
   await service.createPatientCaseObservation(
     patientCase.patient_case_id,
@@ -89,23 +89,23 @@ test("createPatientCaseObservation rejects a reused key with a different payload
   );
 });
 
-test("setPatientCaseDisposition replays without a duplicate audit/event or shifting decision_at", () => {
-  const { service, patientCase, meta } = setup();
+test("setPatientCaseDisposition replays without a duplicate audit/event or shifting decision_at", async () => {
+  const { service, patientCase, meta } = await setup();
   const payload = { outcome: "treated_not_transported", reason: "No transport required" };
-  const first = service.setPatientCaseDisposition(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "disposition-key-1" });
-  const replay = service.setPatientCaseDisposition(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "disposition-key-1" });
+  const first = await service.setPatientCaseDisposition(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "disposition-key-1" });
+  const replay = await service.setPatientCaseDisposition(patientCase.patient_case_id, payload, { ...meta, idempotencyKey: "disposition-key-1" });
   assert.equal(replay.disposition_id, first.disposition_id);
   assert.equal(replay.decision_at, first.decision_at);
 });
 
-test("setPatientCaseDisposition rejects a reused key with a different payload", () => {
-  const { service, patientCase, meta } = setup();
-  service.setPatientCaseDisposition(
+test("setPatientCaseDisposition rejects a reused key with a different payload", async () => {
+  const { service, patientCase, meta } = await setup();
+  await service.setPatientCaseDisposition(
     patientCase.patient_case_id,
     { outcome: "treated_not_transported", reason: "No transport required" },
     { ...meta, idempotencyKey: "disposition-key-2" }
   );
-  assert.throws(
+  await assert.rejects(
     () => service.setPatientCaseDisposition(
       patientCase.patient_case_id,
       { outcome: "transported", reason: "Changed mind" },
