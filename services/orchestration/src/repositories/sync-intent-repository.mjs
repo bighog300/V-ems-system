@@ -42,8 +42,13 @@ export class SyncIntentRepository {
   }
 
   async listPending(limit = 100) {
+    // next_attempt_at/lease_expires_at are ISO-8601 TEXT, which — unlike
+    // SQLite's julianday(), a function Postgres has no equivalent for —
+    // compares correctly as plain text against a JS-computed "now" on
+    // either backend, so there's nothing dialect-specific needed here.
+    const now = sqlValue(new Date().toISOString());
     const rows = await this.db.queryAll(
-      `SELECT * FROM sync_intents WHERE (status = 'pending' OR (status='processing' AND lease_expires_at IS NOT NULL AND julianday(lease_expires_at) <= julianday('now'))) AND (next_attempt_at IS NULL OR julianday(next_attempt_at) <= julianday('now')) ORDER BY intent_id LIMIT ${sqlValue(limit)};`
+      `SELECT * FROM sync_intents WHERE (status = 'pending' OR (status='processing' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ${now})) AND (next_attempt_at IS NULL OR next_attempt_at <= ${now}) ORDER BY intent_id LIMIT ${sqlValue(limit)};`
     );
     return rows.map(mapIntent);
   }

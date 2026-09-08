@@ -1,4 +1,4 @@
-import { SqliteClient } from "./db.mjs";
+import { createDbClient } from "./db.mjs";
 import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
 import { SyncWorker } from "./sync-worker.mjs";
 import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv, createExpoPushTransportFromEnv } from "./adapters/transports.mjs";
@@ -67,7 +67,7 @@ export async function resolveVehicleStockDependencies(payload, vehicleLinks, sto
 
 export async function runSyncWorkerService(options = {}) {
   const config = options.config ?? loadSyncWorkerConfig();
-  const db = options.db ?? new SqliteClient(config.dbPath);
+  const db = options.db ?? createDbClient({ dbPath: config.dbPath });
   const syncIntents = options.syncIntents ?? new SyncIntentRepository(db);
   const vtigerLinks = options.vtigerLinks ?? new VtigerLinkRepository(db);
   const assignmentLinks = options.assignmentLinks ?? new AssignmentVtigerLinkRepository(db);
