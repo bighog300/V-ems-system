@@ -41,7 +41,8 @@ describe("LoginScreen", () => {
       apiBaseUrl: "https://api.example.test",
       authToken: "token-123",
       actorId: "crew-1",
-      actorRole: "field_crew"
+      actorRole: "field_crew",
+      deviceId: expect.any(String)
     });
   });
 

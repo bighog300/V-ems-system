@@ -128,11 +128,17 @@ testable.
    `addNotificationResponseReceivedListener` and `getLastNotificationResponseAsync`
    for a cold start) that deep-links straight to the tapped assignment's
    `IncidentDetail` screen once the crew member is signed in.
-7. **11g — Biometric re-entry and device identity refinement.** Extends Stage 9's
-   `AppLockScreen`/`expo-local-authentication` hook: a stable per-install device
-   identifier (`expo-application`'s installation id) attached to the session and to the
-   push-token registration from 11f, laying the groundwork for Stage 12's
-   device/session-revocation requirement without building revocation itself yet.
+7. **11g — Biometric re-entry and device identity refinement.** Biometric re-entry
+   itself needed no new code — Stage 9's `AppLockScreen`/`expo-local-authentication`
+   hook already re-prompts on every return to the foreground. The concrete addition
+   is device identity: `src/auth/deviceIdentity.ts`'s `getOrCreateDeviceId()` reuses
+   the same getOrCreate-via-SecureStore pattern as the offline-database encryption
+   key (`offline/crypto.ts`) rather than an OS-level ID (iOS's identifier-for-vendor
+   can return null; there's no single cross-platform equivalent). Generated once at
+   sign-in and attached to the mobile `Session`, and threaded through to
+   `POST /api/push-tokens` (migration 013 adds a nullable `device_id` column to
+   `device_push_tokens`) — laying the groundwork for Stage 12's device/session-
+   revocation requirement without building revocation itself yet.
 8. **11h — Tablet/phone layout pass, accessibility polish, and vendor-neutral hardware
    hooks.** Extends Stage 9's existing `theme/a11y.ts` responsive-width work across the
    screens 11a–11g just added. Adds a `src/integrations/deviceImport.ts` interface stub

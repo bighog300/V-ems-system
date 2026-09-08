@@ -52,6 +52,24 @@ test("DevicePushTokenRepository upsert reassigns ownership when a token re-regis
   assert.equal(repo.listByStaffId("STAFF-002").length, 1);
 });
 
+test("DevicePushTokenRepository upsert stores and updates device_id", () => {
+  const db = new SqliteClient(createDbPath("repo-device-id"));
+  const repo = new DevicePushTokenRepository(db);
+
+  const first = repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios", deviceId: "device-uuid-1" });
+  assert.equal(first.device_id, "device-uuid-1");
+
+  const updated = repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios", deviceId: "device-uuid-2" });
+  assert.equal(updated.device_id, "device-uuid-2");
+});
+
+test("DevicePushTokenRepository upsert defaults device_id to null when omitted", () => {
+  const db = new SqliteClient(createDbPath("repo-device-id-null"));
+  const repo = new DevicePushTokenRepository(db);
+  const token = repo.upsert({ staffId: "STAFF-001", expoPushToken: "ExponentPushToken[a]", platform: "ios" });
+  assert.equal(token.device_id, null);
+});
+
 test("DevicePushTokenRepository listByStaffIds fans out across multiple crew members", () => {
   const db = new SqliteClient(createDbPath("repo-fanout"));
   const repo = new DevicePushTokenRepository(db);
@@ -77,6 +95,13 @@ test("registerPushToken persists a device token for the authenticated actor", ()
   assert.equal(token.staff_id, "STAFF-001");
   assert.equal(token.expo_push_token, "ExponentPushToken[device-1]");
   assert.equal(token.platform, "ios");
+  assert.equal(token.device_id, null);
+});
+
+test("registerPushToken persists the device_id when provided, as groundwork for future revocation", () => {
+  const o = service();
+  const token = o.registerPushToken({ expo_push_token: "ExponentPushToken[device-1]", platform: "ios", device_id: "device-uuid-1" }, { actorId: "STAFF-001" });
+  assert.equal(token.device_id, "device-uuid-1");
 });
 
 test("registerPushToken rejects an invalid platform", () => {

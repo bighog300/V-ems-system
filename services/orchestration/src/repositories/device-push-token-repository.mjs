@@ -21,12 +21,14 @@ export class DevicePushTokenRepository {
   // Upserts by the push token itself, not (staff_id, token): a token
   // re-registering under a different staff_id (a shared/handed-off device)
   // reassigns ownership rather than leaving a stale row pointed at the
-  // previous crew member.
-  upsert({ staffId, expoPushToken, platform, now = new Date().toISOString() }) {
-    this.db.execute(`INSERT INTO device_push_tokens (staff_id, expo_push_token, platform, created_at, updated_at)
-      VALUES (${sqlValue(staffId)}, ${sqlValue(expoPushToken)}, ${sqlValue(platform)}, ${sqlValue(now)}, ${sqlValue(now)})
+  // previous crew member. device_id is nullable — a session restored from
+  // before device identity existed registers without one — and is stored
+  // purely as groundwork for Stage 12's device/session-revocation work.
+  upsert({ staffId, expoPushToken, platform, deviceId = null, now = new Date().toISOString() }) {
+    this.db.execute(`INSERT INTO device_push_tokens (staff_id, expo_push_token, platform, device_id, created_at, updated_at)
+      VALUES (${sqlValue(staffId)}, ${sqlValue(expoPushToken)}, ${sqlValue(platform)}, ${sqlValue(deviceId)}, ${sqlValue(now)}, ${sqlValue(now)})
       ON CONFLICT(expo_push_token) DO UPDATE SET
-        staff_id = excluded.staff_id, platform = excluded.platform, updated_at = excluded.updated_at;`);
+        staff_id = excluded.staff_id, platform = excluded.platform, device_id = excluded.device_id, updated_at = excluded.updated_at;`);
     return map(this.db.queryOne(`SELECT * FROM device_push_tokens WHERE expo_push_token = ${sqlValue(expoPushToken)};`));
   }
 

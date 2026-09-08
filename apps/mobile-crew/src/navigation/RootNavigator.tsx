@@ -6,6 +6,7 @@ import { ActivityIndicator, AppState, type AppStateStatus, Platform, StyleSheet,
 import { listMyAssignmentsCached, type AssignedJob } from "../api/assignments.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import { registerPushToken } from "../api/pushTokens.ts";
+import { getOrCreateDeviceId } from "../auth/deviceIdentity.ts";
 import { loadSession, type Session } from "../auth/session.ts";
 import {
   configureForegroundNotificationHandler,
@@ -86,11 +87,14 @@ export default function RootNavigator() {
       const token = await getPushToken();
       if (cancelled || !token) return;
       try {
+        const deviceId = session.deviceId ?? (await getOrCreateDeviceId());
+        if (cancelled) return;
         await registerPushToken({
           apiBaseUrl: session.apiBaseUrl,
           authToken: session.authToken,
           expoPushToken: token,
-          platform: Platform.OS === "ios" ? "ios" : "android"
+          platform: Platform.OS === "ios" ? "ios" : "android",
+          deviceId
         });
       } catch {
         // best-effort — see comment above
