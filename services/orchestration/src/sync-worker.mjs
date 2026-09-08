@@ -22,6 +22,7 @@ export class SyncWorker {
     this.syncIntents = options.syncIntents;
     this.vtiger = options.vtiger;
     this.openemr = options.openemr;
+    this.expo = options.expo;
     this.maxAttempts = options.maxAttempts ?? 3;
     this.baseBackoffMs = options.baseBackoffMs ?? 0;
     this.maxBackoffMs = options.maxBackoffMs ?? 60000;
@@ -65,6 +66,7 @@ export class SyncWorker {
   resolveAdapter(intent) {
     if (intent.target_system === "vtiger") return this.vtiger;
     if (intent.target_system === "openemr") return this.openemr;
+    if (intent.target_system === "expo") return this.expo;
     return undefined;
   }
 

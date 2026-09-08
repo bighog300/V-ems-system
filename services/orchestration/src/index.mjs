@@ -30,6 +30,9 @@ import { StockUsageVtigerLinkRepository } from "./repositories/stock-usage-vtige
 import { PatientCaseDemographicsRepository, PatientCaseAssessmentRepository, ClinicalObservationRepository, MedicationAdministrationRepository, ClinicalProcedureRepository, PatientCaseDispositionRepository, PatientCaseTimelineRepository } from "./repositories/clinical-record-repository.mjs";
 import { clinicalRecordMethods } from "./clinical-record.mjs";
 import { epcrFinalizationMethods } from "./epcr-finalization.mjs";
+import { DevicePushTokenRepository } from "./repositories/device-push-token-repository.mjs";
+
+const DEVICE_PUSH_TOKEN_PLATFORMS = ["ios", "android"];
 
 const ENCOUNTER_ALLOWED_PATIENT_LINK_STATES = ["verified", "provisional"];
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
@@ -70,6 +73,7 @@ export class OrchestrationService {
     this.clinicalProcedures = new ClinicalProcedureRepository(this.db);
     this.clinicalDispositions = new PatientCaseDispositionRepository(this.db);
     this.clinicalTimeline = new PatientCaseTimelineRepository(this.db);
+    this.pushTokens = new DevicePushTokenRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
@@ -229,6 +233,11 @@ export class OrchestrationService {
       this.syncIntent("assignment", "createAssignmentMirror", meta.correlationId, { ...this.vtigerMapper.mapAssignmentCreate(record), incident_id: incidentId, assignment_id: assignmentId });
       this.assignmentVtigerLinks.upsert({ assignment_id: assignmentId, incident_id: incidentId, external_key: `${this.vtigerMapper.sourceNamespace}:assignment:${assignmentId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, incident_remote_id: null, created_at: now, updated_at: now });
       if (personnelMasterActive) for (const staffId of normalized.crew_ids) this.assignmentPersonnelVtigerLinks.ensure({ assignment_id: assignmentId, staff_id: staffId, external_key: `${this.vtigerMapper.sourceNamespace}:assignment-crew:${assignmentId}:${staffId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, created_at: now, updated_at: now });
+      this.pushIntent(normalized.crew_ids, meta.correlationId, {
+        title: "New assignment",
+        body: `You've been assigned to ${incidentId}.`,
+        data: { screen: "IncidentDetail", incident_id: incidentId, assignment_id: assignmentId }
+      });
       if (meta.idempotencyKey) this.idempotency.save("assignment", meta.idempotencyKey, assignmentId, now, fingerprint);
       return record;
     });
@@ -409,6 +418,11 @@ export class OrchestrationService {
     });
     const link = this.assignmentVtigerLinks.findByAssignmentId(assignmentId);
     this.syncIntent("assignment", "updateAssignmentMirror", meta.correlationId, { ...this.vtigerMapper.mapAssignmentUpdate({ ...updated, remote_id: link?.remote_id, incident_remote_id: link?.incident_remote_id }), incident_id: current.incident_id, assignment_id: assignmentId });
+    this.pushIntent(current.crew_ids, meta.correlationId, {
+      title: nextStatus === "Reassigned" ? "Assignment reassigned" : "Assignment updated",
+      body: `${assignmentId} on ${current.incident_id} is now ${nextStatus}.`,
+      data: { screen: "IncidentDetail", incident_id: current.incident_id, assignment_id: assignmentId }
+    });
     return this.getAssignment(assignmentId);
   }
 
@@ -445,6 +459,29 @@ export class OrchestrationService {
       created_at: new Date().toISOString(),
       payload
     });
+  }
+
+  // Queued the same way a Vtiger mirror write is: never sent inline from
+  // the request path (a downstream push failure must never fail or delay
+  // an assignment create/update), picked up and retried by the same
+  // sync-worker loop, just against the "expo" adapter instead of "vtiger".
+  pushIntent(staffIds, correlationId, { title, body, data }) {
+    if (!staffIds.length) return;
+    this.syncIntents.append({
+      target_system: "expo",
+      intent_type: "sendPush",
+      entity_type: "push_notification",
+      operation: "sendPush",
+      correlation_id: correlationId,
+      created_at: new Date().toISOString(),
+      payload: { staff_ids: staffIds, title, body, data }
+    });
+  }
+
+  registerPushToken(payload, meta) {
+    if (!DEVICE_PUSH_TOKEN_PLATFORMS.includes(payload.platform)) throw new ApiError("INVALID_PAYLOAD", "Invalid platform", 400);
+    if (!payload.expo_push_token) throw new ApiError("INVALID_PAYLOAD", "expo_push_token is required", 400);
+    return this.pushTokens.upsert({ staffId: meta.actorId, expoPushToken: payload.expo_push_token, platform: payload.platform });
   }
 
 

@@ -111,11 +111,23 @@ testable.
    scanner already states the intent). A "Scan" button next to the medication/procedure
    name field on `InterventionsScreen` opens it; a scanned code fills that same text
    field, once per scan, rather than resolving to a catalog record. No backend change.
-6. **11f — Push assignment notifications.** Backend: a `device_push_tokens` table +
-   registration endpoint, and a send-on-assignment-create/reassign trigger using Expo's
-   push service (`expo-server-sdk`). Mobile: `expo-notifications` permission request,
-   token registration on sign-in, and foreground/background notification handling that
-   deep-links into the relevant `IncidentDetail`/`JobsList` screen.
+6. **11f — Push assignment notifications.** Backend: migration 012 adds a
+   `device_push_tokens` table (keyed by Expo push token, so a token re-registering
+   under a different crew member reassigns ownership rather than leaving a stale
+   row) and a `POST /api/push-tokens` registration endpoint. `createAssignment` and
+   `updateAssignment` queue a push send the same way every Vtiger mirror write is
+   queued — as a `sync_intents` row (`target_system: "expo"`), never sent inline
+   from the request path, so a downstream push failure can never fail or delay an
+   assignment create/update. The existing sync-worker loop dispatches it through a
+   new `ExpoPushAdapterClient`, a thin wrapper over Expo's push HTTP API (a direct
+   `fetch` transport matching this codebase's existing OpenEMR/Vtiger transport
+   pattern, rather than adding the `expo-server-sdk` dependency). Mobile:
+   `src/notifications/pushNotifications.ts` requests notification permission and
+   registers the device's Expo push token once per sign-in; `RootNavigator` wires
+   up foreground/background/killed-state notification-tap handling (via
+   `addNotificationResponseReceivedListener` and `getLastNotificationResponseAsync`
+   for a cold start) that deep-links straight to the tapped assignment's
+   `IncidentDetail` screen once the crew member is signed in.
 7. **11g — Biometric re-entry and device identity refinement.** Extends Stage 9's
    `AppLockScreen`/`expo-local-authentication` hook: a stable per-install device
    identifier (`expo-application`'s installation id) attached to the session and to the
