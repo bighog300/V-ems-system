@@ -10,6 +10,7 @@ module.exports = {
     "^expo-local-authentication$": "<rootDir>/test/__mocks__/expo-local-authentication.ts",
     "^expo-sqlite$": "<rootDir>/test/__mocks__/expo-sqlite.ts",
     "^@react-native-community/netinfo$": "<rootDir>/test/__mocks__/@react-native-community/netinfo.ts",
-    "^react-native-svg$": "<rootDir>/test/__mocks__/react-native-svg.tsx"
+    "^react-native-svg$": "<rootDir>/test/__mocks__/react-native-svg.tsx",
+    "^expo-location$": "<rootDir>/test/__mocks__/expo-location.ts"
   }
 };

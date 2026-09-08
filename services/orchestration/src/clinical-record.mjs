@@ -27,6 +27,19 @@ const iso = (value, name) => {
 };
 const id = prefix => `${prefix}-${randomUUID()}`;
 
+// Optional care-location context (Stage 11 milestone 11c): captured
+// client-side via expo-location, never required — a crew that denied the
+// permission or has no fix yet must still be able to chart. Validated
+// loosely (real-world coordinate/accuracy bounds) rather than required.
+function parseLocation(payload) {
+  const { location_lat, location_lng, location_accuracy_m } = payload;
+  if (location_lat === undefined && location_lng === undefined && location_accuracy_m === undefined) return {};
+  if (typeof location_lat !== "number" || location_lat < -90 || location_lat > 90) throw new ApiError("INVALID_PAYLOAD", "location_lat must be a number between -90 and 90", 400);
+  if (typeof location_lng !== "number" || location_lng < -180 || location_lng > 180) throw new ApiError("INVALID_PAYLOAD", "location_lng must be a number between -180 and 180", 400);
+  if (location_accuracy_m !== undefined && (typeof location_accuracy_m !== "number" || location_accuracy_m < 0)) throw new ApiError("INVALID_PAYLOAD", "location_accuracy_m must be a non-negative number", 400);
+  return { location_lat, location_lng, location_accuracy_m: location_accuracy_m ?? null };
+}
+
 function appendTimeline(service, record, meta) {
   service.clinicalTimeline.create({
     timeline_event_id: id("TL"), patient_case_id: record.patient_case_id,
@@ -146,10 +159,11 @@ export const clinicalRecordMethods = {
     this.assertPatientCaseClinicalMutable(patientCaseId);
     const before = this.clinicalDispositions.find(patientCaseId);
     if (!OUTCOMES.has(payload.outcome)) throw new ApiError("INVALID_PAYLOAD", `outcome must be one of: ${[...OUTCOMES].join(", ")}`, 400);
+    const location = parseLocation(payload);
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, outcome: payload.outcome, destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, notes: payload.notes ?? null });
     if (meta.idempotencyKey) { const existing = this.idempotency.get("disposition", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalDispositions.find(existing.resource_id); } }
     const now = new Date().toISOString();
-    const record = { disposition_id: id("DISP"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, outcome: payload.outcome, destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, decision_at: iso(payload.decision_at ?? now, "decision_at"), reason: payload.reason ?? null, notes: payload.notes ?? null, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
+    const record = { disposition_id: id("DISP"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, outcome: payload.outcome, destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, decision_at: iso(payload.decision_at ?? now, "decision_at"), reason: payload.reason ?? null, notes: payload.notes ?? null, ...location, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
     this.clinicalDispositions.save(record);
     if (meta.idempotencyKey) this.idempotency.save("disposition", meta.idempotencyKey, patientCaseId, now, fingerprint);
     this.audit("patient_case_disposition", patientCaseId, "set_disposition", meta.correlationId, before, record);

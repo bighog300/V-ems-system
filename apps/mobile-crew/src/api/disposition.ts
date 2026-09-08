@@ -28,6 +28,9 @@ export interface PatientCaseDisposition {
   decision_at: string;
   reason: string | null;
   notes: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_accuracy_m?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -50,6 +53,9 @@ export interface SetDispositionPayload {
   receiving_provider?: string;
   reason?: string;
   notes?: string;
+  location_lat?: number;
+  location_lng?: number;
+  location_accuracy_m?: number | null;
 }
 
 export async function setPatientCaseDisposition({
@@ -78,6 +84,9 @@ export async function setPatientCaseDisposition({
       decision_at: now,
       reason: payload.reason ?? null,
       notes: payload.notes ?? null,
+      location_lat: payload.location_lat ?? null,
+      location_lng: payload.location_lng ?? null,
+      location_accuracy_m: payload.location_accuracy_m ?? null,
       created_at: now,
       updated_at: now
     })

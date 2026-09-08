@@ -13,6 +13,9 @@ export interface PatientCaseEncounter {
   encounter_status: string;
   status: string;
   care_started_at: string;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_accuracy_m?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +44,9 @@ export async function getPatientCaseEncounter({
 export interface CreateEncounterPayload {
   care_started_at: string;
   presenting_complaint: string;
+  location_lat?: number;
+  location_lng?: number;
+  location_accuracy_m?: number | null;
 }
 
 /**
@@ -82,6 +88,9 @@ export async function createPatientCaseEncounter(
         encounter_status: "pending_sync",
         status: "pending_sync",
         care_started_at: payload.care_started_at,
+        location_lat: payload.location_lat ?? null,
+        location_lng: payload.location_lng ?? null,
+        location_accuracy_m: payload.location_accuracy_m ?? null,
         created_at: now,
         updated_at: now
       })

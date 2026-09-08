@@ -4,6 +4,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 
 import { DISPOSITION_OUTCOMES, getPatientCaseDisposition, setPatientCaseDisposition, type DispositionOutcome } from "../api/disposition.ts";
 import type { Session } from "../auth/session.ts";
+import LocationPermissionNotice from "../components/LocationPermissionNotice.tsx";
+import { captureLocation, getLocationPermissionStatus, requestLocationPermission, type LocationPermissionStatus } from "../location/captureLocation.ts";
 import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 export interface DispositionScreenProps {
@@ -26,8 +28,19 @@ export default function DispositionScreen({ patientCaseId, session, onBack }: Di
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [locationPermissionStatus, setLocationPermissionStatus] = useState<LocationPermissionStatus>("undetermined");
+  const [enablingLocation, setEnablingLocation] = useState(false);
 
   const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+
+  async function handleEnableLocation() {
+    setEnablingLocation(true);
+    try {
+      setLocationPermissionStatus(await requestLocationPermission());
+    } finally {
+      setEnablingLocation(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +64,7 @@ export default function DispositionScreen({ patientCaseId, session, onBack }: Di
   useFocusEffect(
     useCallback(() => {
       load();
+      getLocationPermissionStatus().then(setLocationPermissionStatus);
     }, [load])
   );
 
@@ -63,6 +77,7 @@ export default function DispositionScreen({ patientCaseId, session, onBack }: Di
     setError(null);
     setSavedAt(null);
     try {
+      const location = await captureLocation();
       const saved = await setPatientCaseDisposition({
         ...config,
         patientCaseId,
@@ -70,7 +85,8 @@ export default function DispositionScreen({ patientCaseId, session, onBack }: Di
           outcome,
           destination_facility: destinationFacility.trim() || undefined,
           receiving_provider: receivingProvider.trim() || undefined,
-          notes: notes.trim() || undefined
+          notes: notes.trim() || undefined,
+          ...location
         }
       });
       setSavedAt(saved.updated_at);
@@ -104,6 +120,8 @@ export default function DispositionScreen({ patientCaseId, session, onBack }: Di
           {error}
         </Text>
       ) : null}
+
+      <LocationPermissionNotice status={locationPermissionStatus} onEnable={handleEnableLocation} enabling={enablingLocation} />
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Outcome</Text>

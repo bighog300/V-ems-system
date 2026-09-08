@@ -99,6 +99,45 @@ test("createPatientCaseEncounter posts care_started_at and presenting_complaint"
   assert.equal(created.encounter_id, "ENC-101");
 });
 
+test("createPatientCaseEncounter forwards optional location fields, and omits them when not captured", async () => {
+  let capturedBody: unknown;
+  const fetchImpl = async (_url: string, options: any) => {
+    capturedBody = JSON.parse(options.body);
+    return new Response(JSON.stringify({ encounter_id: "ENC-102" }), { status: 201 });
+  };
+
+  await createPatientCaseEncounter({
+    apiBaseUrl: "https://api.example.test",
+    authToken: "token",
+    patientCaseId: "PCR-000001",
+    payload: {
+      care_started_at: "2026-09-07T10:05:00.000Z",
+      presenting_complaint: "Chest pain",
+      location_lat: 51.5074,
+      location_lng: -0.1278,
+      location_accuracy_m: 12.5
+    },
+    fetchImpl: fetchImpl as typeof fetch
+  });
+
+  assert.deepEqual(capturedBody, {
+    care_started_at: "2026-09-07T10:05:00.000Z",
+    presenting_complaint: "Chest pain",
+    location_lat: 51.5074,
+    location_lng: -0.1278,
+    location_accuracy_m: 12.5
+  });
+
+  await createPatientCaseEncounter({
+    apiBaseUrl: "https://api.example.test",
+    authToken: "token",
+    patientCaseId: "PCR-000001",
+    payload: { care_started_at: "2026-09-07T10:05:00.000Z", presenting_complaint: "Chest pain" },
+    fetchImpl: fetchImpl as typeof fetch
+  });
+  assert.deepEqual(capturedBody, { care_started_at: "2026-09-07T10:05:00.000Z", presenting_complaint: "Chest pain" });
+});
+
 test("createPatientCaseEncounter queues offline and returns a LOCAL- placeholder encounter id", async () => {
   const deps = await setupOfflineDeps();
   const fetchImpl = async () => {

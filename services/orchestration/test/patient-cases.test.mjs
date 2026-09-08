@@ -116,7 +116,7 @@ test('Stage 5 migration retains every legacy link field and fresh schema has no 
   const upgraded = new SqliteClient(path);
   const { patient_case_id: pId, ...p } = upgraded.queryOne('SELECT * FROM patient_case_patient_links');
   const { patient_case_id: eId, ...e } = upgraded.queryOne('SELECT * FROM patient_case_encounter_links');
-  assert.deepEqual(p, { ...patient }); assert.deepEqual(e, { ...encounter }); assert.equal(pId,eId);
+  assert.deepEqual(p, { ...patient }); assert.deepEqual(e, { ...encounter, location_lat: null, location_lng: null, location_accuracy_m: null }); assert.equal(pId,eId);
   assert.equal(upgraded.queryOne("SELECT openemr_patient_id FROM patient_case_patient_links WHERE incident_id='INC-000002'").openemr_patient_id, 'patient');
   assert.equal(upgraded.queryAll('PRAGMA foreign_key_check').length,0); upgraded.db.close();
 });

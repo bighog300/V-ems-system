@@ -329,6 +329,9 @@ CREATE TABLE patient_case_encounter_links (
   receiving_clinician TEXT,
   handover_notes TEXT,
   closure_ready INTEGER NOT NULL DEFAULT 0,
+  location_lat REAL,
+  location_lng REAL,
+  location_accuracy_m REAL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   correlation_id TEXT NOT NULL,
@@ -389,7 +392,8 @@ CREATE INDEX idx_clinical_procedures_timeline ON clinical_procedures(patient_cas
 CREATE TABLE patient_case_dispositions (
   disposition_id TEXT PRIMARY KEY, patient_case_id TEXT NOT NULL UNIQUE REFERENCES patient_cases(patient_case_id) ON DELETE CASCADE,
   encounter_id TEXT, outcome TEXT NOT NULL, destination_facility TEXT, receiving_provider TEXT, decision_at TEXT NOT NULL,
-  reason TEXT, notes TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, correlation_id TEXT NOT NULL
+  reason TEXT, notes TEXT, location_lat REAL, location_lng REAL, location_accuracy_m REAL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, correlation_id TEXT NOT NULL
 );
 CREATE TABLE patient_case_timeline_events (
   timeline_event_id TEXT PRIMARY KEY, patient_case_id TEXT NOT NULL REFERENCES patient_cases(patient_case_id) ON DELETE CASCADE,
