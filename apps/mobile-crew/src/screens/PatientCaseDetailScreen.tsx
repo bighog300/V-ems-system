@@ -355,8 +355,8 @@ export default function PatientCaseDetailScreen({
       )}
 
       <Text style={styles.placeholder}>
-        Signature capture is a typed attestation for now; a drawn-signature canvas is Stage 11 mobile-native UX work. Clinical
-        review/finalization after submission happens outside this app.
+        Signing supports a drawn signature or a typed attestation on the ePCR status screen. Clinical review/finalization after
+        submission happens outside this app.
       </Text>
     </ScrollView>
   );
