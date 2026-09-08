@@ -140,11 +140,20 @@ testable.
    `device_push_tokens`) — laying the groundwork for Stage 12's device/session-
    revocation requirement without building revocation itself yet.
 8. **11h — Tablet/phone layout pass, accessibility polish, and vendor-neutral hardware
-   hooks.** Extends Stage 9's existing `theme/a11y.ts` responsive-width work across the
-   screens 11a–11g just added. Adds a `src/integrations/deviceImport.ts` interface stub
-   (a typed contract for "import a structured reading from an external device") with no
-   real vendor implementation — satisfies "vendor-neutral hooks for future
-   monitor/defibrillator imports" as a seam, not a feature.
+   hooks.** Audited every 11a–11g screen and component against Stage 9's
+   `theme/a11y.ts` responsive-width/touch-target work
+   (`CONTENT_MAX_WIDTH`/`TOUCH_TARGET_MIN`/`CHIP_TARGET_MIN`) and accessibility props
+   (`accessibilityRole`/`accessibilityLabel`, `accessibilityRole="alert"` on error
+   text) — each milestone had already applied these consistently as it landed, so
+   this pass is a verification, not a rewrite; no layout or a11y fixes were needed.
+   Adds `src/integrations/deviceImport.ts`: a `DeviceImportProvider` interface
+   (`isAvailable()`/`importReading()`) with no real vendor implementation — its
+   `DeviceImportResult` reuses `VitalSigns`'s field names directly rather than a
+   parallel "parameter" enum, so a future import maps onto the existing
+   `createPatientCaseObservation` payload with no translation step. Satisfies
+   "vendor-neutral hooks for future monitor/defibrillator imports" as a seam, not a
+   feature — no Bluetooth/USB pairing, vendor protocol, or regulatory work is in
+   scope here.
 
 ## Exit gate
 
