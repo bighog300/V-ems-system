@@ -376,7 +376,7 @@ test("outbox event creation", async () => {
       body: JSON.stringify({ action: "confirm_assignment" })
     });
 
-    const events = orchestration.listOutboxEvents();
+    const events = await orchestration.listOutboxEvents();
     assert.ok(events.length >= 4);
     assert.ok(events.some((e) => e.event_type === "IncidentCreated"));
     assert.ok(events.some((e) => e.event_type === "IncidentUpdated"));
@@ -393,7 +393,7 @@ test("incident create writes sync intent for Vtiger", async () => {
     const created = await createDefaultIncident(base);
     assert.equal(created.status, 201);
 
-    const intents = orchestration.listSyncIntents();
+    const intents = await orchestration.listSyncIntents();
     const incidentCreateIntent = intents.find((intent) => intent.operation === "createIncidentMirror");
     assert.ok(incidentCreateIntent);
     assert.equal(incidentCreateIntent.entity_type, "incident");
@@ -413,7 +413,7 @@ test("incident update writes sync intent", async () => {
       body: JSON.stringify({ action: "queue_for_dispatch" })
     });
 
-    const intents = orchestration.listSyncIntents();
+    const intents = await orchestration.listSyncIntents();
     const incidentUpdateIntent = intents.find((intent) => intent.operation === "updateIncidentMirror");
     assert.ok(incidentUpdateIntent);
     assert.equal(incidentUpdateIntent.entity_type, "incident");
@@ -434,7 +434,7 @@ test("assignment create writes sync intent", async () => {
     });
     assert.equal(assignment.status, 201);
 
-    const intents = orchestration.listSyncIntents();
+    const intents = await orchestration.listSyncIntents();
     const assignmentCreateIntent = intents.find((intent) => intent.operation === "createAssignmentMirror");
     assert.ok(assignmentCreateIntent);
     assert.equal(assignmentCreateIntent.entity_type, "assignment");
@@ -457,7 +457,7 @@ test("assignment update writes sync intent", async () => {
       body: JSON.stringify({ action: "confirm_assignment" })
     });
 
-    const intents = orchestration.listSyncIntents();
+    const intents = await orchestration.listSyncIntents();
     const assignmentUpdateIntent = intents.find((intent) => intent.operation === "updateAssignmentMirror");
     assert.ok(assignmentUpdateIntent);
     assert.equal(assignmentUpdateIntent.entity_type, "assignment");

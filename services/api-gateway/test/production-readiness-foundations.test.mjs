@@ -509,8 +509,8 @@ test("support diagnostics exposes readiness, metrics, and failed sync intent vis
     });
     assert.equal(created.status, 201);
 
-    const queuedIntent = orchestration.syncIntents.listAll()[0];
-    orchestration.syncIntents.markFailed(queuedIntent.intent_id, {
+    const queuedIntent = (await orchestration.syncIntents.listAll())[0];
+    await orchestration.syncIntents.markFailed(queuedIntent.intent_id, {
       status: "pending",
       attempt_count: 2,
       last_error: "Vtiger endpoint timeout",
@@ -518,7 +518,7 @@ test("support diagnostics exposes readiness, metrics, and failed sync intent vis
       dead_lettered_at: null
     });
 
-    orchestration.syncIntents.markFailed(queuedIntent.intent_id, {
+    await orchestration.syncIntents.markFailed(queuedIntent.intent_id, {
       status: "dead_lettered",
       attempt_count: 3,
       last_error: "Vtiger endpoint unavailable after retry limit",

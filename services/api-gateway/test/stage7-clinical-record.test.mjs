@@ -20,7 +20,7 @@ test('patient-case clinical record endpoints preserve structured history and non
     const response = await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-user-role': 'supervisor', 'x-actor-id': 'STAFF-001', ...(method !== 'GET' ? { 'idempotency-key': `${method}-${path}` } : {}) }, ...(payload ? { body: JSON.stringify(payload) } : {}) });
     return { status: response.status, body: await response.json() };
   };
-  const incident = service.createIncident({ call: { call_source: 'phone', received_at: '2026-09-06T10:00:00Z' }, incident: { category: 'Medical', priority: 'High', description: 'Stage 7', address: 'Test', patient_count: 1 } }, { correlationId: 'stage7-api' });
+  const incident = await service.createIncident({ call: { call_source: 'phone', received_at: '2026-09-06T10:00:00Z' }, incident: { category: 'Medical', priority: 'High', description: 'Stage 7', address: 'Test', patient_count: 1 } }, { correlationId: 'stage7-api' });
   const created = await request(`/api/incidents/${incident.incident_id}/patient-cases`, 'POST', { temporary_label: 'Unknown patient' });
   assert.equal(created.status, 201);
   const id = created.body.patient_case_id;

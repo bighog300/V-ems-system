@@ -10,11 +10,11 @@ test("Stage 8 Patient Case endpoints expose readiness, lifecycle, signatures, re
   const dir = mkdtempSync(join(tmpdir(), "vems-stage8-api-"));
   const service = new OrchestrationService({ dbPath: join(dir, "stage8.sqlite") });
   const meta = { correlationId: "stage8-api", actorId: "STAFF-001", actorRole: "supervisor" };
-  const incident = service.createIncident({ call: { call_source: "phone", received_at: "2026-09-06T10:00:00Z" }, incident: { category: "medical_emergency", priority: "high", description: "Stage 8", address: "Test", patient_count: 1 } }, meta);
-  const patientCase = service.createPatientCase(incident.incident_id, { temporary_label: "Unknown" }, meta);
-  service.savePatientCaseDemographics(patientCase.patient_case_id, { first_name: "Unknown", unidentified: true, dob_unknown: true }, meta);
-  service.createPatientCaseAssessment(patientCase.patient_case_id, { section_type: "refusal_capacity", payload: { capacity: "documented", refusal: true } }, meta);
-  service.setPatientCaseDisposition(patientCase.patient_case_id, { outcome: "refusal_transport", reason: "declined" }, meta);
+  const incident = await service.createIncident({ call: { call_source: "phone", received_at: "2026-09-06T10:00:00Z" }, incident: { category: "medical_emergency", priority: "high", description: "Stage 8", address: "Test", patient_count: 1 } }, meta);
+  const patientCase = await service.createPatientCase(incident.incident_id, { temporary_label: "Unknown" }, meta);
+  await service.savePatientCaseDemographics(patientCase.patient_case_id, { first_name: "Unknown", unidentified: true, dob_unknown: true }, meta);
+  await service.createPatientCaseAssessment(patientCase.patient_case_id, { section_type: "refusal_capacity", payload: { capacity: "documented", refusal: true } }, meta);
+  await service.setPatientCaseDisposition(patientCase.patient_case_id, { outcome: "refusal_transport", reason: "declined" }, meta);
   const server = createApp(service); await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => { await new Promise(resolve => server.close(resolve)); service.db.db.close(); rmSync(dir, { recursive: true, force: true }); });
   const base = `http://127.0.0.1:${server.address().port}`;
