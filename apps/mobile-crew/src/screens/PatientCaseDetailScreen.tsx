@@ -7,6 +7,8 @@ import { createPatientCaseEncounter, getPatientCaseEncounterCached, type Patient
 import { LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { getPatientCaseCached, getPatientCaseDemographicsCached, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
+import LocationPermissionNotice from "../components/LocationPermissionNotice.tsx";
+import { captureLocation, getLocationPermissionStatus, requestLocationPermission, type LocationPermissionStatus } from "../location/captureLocation.ts";
 import { getOrCreateEncryptionKey } from "../offline/crypto.ts";
 import { getOfflineDatabase } from "../offline/db.ts";
 import { enqueueAttachment, listAttachments, type AttachmentMetadata } from "../offline/attachmentStore.ts";
@@ -54,6 +56,23 @@ export default function PatientCaseDetailScreen({
   const [presentingComplaint, setPresentingComplaint] = useState("");
   const [creatingEncounter, setCreatingEncounter] = useState(false);
   const [encounterError, setEncounterError] = useState<string | null>(null);
+  const [locationPermissionStatus, setLocationPermissionStatus] = useState<LocationPermissionStatus>("undetermined");
+  const [enablingLocation, setEnablingLocation] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      getLocationPermissionStatus().then(setLocationPermissionStatus);
+    }, [])
+  );
+
+  async function handleEnableLocation() {
+    setEnablingLocation(true);
+    try {
+      setLocationPermissionStatus(await requestLocationPermission());
+    } finally {
+      setEnablingLocation(false);
+    }
+  }
 
   const [attachments, setAttachments] = useState<AttachmentMetadata[]>([]);
   const [capturingPhoto, setCapturingPhoto] = useState(false);
@@ -192,11 +211,12 @@ export default function PatientCaseDetailScreen({
     setCreatingEncounter(true);
     setEncounterError(null);
     try {
+      const location = await captureLocation();
       const created = await createPatientCaseEncounter({
         apiBaseUrl: session.apiBaseUrl,
         authToken: session.authToken,
         patientCaseId: caseState.patient_case_id,
-        payload: { care_started_at: new Date().toISOString(), presenting_complaint: presentingComplaint.trim() }
+        payload: { care_started_at: new Date().toISOString(), presenting_complaint: presentingComplaint.trim(), ...location }
       });
       setEncounter(created);
     } catch (err) {
@@ -384,6 +404,7 @@ export default function PatientCaseDetailScreen({
               </Text>
             ) : (
               <>
+                <LocationPermissionNotice status={locationPermissionStatus} onEnable={handleEnableLocation} enabling={enablingLocation} />
                 <TextInput
                   style={styles.input}
                   placeholder="Presenting complaint"
