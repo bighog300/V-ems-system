@@ -14,12 +14,12 @@ maybeTest("rolls back the last migration and re-migrating reapplies it", async (
     const allIds = migrationFiles("postgres").map((m) => m.id);
     const lastId = allIds.at(-1);
     assert.equal(await lastAppliedMigration(db), lastId);
-    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'event_outbox' AND column_name = 'event_seq';"));
+    assert.ok(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'patient_case_attachments';"));
 
     const rolledBack = await rollbackLastMigration(db);
     assert.equal(rolledBack, lastId);
     assert.equal(await lastAppliedMigration(db), allIds.at(-2));
-    assert.equal(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'event_outbox' AND column_name = 'event_seq';"), undefined);
+    assert.equal(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'patient_case_attachments';"), undefined);
   } finally {
     await db.close();
   }
@@ -36,15 +36,33 @@ maybeTest("rolls back the last migration and re-migrating reapplies it", async (
   }
 });
 
-maybeTest("rolling back a migration with no rollback script fails loudly", async () => {
+maybeTest("consecutive migrations can each be rolled back in turn, until one with no rollback script is reached", async () => {
   const db = createDbClient({ driver: "postgres", connectionString: POSTGRES_URL });
   try {
+    // Fresh client against a fully-migrated database (the prior test leaves
+    // it that way, but don't depend on inter-test ordering) — bootstrap
+    // reapplies anything missing before any assertion here.
     await db.execute("SELECT 1;");
-    // 013 has no rollback script — roll back 014 (which does) first so 013
-    // becomes the "last applied" migration under test.
-    await rollbackLastMigration(db);
+
+    // 015 (patient_case_attachments) and 014 (event_outbox_sequence) both
+    // ship rollback scripts; roll each back in turn.
+    const rolledBack015 = await rollbackLastMigration(db);
+    assert.equal(rolledBack015, "015_patient_case_attachments");
+    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'event_outbox' AND column_name = 'event_seq';"));
+
+    const rolledBack014 = await rollbackLastMigration(db);
+    assert.equal(rolledBack014, "014_event_outbox_sequence");
+    assert.equal(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'event_outbox' AND column_name = 'event_seq';"), undefined);
+
+    // 013 has no rollback script.
     await assert.rejects(() => rollbackLastMigration(db), /No rollback script exists for migration "013_device_push_token_device_id"/);
   } finally {
     await db.close();
   }
+
+  // Leave the database fully migrated again for any test that runs after
+  // this one.
+  const reconnected = createDbClient({ driver: "postgres", connectionString: POSTGRES_URL });
+  await reconnected.execute("SELECT 1;");
+  await reconnected.close();
 });

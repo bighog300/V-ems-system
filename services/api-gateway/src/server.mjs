@@ -14,6 +14,12 @@ const PERSONNEL_STATUSES = ["Available", "Unavailable", "Off Duty", "Training", 
 const STOCK_ITEM_TYPES = ["Consumable", "Medication"];
 const STOCK_ACTIVE_STATUSES = ["Active", "Inactive"];
 const DEFAULT_JSON_BODY_MAX_BYTES = 1024 * 1024;
+// Attachment uploads carry base64-encoded file content (~33% larger than
+// the raw bytes) as a JSON field, so they need a much higher ceiling than
+// every other JSON body on this API -- 25MB of base64 covers an ~18MB raw
+// photo/document with headroom, well above what a mobile capture at
+// captureAttachment.ts's quality settings produces.
+const DEFAULT_ATTACHMENT_BODY_MAX_BYTES = 25 * 1024 * 1024;
 
 
 const logger = createLogger({ serviceName: "api-gateway" });
@@ -257,9 +263,9 @@ function assertJsonContentType(req) {
   }
 }
 
-async function parseJson(req) {
+async function parseJson(req, maxBytes = Number(process.env.JSON_BODY_MAX_BYTES ?? DEFAULT_JSON_BODY_MAX_BYTES)) {
   assertJsonContentType(req);
-  const jsonBodyMaxBytes = Number(process.env.JSON_BODY_MAX_BYTES ?? DEFAULT_JSON_BODY_MAX_BYTES);
+  const jsonBodyMaxBytes = maxBytes;
   const chunks = [];
   let bytesRead = 0;
   for await (const chunk of req) {
@@ -787,7 +793,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline))?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline|attachments)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -799,6 +805,7 @@ export function createApp(orchestration = new OrchestrationService()) {
         if (caseListMatch && method === 'GET') return okJson(res, 200, { patient_cases: await orchestration.listPatientCases(incidentId) }, context);
         if (caseListMatch && method === 'POST') return okJson(res, 201, await orchestration.createPatientCase(incidentId, await parseJson(req), meta), context);
         const action = caseMatch?.[2];
+        const childId = caseMatch?.[3];
         if (method === 'GET' && !action) return okJson(res, 200, await orchestration.getPatientCase(id), context);
         if (method === 'GET' && action === 'patient-link') return okJson(res, 200, await orchestration.getPatientCasePatientLink(id), context);
         if (method === 'GET' && action === 'encounter') return okJson(res, 200, await orchestration.getPatientCaseEncounter(id), context);
@@ -824,6 +831,12 @@ export function createApp(orchestration = new OrchestrationService()) {
         if (method === 'GET' && action === 'disposition') return okJson(res, 200, await orchestration.getPatientCaseDisposition(id), context);
         if (method === 'POST' && action === 'disposition') return okJson(res, 201, await orchestration.setPatientCaseDisposition(id, await parseJson(req), meta), context);
         if (method === 'GET' && action === 'timeline') return okJson(res, 200, { timeline: await orchestration.listPatientCaseTimeline(id) }, context);
+        if (method === 'GET' && action === 'attachments' && !childId) return okJson(res, 200, { attachments: await orchestration.listPatientCaseAttachments(id) }, context);
+        if (method === 'POST' && action === 'attachments' && !childId) {
+          const attachmentBodyMaxBytes = Number(process.env.ATTACHMENT_BODY_MAX_BYTES ?? DEFAULT_ATTACHMENT_BODY_MAX_BYTES);
+          return okJson(res, 201, await orchestration.uploadPatientCaseAttachment(id, await parseJson(req, attachmentBodyMaxBytes), meta), context);
+        }
+        if (method === 'GET' && action === 'attachments' && childId) return okJson(res, 200, await orchestration.getPatientCaseAttachmentContent(id, childId), context);
       }
 
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
