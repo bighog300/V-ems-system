@@ -1,3 +1,68 @@
+services:
+  # Stage 12 milestone 12h: mysql/redis were referenced by vtiger/openemr's
+  # depends_on below but never actually defined in this file, and the file
+  # had no top-level services:/networks:/volumes: keys either -- so
+  # `docker-compose -f infra/docker-compose.staging.yml up -d` (as
+  # scripts/start-env.sh runs it for staging) could never have worked as a
+  # standalone compose file. Both are fixed here.
+  mysql:
+    image: mysql:8.0
+    container_name: vems-mysql-staging
+    restart: unless-stopped
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
+    volumes:
+      - mysql_data_staging:/var/lib/mysql
+      # Pre-existing gap, not addressed by this change: init-databases.sql
+      # creates the vtiger/openemr/vems MySQL users with hardcoded
+      # passwords ('vtigerpass'/'openemrpass'/'vemspass'), which only
+      # happen to match dev's own compose defaults. Staging's
+      # VTIGER_DB_PASSWORD/OPENEMR_DB_PASSWORD below are required with no
+      # default and MUST currently be set to those same hardcoded values
+      # for the vtiger/openemr containers to actually authenticate --
+      # templating this init script to use the real configured passwords
+      # is follow-up work, not part of Stage 12 milestone 12h.
+      - ./services/mysql/init-scripts:/docker-entrypoint-initdb.d:ro
+    # Unlike dev, staging does not publish MySQL's port to the host --
+    # it's reachable only from other containers on vems-network-staging.
+    networks:
+      - vems-network-staging
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: vems-redis-staging
+    restart: unless-stopped
+    volumes:
+      - redis_data_staging:/data
+    networks:
+      - vems-network-staging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   vtiger:
     build:
       context: ./services/vtiger
@@ -29,6 +94,11 @@
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   openemr:
     build:
@@ -63,3 +133,17 @@
       timeout: 10s
       retries: 3
       start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  vems-network-staging:
+
+volumes:
+  mysql_data_staging:
+  redis_data_staging:
+  vtiger_data_staging:
+  openemr_data_staging:

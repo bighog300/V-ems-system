@@ -4,6 +4,7 @@ import { OrchestrationService } from "@vems/orchestration";
 import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCIDENT_STATUSES, createLogger, isInsecureSecret, isProductionEnv } from "@vems/shared";
 import { authenticateRequest } from "./auth.mjs";
 import { RBAC_POLICIES } from "./authorization-policy.mjs";
+import { checkDependencies } from "./dependency-health.mjs";
 
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
@@ -78,9 +79,12 @@ async function readinessReport(orchestration, diagnostics) {
     acc[incident.status] = (acc[incident.status] ?? 0) + 1;
     return acc;
   }, {});
+  const dependencies = await checkDependencies(orchestration);
 
   return {
     generated_at: new Date().toISOString(),
+    healthy: dependencies.healthy,
+    dependencies,
     production_readiness: {
       structured_logging: true,
       correlation_headers: true,
@@ -695,7 +699,8 @@ export function createApp(orchestration = new OrchestrationService()) {
 
     try {
       if (method === "GET" && url.pathname === "/api/support/readiness") {
-        return okJson(res, 200, await readinessReport(orchestration, diagnostics), context);
+        const report = await readinessReport(orchestration, diagnostics);
+        return okJson(res, report.healthy ? 200 : 503, report, context);
       }
 
       if (method === "GET" && url.pathname === "/api/support/metrics") {
