@@ -34,8 +34,24 @@ export class PostgresClient {
       connectionString,
       max: options.poolSize ?? 10
     });
+    // node-postgres emits 'error' on the pool for background failures on an
+    // otherwise-idle client (e.g. the server restarting) that aren't tied to
+    // any in-flight query — without a listener, that's an uncaught 'error'
+    // event, which crashes the process. There's nothing more targeted to do
+    // with it here: the next real query against the pool will fail on its
+    // own and surface a normal, catchable rejection to its caller.
+    this.pool.on("error", () => {});
     this._txStorage = new AsyncLocalStorage();
     this._ready = this._bootstrap();
+    // A bootstrap failure (e.g. Postgres unreachable at startup) shouldn't
+    // crash the process before any caller gets a chance to await _ready and
+    // handle it — the constructor runs well before the first real request
+    // in every real usage (OrchestrationService/sync-worker-service
+    // construct their DbClient once at startup, not per-request), so
+    // without this, an unlucky timing gap turns a normal connectivity
+    // failure into an unhandled-rejection crash. Every public method still
+    // awaits the same `this._ready` and gets the real rejection.
+    this._ready.catch(() => {});
   }
 
   async _bootstrap() {
