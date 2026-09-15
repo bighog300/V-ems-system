@@ -781,6 +781,24 @@ export function createApp(orchestration = new OrchestrationService()) {
         return okJson(res, 200, { replayed: true, intent: replayed }, context);
       }
 
+      // Stage 13 milestone 13e: the first cross-case reporting endpoints
+      // (every prior GET is scoped to one entity/patient case, or to
+      // system/operational health under /api/support/*). Query params
+      // (not path segments) for the optional date range, since it's
+      // genuinely a filter, not a resource identifier -- no other
+      // endpoint in this API uses query params today, so this is a
+      // deliberate, minimal addition to the convention, not an
+      // inconsistency with it.
+      if (method === "GET" && url.pathname === "/api/reports/incidents") {
+        return okJson(res, 200, await orchestration.getIncidentVolumeReport({ from: url.searchParams.get("from"), to: url.searchParams.get("to") }), context);
+      }
+      if (method === "GET" && url.pathname === "/api/reports/stock-usage") {
+        return okJson(res, 200, await orchestration.getStockUsageReport({ from: url.searchParams.get("from"), to: url.searchParams.get("to") }), context);
+      }
+      if (method === "GET" && url.pathname === "/api/reports/qa-flags") {
+        return okJson(res, 200, await orchestration.getQaFlagReport({ from: url.searchParams.get("from"), to: url.searchParams.get("to") }), context);
+      }
+
       if (method === "GET" && url.pathname === "/api/incidents") {
         const incidents = await orchestration.listIncidentsForBoard();
         return okJson(res, 200, { incidents }, context);

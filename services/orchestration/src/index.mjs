@@ -34,6 +34,7 @@ import { DevicePushTokenRepository } from "./repositories/device-push-token-repo
 import { PatientCaseAttachmentRepository } from "./repositories/patient-case-attachment-repository.mjs";
 import { FilesystemObjectStorage } from "./storage/object-storage.mjs";
 import { attachmentMethods } from "./attachments.mjs";
+import { reportingMethods } from "./reporting/reporting-methods.mjs";
 import { RevocationRepository } from "./repositories/revocation-repository.mjs";
 
 const DEVICE_PUSH_TOKEN_PLATFORMS = ["ios", "android"];
@@ -992,3 +993,4 @@ Object.assign(OrchestrationService.prototype, patientCaseMethods);
 Object.assign(OrchestrationService.prototype, clinicalRecordMethods);
 Object.assign(OrchestrationService.prototype, epcrFinalizationMethods);
 Object.assign(OrchestrationService.prototype, attachmentMethods);
+Object.assign(OrchestrationService.prototype, reportingMethods);
