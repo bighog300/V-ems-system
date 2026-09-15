@@ -32,6 +32,7 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^26.4.1",
     "@types/react": "~19.2.2",
+    "babel-plugin-dynamic-import-node": "^2.3.3",
     "jest": "^30.5.1",
     "jest-expo": "^57.0.5",
     "react-test-renderer": "^19.2.3",
@@ -44,7 +45,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test:unit": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
-    "test:component": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:component": "jest",
     "test": "npm run test:unit && npm run test:component"
   },
   "private": true
