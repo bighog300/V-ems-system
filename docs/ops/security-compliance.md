@@ -11,6 +11,36 @@
 - Route authorization policy is centralized in `services/api-gateway/src/authorization-policy.mjs`.
 - Least-privilege review cadence: **monthly**.
 - Policy owner: **Platform Security Lead**.
+- **RBAC enforcement is non-optional in production** (Stage 12 milestone
+  12i): `RBAC_ENFORCE` remains opt-in everywhere else (defaults off in
+  dev/test/staging unless explicitly set), but in production
+  (`APP_ENV=production`) `services/api-gateway/src/server.mjs`'s
+  `createApp` always enforces it -- an explicit `RBAC_ENFORCE=false` is
+  overridden (logged as `rbac_enforce_override_ignored`), not honored,
+  since silently forcing enforcement back on is the fail-safe outcome
+  here (unlike the 12f production-secrets checks, where failing loudly is
+  the only safe response to a missing secret).
+
+## Rate limiting and abuse protection (Stage 12 milestone 12i)
+
+- `services/api-gateway/src/rate-limiter.mjs` implements per-actor request
+  throttling: a sliding window keyed by `actor_id` once authenticated,
+  falling back to the client's remote address for the brief pre-auth
+  window. In-process and in-memory -- state is not shared across multiple
+  api-gateway instances behind a load balancer, so each instance enforces
+  its own limit independently; a shared store (e.g. Redis) is future work
+  if/when api-gateway runs more than one instance.
+- On by default everywhere (`RATE_LIMIT_ENABLED=false` to disable),
+  defaulting to 120 requests per 60-second window per actor
+  (`RATE_LIMIT_MAX_REQUESTS`/`RATE_LIMIT_WINDOW_MS`) -- far above any
+  legitimate interactive dispatcher/crew usage, but enough to stop a
+  runaway retry loop or a single compromised/malicious actor from
+  monopolizing an instance.
+- A throttled request gets `429` with a `retry-after` header and an
+  `error.code` of `RATE_LIMITED`; `rate_limit_deny_count` is tracked
+  alongside `rbac_deny_count` in `/api/support/metrics` and
+  `/api/support/diagnostics`' alert states
+  (`ALERT_RATE_LIMIT_DENY_WARN`, default 10).
 
 ## PHI-safe logging and telemetry (Stage 12 milestone 12e)
 

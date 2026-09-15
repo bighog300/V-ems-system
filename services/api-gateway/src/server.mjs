@@ -5,6 +5,7 @@ import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCID
 import { authenticateRequest } from "./auth.mjs";
 import { RBAC_POLICIES } from "./authorization-policy.mjs";
 import { checkDependencies } from "./dependency-health.mjs";
+import { createRateLimiter } from "./rate-limiter.mjs";
 
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
@@ -42,11 +43,12 @@ function buildRequestContext(req, actor = {}) {
   };
 }
 
-function okJson(res, status, body, context) {
+function okJson(res, status, body, context, extraHeaders = {}) {
   res.writeHead(status, {
     "content-type": "application/json",
     "x-correlation-id": context.correlationId,
-    "x-request-id": context.requestId
+    "x-request-id": context.requestId,
+    ...extraHeaders
   });
   res.end(JSON.stringify(body));
 }
@@ -103,7 +105,8 @@ async function readinessReport(orchestration, diagnostics) {
         smoke_include_upstream_connectivity: diagnostics.smokeIncludeUpstreamConnectivity,
         readiness_mode: diagnostics.readinessMode
       },
-      last_validation: diagnostics.lastValidation
+      last_validation: diagnostics.lastValidation,
+      rate_limiting: diagnostics.rateLimiting
     },
     incident_snapshot: {
       total: incidents.length,
@@ -118,6 +121,7 @@ function metricsSummary(metrics) {
     request_count: metrics.request_count,
     request_failures: metrics.request_failures,
     rbac_deny_count: metrics.rbac_deny_count,
+    rate_limit_deny_count: metrics.rate_limit_deny_count,
     failure_rate_pct: metrics.request_count === 0
       ? 0
       : Number(((metrics.request_failures / metrics.request_count) * 100).toFixed(2)),
@@ -194,6 +198,7 @@ async function syncIntentSummary(orchestration) {
 function evaluateAlertStates(metricsSum, syncSum, thresholds) {
   return {
     rbac_deny_count: (metricsSum.rbac_deny_count ?? 0) >= thresholds.rbac_deny_count_warn ? "warn" : "ok",
+    rate_limit_deny_count: (metricsSum.rate_limit_deny_count ?? 0) >= thresholds.rate_limit_deny_count_warn ? "warn" : "ok",
     dead_letter_count: (syncSum.totals.dead_lettered ?? 0) >= thresholds.dead_letter_count_warn ? "warn" : "ok",
     failure_rate_pct: (metricsSum.failure_rate_pct ?? 0) >= thresholds.failure_rate_pct_warn ? "warn" : "ok",
     latency_avg_ms: (metricsSum.latency_ms.avg ?? 0) >= thresholds.latency_avg_ms_warn ? "warn" : "ok"
@@ -223,6 +228,7 @@ function createApiMetricsCollector() {
     request_count: 0,
     request_failures: 0,
     rbac_deny_count: 0,
+    rate_limit_deny_count: 0,
     latency_ms: {
       count: 0,
       total: 0,
@@ -578,8 +584,20 @@ function validateCreateHandover(payload) {
 }
 
 export function createApp(orchestration = new OrchestrationService()) {
-  const enforceRbac = process.env.RBAC_ENFORCE === "true";
   const appEnv = process.env.APP_ENV ?? "development";
+  // Stage 12 milestone 12i: RBAC_ENFORCE is opt-in everywhere except
+  // production, where enforcement is non-optional -- an explicit
+  // RBAC_ENFORCE=false is overridden (fail-safe, not fail-open) rather
+  // than honored, since unlike the production-secrets checks in 12f
+  // (where failing loudly is the only safe response to a missing secret),
+  // silently forcing RBAC back on is itself the safe outcome here.
+  const rbacEnforceOverridden = isProductionEnv() && process.env.RBAC_ENFORCE === "false";
+  const enforceRbac = isProductionEnv() ? true : process.env.RBAC_ENFORCE === "true";
+  if (rbacEnforceOverridden) {
+    logger.warn("rbac_enforce_override_ignored", {
+      message: "RBAC_ENFORCE=false is ignored in production; RBAC enforcement is always on."
+    });
+  }
   const profile = process.env.APP_PROFILE ?? process.env.NODE_ENV ?? "default";
   const smokeIncludeUpstreamConnectivity = process.env.SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY === "true";
   const upstreamConnectivityValidationEnabled = envFlagEnabled(
@@ -592,6 +610,19 @@ export function createApp(orchestration = new OrchestrationService()) {
       result: process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT ?? "unknown"
     }
     : null;
+  // Stage 12 milestone 12i: per-actor request throttling, on by default
+  // (unlike RBAC_ENFORCE, generous defaults here cost nothing in dev/test
+  // and this is abuse protection, not a workflow gate) -- keyed by
+  // actor_id once authenticated, falling back to the client's remote
+  // address for the brief pre-auth/anonymous window. 120 requests/60s is
+  // far above any legitimate dispatcher/crew interactive usage but stops a
+  // runaway retry loop or a single compromised/malicious actor from
+  // monopolizing this instance.
+  const rateLimitEnabled = process.env.RATE_LIMIT_ENABLED !== "false";
+  const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60000);
+  const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS ?? 120);
+  const rateLimiter = createRateLimiter({ windowMs: rateLimitWindowMs, maxRequests: rateLimitMaxRequests });
+
   const diagnostics = {
     appEnv,
     profile,
@@ -599,7 +630,12 @@ export function createApp(orchestration = new OrchestrationService()) {
     upstreamConnectivityValidationEnabled,
     smokeIncludeUpstreamConnectivity,
     readinessMode: process.env.READINESS_MODE ?? process.env.SMOKE_MODE ?? null,
-    lastValidation
+    lastValidation,
+    rateLimiting: {
+      enabled: rateLimitEnabled,
+      window_ms: rateLimitWindowMs,
+      max_requests: rateLimitMaxRequests
+    }
   };
   const metrics = createApiMetricsCollector();
   const metricsExposureEnabled = appEnv !== "production" || process.env.INTERNAL_METRICS_ENABLED === "true";
@@ -626,6 +662,7 @@ export function createApp(orchestration = new OrchestrationService()) {
   }
   const alertThresholds = {
     rbac_deny_count_warn: Number(process.env.ALERT_RBAC_DENY_WARN ?? 10),
+    rate_limit_deny_count_warn: Number(process.env.ALERT_RATE_LIMIT_DENY_WARN ?? 10),
     dead_letter_count_warn: Number(process.env.ALERT_DEAD_LETTER_WARN ?? 5),
     failure_rate_pct_warn: Number(process.env.ALERT_FAILURE_RATE_PCT_WARN ?? 5),
     latency_avg_ms_warn: Number(process.env.ALERT_LATENCY_AVG_MS_WARN ?? 1000)
@@ -652,6 +689,25 @@ export function createApp(orchestration = new OrchestrationService()) {
     const deviceId = toHeaderValue(req.headers["x-device-id"]);
     const idempotencyKey = req.headers["idempotency-key"];
     let requestFailed = false;
+
+    if (rateLimitEnabled) {
+      const rateLimitKey = context.actorId ?? req.socket.remoteAddress ?? "unknown";
+      const rateLimit = rateLimiter.check(rateLimitKey);
+      if (!rateLimit.allowed) {
+        metrics.rate_limit_deny_count += 1;
+        logger.warn("rate_limit_denied", {
+          correlation_id: context.correlationId,
+          request_id: context.requestId,
+          actor_id: context.actorId,
+          method,
+          path: url.pathname,
+          retry_after_ms: rateLimit.retryAfterMs
+        });
+        return okJson(res, 429, errorEnvelope("RATE_LIMITED", "Too many requests; slow down and retry shortly", true, context), context, {
+          "retry-after": String(Math.ceil(rateLimit.retryAfterMs / 1000))
+        });
+      }
+    }
 
     logger.info("request_received", {
       correlation_id: context.correlationId,
