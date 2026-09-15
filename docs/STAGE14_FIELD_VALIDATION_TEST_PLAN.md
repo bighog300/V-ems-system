@@ -1,0 +1,261 @@
+# Stage 14 — Field Validation and Release Readiness: Test Plan
+
+Tracking: issue [#71](https://github.com/bighog300/v-ems-system/issues/71). Follows Stage 13
+(issue #70, merged in full — compliance profiles, coded terminology, PCR completeness
+validation, signed/versioned PDF export, operational/drug-stock/QA/audit reporting,
+retention/legal-hold, export-format compatibility).
+
+## Why this document exists, and what it is not
+
+Every prior stage (6 through 13) was validated the way this repository validates
+everything: automated unit/integration tests, run against SQLite in CI and against a
+real local Postgres instance before merge, per each stage's own completion gate. That
+proves the *code* is correct against the contracts it was written to. It does not prove
+the *system* — real devices, real network conditions, real crews, a real ambulance cab —
+behaves correctly, because none of that exists in an automated test run or in this
+environment. Stage 14 is that second, distinct kind of proof, and this document is the
+plan for gathering it: what to test, on what, how to tell pass from fail, and what
+"done" means.
+
+This document is written to be **executed by a human team with physical devices**, not
+by this session. Nothing in it can be completed here — that is the reason Stage 14 was
+called out as unstartable when Stages 10–13 were surveyed for what this environment
+could actually execute. What *is* in scope for this environment, and done as of this
+document: drafting the plan itself (issue #71 explicitly calls for starting test-plan
+drafting early, ahead of the drills themselves), and keeping it grounded in the features
+Stages 6–13 actually built rather than a generic device-testing checklist.
+
+## Scope
+
+**In scope**: everything in Stage 14's required-outcomes list (issue #71) as it applies
+to the V-EMS mobile crew app, its offline/sync behavior, and its interaction with the
+API gateway, OpenEMR and Vtiger in a real deployment topology.
+
+**Out of scope, and why**:
+- Anything already covered by an existing automated suite is *referenced*, not
+  re-specified here — e.g. RBAC enforcement (`docs/ops/security-compliance.md`), sync
+  worker duplicate-processing correctness under concurrent Postgres connections
+  (`docs/ops/09-capacity-and-load-testing.md`), backup/restore mechanics
+  (`docs/ops/06-backup-recovery-checklist.md`, `docs/ops/07-disaster-recovery-runbook.md`).
+  Stage 14 exercises these *on real infrastructure under field conditions*, not their
+  logic from scratch.
+- Load/capacity targets are Stage 12 milestone 12j's job, already measured and
+  documented; Stage 14's outage/recovery drills below are about *operator-visible
+  behavior* during an outage, not throughput.
+- Formal penetration testing and clinical-safety review require qualified third-party
+  reviewers this session cannot stand in for; this document specifies what they need to
+  cover and the acceptance bar, not the review itself.
+
+## Device and environment matrix
+
+| Axis | Coverage required |
+|---|---|
+| OS | Android (current + previous major release), iOS (current + previous major release) |
+| Form factor | Phone, and the specific ambulance-mount tablet model(s) the deployment will actually use |
+| Network | Wi-Fi, cellular (LTE/5G), airplane mode, and a simulated poor-cellular profile (high latency + packet loss, not just "off") |
+| Power | Normal, low-battery power-saving mode active (OS may throttle background sync) |
+| Locale/timezone | At minimum the deployment's home timezone and one DST-transition date; `apps/web-control/test/crew-timezones.test.mjs` and its fixture already cover the *display-layer* timezone-conversion logic under test — Stage 14 confirms real-device clocks agree with server time under the same rules |
+
+Every scenario below runs at minimum once against a physical Android device and once
+against a physical iOS device unless marked platform-specific.
+
+## Test scenario catalog
+
+Each scenario lists preconditions, steps, and pass/fail criteria. "Pass" criteria are
+written to be checkable by an observer without needing to read source code.
+
+### 1. Golden path: dispatch → patient care → handover → QA → final report
+
+**Preconditions**: crew logged in, assigned to a vehicle, incident dispatched to that
+vehicle's assignment.
+
+**Steps**: accept assignment on device → chart demographics, at least one assessment, one
+medication (against a stocked item, to exercise the stock-usage path), one procedure,
+disposition → complete → sign → submit → (as a second reviewer account) accept → finalize
+→ export the signed PDF.
+
+**Pass criteria**: every step succeeds with no error dialog attributable to the app
+itself (a deliberately-induced network failure inside a later scenario is not a failure
+here); the exported PDF opens in a standard PDF viewer, shows the correct patient case
+ID, version number, content hash, and every charted item; the audit report
+(`GET /api/reports/audit`) shows an entry for each mutating step with the correct
+`actor_id`.
+
+**Repeat** for at least one refusal-outcome case and one transported-to-facility case,
+since those two disposition paths drive different completeness-validation rules
+(`services/orchestration/src/compliance/profiles/reference-nemsis.mjs`).
+
+### 2. Multi-patient / MCI drill
+
+The schema already supports multiple independent patient cases per incident
+(`patient_cases.patient_sequence`, exercised in
+`services/orchestration/test/patient-cases.test.mjs`'s four-independent-patients test) —
+this scenario proves that holds up with real crews on real devices, not just in a
+single-process test.
+
+**Steps**: dispatch one incident, create 4+ patient cases against it from 2+ physical
+devices concurrently, assign different crew members as lead clinician on different
+cases, chart all of them to completion in parallel.
+
+**Pass criteria**: no case's data leaks into another's on-device or in the exported
+report; the incident's audit trail and QA-flag report correctly attribute each entry to
+its own patient case; no device shows another crew member's in-progress case as its own.
+
+### 3. Prolonged offline / app-kill / reboot / reconnect drill
+
+**Steps**: put device in airplane mode → chart a complete PCR fully offline (this is
+Stage 10 milestone 10h's own drill, folded in here rather than duplicated as a separate
+exercise) → force-kill the app mid-charting and relaunch → reboot the device entirely and
+relaunch → leave offline for at least 4 hours → reconnect.
+
+**Pass criteria**: no chart data is lost at any interruption point; on reconnect, sync
+completes and the server-side record matches on-device state exactly (compare the
+device's local copy against `GET /api/patient-cases/{id}/summary`); no duplicate
+patient case, medication, or procedure record is created server-side from a retried
+sync (this is the same duplicate-processing guarantee 12j proved under load — this
+drill proves it under a real flaky-radio device, not a load-test harness).
+
+### 4. Identity correction and reconciliation scenarios
+
+**Steps**: chart a patient as unidentified/provisional → later reconcile to a verified
+identity mid-case → attempt the same for a case where two crews independently created
+provisional identities for what turns out to be the same patient.
+
+**Pass criteria**: `POST /api/patient-cases/{id}/identity-reconciliation` correctly
+merges without data loss; the audit trail shows the reconciliation event; no downstream
+OpenEMR/Vtiger record ends up orphaned or duplicated.
+
+### 5. Clinical scenario drills: trauma, paediatric, cardiac arrest
+
+Run the golden path (Scenario 1) once per scenario type, using each type's actual
+required documentation:
+
+- **Trauma**: multiple procedures with stock consumption sufficient to trigger a real
+  `INSUFFICIENT_STOCK` discrepancy on at least one run (proving the crew sees and can
+  work around a real discrepancy, not just that the report shows one).
+- **Paediatric**: weight-based dosing entry, guardian signature role
+  (`signer_role: "guardian"` in `epcr-finalization.mjs`'s `SIGNATURE_ROLES`).
+- **Cardiac arrest**: refusal-of-resuscitation or termination-of-efforts disposition path,
+  and the automatic QA flag it's expected to raise (`createVersion`'s automatic
+  QA-flag-on-refusal logic in `epcr-finalization.mjs`) actually appears in
+  `GET /api/reports/qa-flags` after sync.
+
+**Pass criteria**: each scenario's specific required fields are actually collectible on
+the real device UI within a clinically reasonable time (measure and record time-to-chart
+per scenario — this is a usability signal, not a hard pass/fail gate, but a large
+outlier here is itself a finding).
+
+### 6. OpenEMR / Vtiger / V-EMS outage and recovery drills
+
+Run each of the three independently: stop OpenEMR, stop Vtiger, stop the V-EMS API
+gateway itself, while a crew is actively charting.
+
+**Pass criteria**: per cross-stage engineering rule 3 (`docs/EPCR_MOBILE_COMPLETION_PLAN.md`),
+clinical charting continues uninterrupted during an OpenEMR/Vtiger outage — the app
+must not block chart entry on a downstream system being reachable. A V-EMS API gateway
+outage is expected to degrade to offline-queued mode (Scenario 3's behavior), not data
+loss. On each system's recovery, queued work drains automatically without manual
+intervention, and `/api/support/diagnostics` reflects a clean recovered state (no
+stuck `processing` sync intents past their lease, per the dead-letter/backoff behavior
+already covered in `services/orchestration/test/sync-worker.test.mjs`).
+
+### 7. Lost / revoked device test
+
+**Steps**: while a device is mid-session, revoke it (`POST /api/revocations`, scope
+`device`) from another device/console. Separately, test scope `actor` revocation.
+
+**Pass criteria**: matches the already-automated behavior in
+`services/api-gateway/test/revocation.test.mjs` — the revoked device/actor is denied
+with `401 SESSION_REVOKED` on its very next request — but confirmed here against a real
+device's real request timing (e.g., a request already in flight when revocation lands),
+and that the on-device UI surfaces a clear "access revoked, contact your supervisor"
+state rather than a raw error or silent failure.
+
+### 8. Timezone / DST verification
+
+**Steps**: chart a PCR with the device set to the deployment's home timezone, then
+repeat with the device clock spanning a DST transition (either simulate the date or use
+a real transition date in the drill calendar).
+
+**Pass criteria**: every timestamp charted on-device matches server-recorded UTC
+correctly converted; the exported PDF and the web-control dashboard
+(`apps/web-control/test/crew-timezones.test.mjs` covers the conversion logic itself)
+show the same local time for the same event; no event appears to occur before dispatch
+or after handover due to a conversion error.
+
+### 9. Ambulance tablet usability test
+
+Distinct from the functional drills above: with real crews, in a real (or realistic
+mock) ambulance cab, chart a full PCR under actual field conditions — gloved hands,
+vehicle motion, daylight glare, one-handed operation.
+
+**Pass criteria**: no required interaction is impossible or unreasonably difficult under
+these conditions; collect structured usability feedback (task completion, time,
+subjective difficulty per screen) from at least 3 distinct crew members per platform.
+This is the one scenario in this catalog whose "pass" bar is a documented go/no-go
+judgment call by the clinical/operations sponsor, not a binary technical check — record
+the judgment and its rationale in the execution log (see below).
+
+## Non-functional reviews
+
+These are qualified-reviewer activities, not device drills, but are Stage 14 exit-gate
+requirements per issue #71:
+
+- **Security/privacy penetration review.** Scope: the deployed API gateway, mobile app
+  binary, and object storage. Start from `docs/ops/security-compliance.md` as the
+  baseline control set already implemented (JWT verification, RBAC enforcement, rate
+  limiting, PHI-safe logging, encrypted object storage, device revocation) — the review's
+  job is to find what that baseline missed, not re-verify what's already covered by
+  `services/api-gateway/test/*`. A qualified external or internal security reviewer,
+  independent of this build, must sign off.
+- **Clinical-safety/hazard review.** Scope: every clinical workflow path in Stages 6–13
+  (assessment, medication, procedure, disposition, refusal, amendment, QA flagging).
+  Reviewer: a qualified clinical safety officer. Focus specifically on failure modes a
+  code review cannot catch — e.g., whether a discrepancy warning is *clinically*
+  actionable in the moment it's shown, not just technically correct.
+- **Backup/DR verification, at field scale.** `docs/ops/07-disaster-recovery-runbook.md`
+  already specifies the mechanics; Stage 14's job is running an actual restore drill
+  against a copy of real (de-identified, if using production-shaped data) field data
+  volume, timing it, and confirming the RTO/RPO in that runbook hold at real scale.
+
+## Release process
+
+- Signed release builds for both platforms, built from the exact commit that passed
+  every drill above (record the commit SHA in the execution log).
+- Documented rollout plan (phased/staged rollout vs. all-at-once) and rollback plan
+  (what triggers a rollback, and the actual mechanical steps — app-store rollback
+  mechanics differ meaningfully between Android and iOS and both must be rehearsed, not
+  just documented).
+- Support process: an on-call/escalation path for a crew hitting an issue in the field
+  during initial rollout, distinct from ordinary engineering support.
+- Training materials and a training session for crews, dispatchers, and clinical
+  reviewers, covering at minimum: offline charting behavior, what a QA flag means and
+  what to do about it, and the device-revocation "contact your supervisor" flow from
+  Scenario 7.
+
+## Execution log
+
+Every scenario run gets one row: scenario, device/OS/network condition, date, tester,
+commit SHA under test, result (pass/fail/blocked), and a link to any filed defect. Keep
+this log in the same repository (a simple table or linked spreadsheet is fine) so exit-gate
+sign-off can point at it directly rather than relying on memory. A scenario is not
+"done" until it has a passing row on **both** platforms at minimum once.
+
+## Exit gate
+
+Per issue #71, restated as checkable conditions:
+
+- [ ] Every scenario in this catalog has at least one passing execution-log row on both
+      Android and iOS.
+- [ ] The security/privacy penetration review and clinical-safety/hazard review are both
+      complete with sign-off, and every critical/high finding from either is resolved
+      (not merely triaged) before release.
+- [ ] The backup/DR field-scale drill has a passing execution-log row with measured
+      RTO/RPO meeting `docs/ops/07-disaster-recovery-runbook.md`'s targets.
+- [ ] Signed release builds exist for the commit that passed every drill, with rollout,
+      rollback, support, and training materials all reviewed and ready.
+- [ ] No unresolved critical/high safety or security finding remains open anywhere in
+      the execution log.
+
+Stage 14, and with it the full V-EMS build-out (Stages 6–14), is complete only when
+every box above is checked.
