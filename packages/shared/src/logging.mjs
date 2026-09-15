@@ -9,6 +9,13 @@ function shouldLog(configuredLevel, eventLevel) {
   return LOG_LEVELS.indexOf(eventLevel) >= LOG_LEVELS.indexOf(configuredLevel);
 }
 
+// Stage 12 milestone 12e (PHI-safe logging): an Error can be thrown from
+// anywhere, including a driver deep in the stack -- a Postgres unique-
+// constraint violation's own .detail property, for example, can contain
+// the literal conflicting column VALUE, not just a generic message. Never
+// spread an Error's own properties into a log line; only ever pass through
+// this fixed, hand-reviewed allowlist. Adding a field here means re-
+// reviewing every place an Error reaches the logger, not a routine change.
 function safeJson(value) {
   if (value === undefined) return undefined;
   if (value instanceof Error) {
