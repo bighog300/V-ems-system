@@ -395,6 +395,17 @@ test("readiness endpoint provides supportability snapshot", async () => {
       result: "ok"
     });
     assert.ok(report.body.incident_snapshot);
+    // Stage 12 milestone 12h: live dependency health, not just static config.
+    // UPSTREAM_CONNECTIVITY_CHECKS_ENABLED is true here but no
+    // VTIGER_BASE_URL/OPENEMR_BASE_URL is configured, so those two stay
+    // unchecked -- only database/object storage (always checked, both
+    // local) count toward healthy.
+    assert.equal(report.body.healthy, true);
+    assert.equal(report.body.dependencies.database.ok, true);
+    assert.equal(report.body.dependencies.database.dialect, "sqlite");
+    assert.equal(report.body.dependencies.object_storage.ok, true);
+    assert.equal(report.body.dependencies.vtiger.checked, false);
+    assert.equal(report.body.dependencies.openemr.checked, false);
   } finally {
     server.close();
     delete process.env.APP_ENV;
@@ -405,6 +416,32 @@ test("readiness endpoint provides supportability snapshot", async () => {
     delete process.env.READINESS_MODE;
     delete process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT;
     delete process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT;
+  }
+});
+
+test("readiness endpoint returns 503 and reports which dependency is unhealthy", async () => {
+  const { server, orchestration, base } = await startServer();
+
+  try {
+    // Simulate the database becoming unreachable without depending on
+    // node:sqlite's own close/error behavior -- the same live "SELECT 1;"
+    // probe path a real outage would hit. Every other queryOne caller on
+    // this request path (e.g. the access-revocation check) must keep
+    // working, so only the readiness probe's own query is made to fail.
+    const originalQueryOne = orchestration.db.queryOne.bind(orchestration.db);
+    orchestration.db.queryOne = async (sql) => {
+      if (sql === "SELECT 1;") throw new Error("simulated db failure");
+      return originalQueryOne(sql);
+    };
+
+    const report = await jsonFetch(base, "/api/support/readiness", { method: "GET" });
+    assert.equal(report.status, 503);
+    assert.equal(report.body.healthy, false);
+    assert.equal(report.body.dependencies.healthy, false);
+    assert.equal(report.body.dependencies.database.ok, false);
+    assert.ok(report.body.dependencies.database.error);
+  } finally {
+    server.close();
   }
 });
 

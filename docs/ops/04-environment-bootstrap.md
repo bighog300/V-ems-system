@@ -49,6 +49,25 @@ Smoke checks validate:
 3. `GET /api/incidents`
 4. `POST /api/incidents/{incidentId}/assignments`
 
+### Liveness vs. readiness
+
+- `GET /health` is a liveness check only: it returns `200 {"status":"ok"}`
+  as soon as the HTTP server is up, without touching any dependency. Use it
+  for "is the process alive" (e.g. `wait_for_http_ready` after start-env).
+- `GET /api/support/readiness` is a real readiness check (Stage 12
+  milestone 12h): it actively pings the database (`SELECT 1;`) and does a
+  round-trip write/read against object storage on every call, returning
+  `200` with `"healthy": true` only when both succeed, or `503` with
+  `"healthy": false` and the specific failing dependency's `error`
+  otherwise. It also pings Vtiger/OpenEMR when
+  `UPSTREAM_CONNECTIVITY_CHECKS_ENABLED`/`SMOKE_INCLUDE_UPSTREAM_CONNECTIVITY`
+  is set for the environment and a base URL is configured for each — same
+  gate the connectivity-validation scripts use, so a readiness probe polled
+  every few seconds doesn't also hammer an external system by default. Use
+  this endpoint (not `/health`) for an orchestrator's actual readiness
+  probe, and for the post-restore validation step in
+  `docs/ops/07-disaster-recovery-runbook.md`.
+
 ## Stop environment
 ```bash
 make stop-env
