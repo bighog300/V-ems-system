@@ -8,6 +8,21 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: vems
+          POSTGRES_DB: vems_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      VEMS_TEST_POSTGRES_URL: postgresql://postgres:vems@localhost:5432/vems_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

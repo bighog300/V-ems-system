@@ -1,7 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
+import { migrationFiles } from "./migration-files.mjs";
+import { PostgresClient } from "./postgres-client.mjs";
+import { sqlValue } from "./sql-value.mjs";
 
 let DatabaseSync;
 try {
@@ -18,24 +21,6 @@ function runSqlite(dbPath, args, input = undefined) {
   });
 }
 
-function sqlValue(value) {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
-
-function migrationFiles() {
-  const dir = new URL("./migrations/", import.meta.url);
-  const filePath = resolve(dir.pathname);
-  return readdirSync(filePath)
-    .filter((name) => name.endsWith(".sql"))
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => ({
-      id: name.replace(/\.sql$/, ""),
-      file: new URL(`./migrations/${name}`, import.meta.url)
-    }));
-}
-
 /**
  * SqliteClient implements the shared async DbClient interface
  * (queryOne/queryAll/execute/transaction/withTransaction, all
@@ -48,6 +33,8 @@ function migrationFiles() {
  * public async methods.
  */
 export class SqliteClient {
+  dialect = "sqlite";
+
   constructor(dbPath = process.env.VEMS_DB_PATH ?? ".data/platform.sqlite") {
     this.dbPath = resolve(dbPath);
     mkdirSync(dirname(this.dbPath), { recursive: true });
@@ -90,7 +77,7 @@ export class SqliteClient {
       applied_at TEXT NOT NULL
     );`);
 
-    for (const migration of migrationFiles()) {
+    for (const migration of migrationFiles(this.dialect)) {
       const existing = this.queryOneSync(`SELECT id FROM schema_migrations WHERE id = ${sqlValue(migration.id)};`);
       if (existing) continue;
       const sql = readFileSync(migration.file, "utf8");
@@ -198,6 +185,23 @@ export class SqliteClient {
 
 export function hasEmbeddedSqliteRuntime() {
   return Boolean(DatabaseSync);
+}
+
+/**
+ * Selects the DbClient implementation for a driver name. Defaults to
+ * SQLite everywhere (tests, local/mobile-adjacent dev, and any deployment
+ * that hasn't opted in) per issue #69; set VEMS_DB_DRIVER=postgres (or
+ * pass driver: "postgres") to run against a real Postgres instead.
+ * Synchronous, like `new SqliteClient(...)` — PostgresClient's own
+ * migration bootstrap is async internally (a readiness promise every
+ * public method awaits first), so constructing either client is instant
+ * and callers never need to await this factory itself.
+ */
+export function createDbClient(options = {}) {
+  const driver = options.driver ?? process.env.VEMS_DB_DRIVER ?? "sqlite";
+  if (driver === "postgres") return new PostgresClient(options);
+  if (driver !== "sqlite") throw new Error(`Unknown VEMS_DB_DRIVER: ${driver}`);
+  return new SqliteClient(options.dbPath);
 }
 
 export { sqlValue };

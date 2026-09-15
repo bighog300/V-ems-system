@@ -2,7 +2,7 @@ import { PatientCaseRepository } from './repositories/patient-case-repository.mj
 import { patientCaseMethods } from './patient-cases.mjs';
 import { randomUUID } from "node:crypto";
 import { ApiError, nextAssignmentStatus, nextIncidentStatus } from "@vems/shared";
-import { SqliteClient, sqlValue } from "./db.mjs";
+import { createDbClient, sqlValue } from "./db.mjs";
 import { IncidentRepository } from "./repositories/incident-repository.mjs";
 import { AssignmentRepository } from "./repositories/assignment-repository.mjs";
 import { AuditLogRepository } from "./repositories/audit-log-repository.mjs";
@@ -43,7 +43,7 @@ const STOCK_ACTIVE_STATUSES = ["Active", "Inactive"];
 
 export class OrchestrationService {
   constructor(options = {}) {
-    this.db = options.db ?? new SqliteClient(options.dbPath);
+    this.db = options.db ?? createDbClient(options);
     this.incidents = new IncidentRepository(this.db);
     this.assignments = new AssignmentRepository(this.db);
     this.audits = new AuditLogRepository(this.db);
