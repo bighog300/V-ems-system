@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createDbClient } from "../src/db.mjs";
 import { migrationFiles } from "../src/migration-files.mjs";
+import { PostgresClient } from "../src/postgres-client.mjs";
 
 // PostgresClient needs a real Postgres to talk to. It's exercised here only
 // when VEMS_TEST_POSTGRES_URL points at one (set by CI's postgres service
@@ -124,6 +125,31 @@ maybeTest("createDbClient(VEMS_DB_DRIVER=postgres) selects PostgresClient", asyn
 
 test("createDbClient rejects an unknown driver", () => {
   assert.throws(() => createDbClient({ driver: "mysql" }), /Unknown VEMS_DB_DRIVER/);
+});
+
+test("PostgresClient refuses to start in production without a real connection string", () => {
+  const previous = process.env.APP_ENV;
+  process.env.APP_ENV = "production";
+  try {
+    assert.throws(() => new PostgresClient({ connectionString: undefined }), /VEMS_POSTGRES_URL\/DATABASE_URL is required in production/);
+    assert.throws(() => new PostgresClient({ connectionString: "postgresql://app:changeme@db.internal:5432/vems" }), /VEMS_POSTGRES_URL\/DATABASE_URL is required in production/);
+  } finally {
+    if (previous === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = previous;
+  }
+});
+
+test("PostgresClient allows a real-looking connection string in production (fails later on actual connect, not on this check)", () => {
+  const previous = process.env.APP_ENV;
+  process.env.APP_ENV = "production";
+  try {
+    const db = new PostgresClient({ connectionString: "postgresql://app:kx92-9d4b4e11b6a2@db.internal:5432/vems" });
+    db._ready.catch(() => {}); // this host doesn't exist; only the startup check itself is under test here
+    db.pool.end();
+  } finally {
+    if (previous === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = previous;
+  }
 });
 
 test("migrationFiles resolves dialect-specific variants only where they exist", () => {

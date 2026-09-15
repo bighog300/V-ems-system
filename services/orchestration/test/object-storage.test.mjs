@@ -118,3 +118,24 @@ test("falls back to a deterministic dev key when none is configured, without thr
     if (previous !== undefined) process.env.VEMS_OBJECT_STORAGE_KEY = previous;
   }
 });
+
+test("refuses to start in production without a real encryption key", () => {
+  const previousEnv = process.env.APP_ENV;
+  const previousKey = process.env.VEMS_OBJECT_STORAGE_KEY;
+  process.env.APP_ENV = "production";
+  delete process.env.VEMS_OBJECT_STORAGE_KEY;
+  try {
+    assert.throws(
+      () => new FilesystemObjectStorage({ rootDir: mkdtempSync(join(tmpdir(), "vems-object-storage-")) }),
+      /VEMS_OBJECT_STORAGE_KEY is required in production/
+    );
+    assert.throws(
+      () => new FilesystemObjectStorage({ rootDir: mkdtempSync(join(tmpdir(), "vems-object-storage-")), encryptionKey: "changeme" }),
+      /VEMS_OBJECT_STORAGE_KEY is required in production/
+    );
+  } finally {
+    if (previousEnv === undefined) delete process.env.APP_ENV;
+    else process.env.APP_ENV = previousEnv;
+    if (previousKey !== undefined) process.env.VEMS_OBJECT_STORAGE_KEY = previousKey;
+  }
+});

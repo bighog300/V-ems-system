@@ -7,6 +7,10 @@ import { createHmac } from "node:crypto";
 import { createApp } from "../src/server.mjs";
 import { OrchestrationService } from "../../orchestration/src/index.mjs";
 
+function newOrchestration() {
+  return new OrchestrationService({ dbPath: createDbPath() });
+}
+
 
 
 function base64UrlEncode(input) {
@@ -32,7 +36,10 @@ function createDbPath() {
 }
 
 async function startServer() {
-  process.env.JWT_HS256_SECRET = "test-secret";
+  // Not "test-secret" -- milestone 12f's production-secrets checks treat
+  // that as an insecure placeholder, and some tests below run under
+  // APP_ENV=production.
+  process.env.JWT_HS256_SECRET = "k3y-8f2a91c7-9d4b-4e11-b6a2-7c5d0e1f2a3b";
   process.env.JWT_ISSUER = "vems-tests";
   process.env.JWT_AUDIENCE = "vems-platform";
   const orchestration = new OrchestrationService({ dbPath: createDbPath() });
@@ -458,6 +465,11 @@ test("internal metrics endpoint exposes request counters and latency summary in 
 test("metrics endpoint remains disabled by default in production", async () => {
   process.env.APP_ENV = "production";
   delete process.env.INTERNAL_METRICS_ENABLED;
+  // Milestone 12f's production-secrets checks also reject a missing/default
+  // object-storage key once APP_ENV=production, so this test needs a
+  // real-looking one to get past startup and exercise the actual thing
+  // it's testing (the metrics endpoint's own default-off gate).
+  process.env.VEMS_OBJECT_STORAGE_KEY = "a".repeat(64);
   const { server, base } = await startServer();
 
   try {
@@ -467,6 +479,7 @@ test("metrics endpoint remains disabled by default in production", async () => {
   } finally {
     server.close();
     delete process.env.APP_ENV;
+    delete process.env.VEMS_OBJECT_STORAGE_KEY;
   }
 });
 
@@ -551,5 +564,47 @@ test("support diagnostics exposes readiness, metrics, and failed sync intent vis
     delete process.env.UPSTREAM_CONNECTIVITY_CHECKS_ENABLED;
     delete process.env.UPSTREAM_CONNECTIVITY_LAST_VALIDATED_AT;
     delete process.env.UPSTREAM_CONNECTIVITY_LAST_RESULT;
+  }
+});
+
+test("createApp refuses to start in production with AUTH_TRUST_HEADERS enabled", () => {
+  process.env.APP_ENV = "production";
+  process.env.AUTH_TRUST_HEADERS = "true";
+  process.env.JWT_HS256_SECRET = "k3y-8f2a91c7-9d4b-4e11-b6a2-7c5d0e1f2a3b";
+  process.env.VEMS_OBJECT_STORAGE_KEY = "a".repeat(64);
+  try {
+    assert.throws(() => createApp(newOrchestration()), /AUTH_TRUST_HEADERS must not be enabled in production/);
+  } finally {
+    delete process.env.APP_ENV;
+    delete process.env.AUTH_TRUST_HEADERS;
+    delete process.env.VEMS_OBJECT_STORAGE_KEY;
+  }
+});
+
+test("createApp refuses to start in production without a real JWT secret or JWKS URI", () => {
+  process.env.APP_ENV = "production";
+  delete process.env.JWT_HS256_SECRET;
+  delete process.env.JWT_JWKS_URI;
+  process.env.VEMS_OBJECT_STORAGE_KEY = "a".repeat(64);
+  try {
+    assert.throws(() => createApp(newOrchestration()), /A real JWT_HS256_SECRET .* is required in production/);
+  } finally {
+    delete process.env.APP_ENV;
+    delete process.env.VEMS_OBJECT_STORAGE_KEY;
+  }
+});
+
+test("createApp starts in production with a real JWT secret and no trust-headers", () => {
+  process.env.APP_ENV = "production";
+  process.env.JWT_HS256_SECRET = "k3y-8f2a91c7-9d4b-4e11-b6a2-7c5d0e1f2a3b";
+  process.env.VEMS_OBJECT_STORAGE_KEY = "a".repeat(64);
+  let server;
+  try {
+    server = createApp(newOrchestration());
+    assert.ok(server);
+  } finally {
+    server?.close();
+    delete process.env.APP_ENV;
+    delete process.env.VEMS_OBJECT_STORAGE_KEY;
   }
 });
