@@ -38,7 +38,7 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob, onOp
       isRefresh ? setRefreshing(true) : setLoading(true);
       setError(null);
       try {
-        const result = await listMyAssignmentsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken });
+        const result = await listMyAssignmentsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId });
         setJobs(result.value);
         setShowingCached(result.cached);
       } catch (err) {

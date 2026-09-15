@@ -32,7 +32,7 @@ export default function AssessmentScreen({ patientCaseId, session, onBack }: Ass
   const [sectionType, setSectionType] = useState(SECTION_TYPES[0].key);
   const [notes, setNotes] = useState("");
 
-  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
   const load = useCallback(async () => {
     setLoading(true);

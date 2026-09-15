@@ -22,16 +22,17 @@ export interface AssignedJob {
 export interface ListMyAssignmentsArgs {
   apiBaseUrl: string;
   authToken: string;
+  deviceId?: string;
   fetchImpl?: typeof fetch;
 }
 
-export async function listMyAssignmentsCached({ apiBaseUrl, authToken, fetchImpl = fetch }: ListMyAssignmentsArgs): Promise<CachedResult<AssignedJob[]>> {
-  return withCache(`assignments:mine`, () => listMyAssignments({ apiBaseUrl, authToken, fetchImpl }));
+export async function listMyAssignmentsCached({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch }: ListMyAssignmentsArgs): Promise<CachedResult<AssignedJob[]>> {
+  return withCache(`assignments:mine`, () => listMyAssignments({ apiBaseUrl, authToken, deviceId, fetchImpl }));
 }
 
-export async function listMyAssignments({ apiBaseUrl, authToken, fetchImpl = fetch }: ListMyAssignmentsArgs): Promise<AssignedJob[]> {
+export async function listMyAssignments({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch }: ListMyAssignmentsArgs): Promise<AssignedJob[]> {
   const result = await requestJson<{ assignments: AssignedJob[] }>(fetchImpl, `${apiBaseUrl}/api/assignments/mine`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.data?.assignments ?? [];
 }

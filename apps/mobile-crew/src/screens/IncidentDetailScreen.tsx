@@ -50,7 +50,7 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
     setLoading(true);
     setError(null);
     try {
-      const result = await listPatientCasesCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, incidentId });
+      const result = await listPatientCasesCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId, incidentId });
       setCases(result.value);
       setShowingCached(result.cached);
     } catch (err) {
@@ -70,7 +70,7 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
     setError(null);
     try {
       const payload = label.trim() ? { assignment_id: job.assignment_id, temporary_label: label.trim() } : { assignment_id: job.assignment_id };
-      const created = await createPatientCase({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, incidentId, payload });
+      const created = await createPatientCase({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId, incidentId, payload });
       setLabel("");
       setCases((prev) => [...prev, created]);
     } catch (err) {

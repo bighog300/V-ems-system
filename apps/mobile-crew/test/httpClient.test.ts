@@ -14,6 +14,16 @@ test("buildRequestHeaders sets a bearer authorization header", () => {
   assert.equal(headers["content-type"], "application/json");
 });
 
+test("buildRequestHeaders attaches x-device-id when a deviceId is configured", () => {
+  const headers = buildRequestHeaders({ authToken: "abc123", deviceId: "device-1" });
+  assert.equal(headers["x-device-id"], "device-1");
+});
+
+test("buildRequestHeaders omits x-device-id when no deviceId is configured", () => {
+  const headers = buildRequestHeaders({ authToken: "abc123" });
+  assert.equal("x-device-id" in headers, false);
+});
+
 test("requestJson resolves parsed JSON on success", async () => {
   const fetchImpl = async () =>
     new Response(JSON.stringify({ status: "ok" }), { status: 200, headers: { "content-type": "application/json" } });

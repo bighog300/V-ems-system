@@ -16,11 +16,12 @@ export interface PatientCaseAssessment {
 export async function listPatientCaseAssessments({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<PatientCaseAssessment[]> {
   const result = await requestJson<{ assessments: PatientCaseAssessment[] }>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/assessments`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.data?.assessments ?? [];
 }
@@ -28,6 +29,7 @@ export async function listPatientCaseAssessments({
 export async function createPatientCaseAssessment({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   sectionType,
@@ -39,7 +41,7 @@ export async function createPatientCaseAssessment({
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/assessments`,
     method: "POST",
     payload: { section_type: sectionType, payload: { notes } },
-    config: { authToken },
+    config: { authToken, deviceId },
     scope: "assessment",
     patientCaseId,
     buildOptimisticResult: (entryId) => ({

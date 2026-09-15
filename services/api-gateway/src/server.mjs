@@ -632,6 +632,7 @@ export function createApp(orchestration = new OrchestrationService()) {
     }
 
     const context = buildRequestContext(req, actor);
+    const deviceId = toHeaderValue(req.headers["x-device-id"]);
     const idempotencyKey = req.headers["idempotency-key"];
     let requestFailed = false;
 
@@ -643,6 +644,19 @@ export function createApp(orchestration = new OrchestrationService()) {
       method,
       path: url.pathname
     });
+
+    if (context.actorId && await orchestration.isAccessRevoked({ actorId: context.actorId, deviceId })) {
+      requestFailed = true;
+      logger.warn("access_revoked_denied", {
+        correlation_id: context.correlationId,
+        request_id: context.requestId,
+        actor_id: context.actorId,
+        device_id: deviceId,
+        method,
+        path: url.pathname
+      });
+      return okJson(res, 401, errorEnvelope("SESSION_REVOKED", "This session or device has been revoked", false, context), context);
+    }
 
     const rbac = evaluateRbac({ method, pathname: url.pathname, role: context.role, enforceRbac });
     if (rbac.requiresRole) {
@@ -872,6 +886,15 @@ export function createApp(orchestration = new OrchestrationService()) {
         const payload = await parseJson(req);
         const token = await orchestration.registerPushToken(payload, { actorId: context.actorId, correlationId: context.correlationId });
         return okJson(res, 201, token, context);
+      }
+
+      if (method === "GET" && url.pathname === "/api/revocations") {
+        return okJson(res, 200, { revocations: await orchestration.listRevocations() }, context);
+      }
+      if (method === "POST" && url.pathname === "/api/revocations") {
+        const payload = await parseJson(req);
+        const record = await orchestration.revokeAccess(payload, { actorId: context.actorId, correlationId: context.correlationId });
+        return okJson(res, 201, record, context);
       }
 
       const encounterCreateMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/encounters$/);

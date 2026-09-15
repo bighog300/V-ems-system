@@ -44,7 +44,7 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
 
   const [scanTarget, setScanTarget] = useState<ScanTarget>(null);
 
-  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
   function handleScanned(code: string) {
     if (scanTarget === "medication") setMedName(code);

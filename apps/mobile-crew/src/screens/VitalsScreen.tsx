@@ -48,7 +48,7 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
   const load = useCallback(async () => {
     setLoading(true);

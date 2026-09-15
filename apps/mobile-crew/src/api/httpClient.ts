@@ -2,6 +2,14 @@ import { ApiError, ForbiddenError, UnauthorizedError } from "./apiError.ts";
 
 export interface RequestConfig {
   authToken?: string;
+  // Attached as x-device-id so Stage 12's server-side device/session
+  // revocation (12d) has something to check on every request, not just
+  // push-token registration. Optional so a session restored from before
+  // device identity existed (session.ts's Session.deviceId is itself
+  // optional for the same reason) still authenticates normally --
+  // omitting it just means that request can only be caught by an
+  // actor-level revocation, not a device-level one.
+  deviceId?: string;
 }
 
 export interface RequestOptions {
@@ -54,9 +62,12 @@ export function buildRequestHeaders(config: RequestConfig, headers: Record<strin
     });
   }
 
+  const deviceId = config.deviceId?.trim();
+
   return {
     "content-type": "application/json",
     authorization: `Bearer ${authToken}`,
+    ...(deviceId ? { "x-device-id": deviceId } : {}),
     ...headers
   };
 }

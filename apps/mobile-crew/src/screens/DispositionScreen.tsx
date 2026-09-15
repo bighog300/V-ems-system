@@ -31,7 +31,7 @@ export default function DispositionScreen({ patientCaseId, session, onBack }: Di
   const [locationPermissionStatus, setLocationPermissionStatus] = useState<LocationPermissionStatus>("undetermined");
   const [enablingLocation, setEnablingLocation] = useState(false);
 
-  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
   async function handleEnableLocation() {
     setEnablingLocation(true);

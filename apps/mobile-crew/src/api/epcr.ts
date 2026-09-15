@@ -38,14 +38,14 @@ export interface EpcrSignature {
   signature_image_ref?: string | null;
 }
 
-export async function getEpcrReadiness({ apiBaseUrl, authToken, fetchImpl = fetch, patientCaseId }: ApiConfig & { patientCaseId: string }): Promise<EpcrReadiness> {
-  const result = await requestJson<EpcrReadiness>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/readiness`, { config: { authToken } });
+export async function getEpcrReadiness({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch, patientCaseId }: ApiConfig & { patientCaseId: string }): Promise<EpcrReadiness> {
+  const result = await requestJson<EpcrReadiness>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/readiness`, { config: { authToken, deviceId } });
   if (!result.data) throw new Error("Readiness fetch returned no data");
   return result.data;
 }
 
-export async function getEpcrLifecycle({ apiBaseUrl, authToken, fetchImpl = fetch, patientCaseId }: ApiConfig & { patientCaseId: string }): Promise<EpcrLifecycle> {
-  const result = await requestJson<EpcrLifecycle>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/lifecycle`, { config: { authToken } });
+export async function getEpcrLifecycle({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch, patientCaseId }: ApiConfig & { patientCaseId: string }): Promise<EpcrLifecycle> {
+  const result = await requestJson<EpcrLifecycle>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/lifecycle`, { config: { authToken, deviceId } });
   if (!result.data) throw new Error("Lifecycle fetch returned no data");
   return result.data;
 }
@@ -53,23 +53,25 @@ export async function getEpcrLifecycle({ apiBaseUrl, authToken, fetchImpl = fetc
 export async function listEpcrSignatures({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<EpcrSignature[]> {
-  const result = await requestJson<EpcrSignature[]>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/signatures`, { config: { authToken } });
+  const result = await requestJson<EpcrSignature[]>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/signatures`, { config: { authToken, deviceId } });
   return result.data ?? [];
 }
 
 export async function completeEpcr({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<{ lifecycle: EpcrLifecycle }> {
   const result = await requestJson<{ lifecycle: EpcrLifecycle }>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/complete`, {
     method: "POST",
     payload: {},
-    config: { authToken },
+    config: { authToken, deviceId },
     headers: { "idempotency-key": `mobile-epcr-complete-${patientCaseId}-${Date.now()}` }
   });
   if (!result.data) throw new Error("Complete ePCR returned no data");
@@ -89,6 +91,7 @@ export interface SignEpcrPayload {
 export async function signEpcr({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   payload
@@ -96,7 +99,7 @@ export async function signEpcr({
   const result = await requestJson<EpcrSignature[]>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/signatures`, {
     method: "POST",
     payload,
-    config: { authToken },
+    config: { authToken, deviceId },
     headers: { "idempotency-key": `mobile-epcr-sign-${patientCaseId}-${Date.now()}-${Math.random().toString(36).slice(2)}` }
   });
   return result.data ?? [];
@@ -105,13 +108,14 @@ export async function signEpcr({
 export async function submitEpcr({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<EpcrLifecycle> {
   const result = await requestJson<EpcrLifecycle>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/submit`, {
     method: "POST",
     payload: {},
-    config: { authToken },
+    config: { authToken, deviceId },
     headers: { "idempotency-key": `mobile-epcr-submit-${patientCaseId}-${Date.now()}` }
   });
   if (!result.data) throw new Error("Submit ePCR returned no data");
