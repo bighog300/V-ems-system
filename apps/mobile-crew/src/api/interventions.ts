@@ -32,11 +32,12 @@ export interface CreateMedicationPayload {
 export async function listPatientCaseMedications({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<MedicationAdministration[]> {
   const result = await requestJson<{ medications: MedicationAdministration[] }>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/medications`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.data?.medications ?? [];
 }
@@ -44,6 +45,7 @@ export async function listPatientCaseMedications({
 export async function createPatientCaseMedication({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   payload
@@ -54,7 +56,7 @@ export async function createPatientCaseMedication({
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/medications`,
     method: "POST",
     payload,
-    config: { authToken },
+    config: { authToken, deviceId },
     scope: "medication",
     patientCaseId,
     buildOptimisticResult: (entryId) => ({
@@ -105,11 +107,12 @@ export interface CreateProcedurePayload {
 export async function listPatientCaseProcedures({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<ClinicalProcedure[]> {
   const result = await requestJson<{ procedures: ClinicalProcedure[] }>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/procedures`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.data?.procedures ?? [];
 }
@@ -117,6 +120,7 @@ export async function listPatientCaseProcedures({
 export async function createPatientCaseProcedure({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   payload
@@ -127,7 +131,7 @@ export async function createPatientCaseProcedure({
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/procedures`,
     method: "POST",
     payload,
-    config: { authToken },
+    config: { authToken, deviceId },
     scope: "procedure",
     patientCaseId,
     buildOptimisticResult: (entryId) => ({

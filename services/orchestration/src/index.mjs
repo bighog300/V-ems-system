@@ -34,6 +34,7 @@ import { DevicePushTokenRepository } from "./repositories/device-push-token-repo
 import { PatientCaseAttachmentRepository } from "./repositories/patient-case-attachment-repository.mjs";
 import { FilesystemObjectStorage } from "./storage/object-storage.mjs";
 import { attachmentMethods } from "./attachments.mjs";
+import { RevocationRepository } from "./repositories/revocation-repository.mjs";
 
 const DEVICE_PUSH_TOKEN_PLATFORMS = ["ios", "android"];
 
@@ -79,6 +80,7 @@ export class OrchestrationService {
     this.pushTokens = new DevicePushTokenRepository(this.db);
     this.attachments = new PatientCaseAttachmentRepository(this.db);
     this.objectStorage = options.objectStorage ?? new FilesystemObjectStorage(options.objectStorageOptions ?? {});
+    this.revocations = new RevocationRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
@@ -580,6 +582,53 @@ export class OrchestrationService {
     if (!DEVICE_PUSH_TOKEN_PLATFORMS.includes(payload.platform)) throw new ApiError("INVALID_PAYLOAD", "Invalid platform", 400);
     if (!payload.expo_push_token) throw new ApiError("INVALID_PAYLOAD", "expo_push_token is required", 400);
     return this.pushTokens.upsert({ staffId: meta.actorId, expoPushToken: payload.expo_push_token, platform: payload.platform, deviceId: payload.device_id ?? null });
+  }
+
+  /**
+   * V-EMS-side revocation (Stage 12 milestone 12d): rather than depending
+   * entirely on short token TTLs and the external IdP's own
+   * introspection/revocation endpoint, a small revoked-sessions/devices
+   * store checked on every authenticated request (see server.mjs) makes
+   * revocation immediate and under V-EMS's own control regardless of which
+   * IdP is deployed or how long its tokens live. `actor` revokes every
+   * session/device for that identity at once (the broad "cut off this
+   * account now" case, and the only kind possible for a client -- like
+   * web-control -- that has no device identity concept at all); `device`
+   * revokes just the one device (11g's deviceId), for a single lost/stolen
+   * phone without logging the rest of that crew member's devices out.
+   */
+  async revokeAccess(payload, meta) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Revocation payload must be an object", 400);
+    const allowed = ["scope", "target", "reason"];
+    const unknown = Object.keys(payload).filter((key) => !allowed.includes(key));
+    if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown revocation fields: ${unknown.join(", ")}`, 400);
+    if (!["device", "actor"].includes(payload.scope)) throw new ApiError("INVALID_PAYLOAD", "scope must be 'device' or 'actor'", 400);
+    if (typeof payload.target !== "string" || !payload.target.trim()) throw new ApiError("INVALID_PAYLOAD", "target is required", 400);
+
+    const record = {
+      revocation_id: `REV-${randomUUID()}`,
+      scope: payload.scope,
+      target: payload.target,
+      reason: payload.reason ?? null,
+      revoked_by: meta.actorId ?? null,
+      revoked_at: new Date().toISOString(),
+      correlation_id: meta.correlationId
+    };
+    await this.revocations.revoke(record);
+    await this.audit("access_revocation", record.revocation_id, "revoke_access", meta.correlationId, undefined, record);
+    await this.event("AccessRevoked", meta.correlationId, { scope: record.scope, target: record.target, revoked_by: record.revoked_by });
+    return record;
+  }
+
+  async listRevocations() {
+    return this.revocations.list();
+  }
+
+  /** Checked on every authenticated request (server.mjs) before routing. */
+  async isAccessRevoked({ actorId, deviceId } = {}) {
+    if (actorId && (await this.revocations.isRevoked("actor", actorId))) return true;
+    if (deviceId && (await this.revocations.isRevoked("device", deviceId))) return true;
+    return false;
   }
 
 

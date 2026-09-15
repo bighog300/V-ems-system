@@ -32,7 +32,7 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
   async function handleSearch() {
     setSearching(true);

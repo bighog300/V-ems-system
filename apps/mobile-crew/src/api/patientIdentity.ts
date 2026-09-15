@@ -17,11 +17,11 @@ export interface SearchPatientsArgs extends ApiConfig {
   criteria: { first_name?: string; last_name?: string; dob?: string; sex?: string; phone?: string };
 }
 
-export async function searchPatients({ apiBaseUrl, authToken, fetchImpl = fetch, criteria }: SearchPatientsArgs): Promise<PatientSearchResult> {
+export async function searchPatients({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch, criteria }: SearchPatientsArgs): Promise<PatientSearchResult> {
   const result = await requestJson<PatientSearchResult>(fetchImpl, `${apiBaseUrl}/api/patients/search`, {
     method: "POST",
     payload: criteria,
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   if (!result.data) throw new Error("Patient search returned no data");
   return result.data;
@@ -31,11 +31,11 @@ export interface CreatePatientArgs extends ApiConfig {
   patient: { first_name: string; last_name: string; dob: string; sex?: string; phone?: string };
 }
 
-export async function createPatient({ apiBaseUrl, authToken, fetchImpl = fetch, patient }: CreatePatientArgs): Promise<{ patient_id: string; display_name?: string }> {
+export async function createPatient({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch, patient }: CreatePatientArgs): Promise<{ patient_id: string; display_name?: string }> {
   const result = await requestJson<{ patient_id: string; display_name?: string }>(fetchImpl, `${apiBaseUrl}/api/patients`, {
     method: "POST",
     payload: patient,
-    config: { authToken },
+    config: { authToken, deviceId },
     headers: { "idempotency-key": `mobile-create-patient-${Date.now()}-${Math.random().toString(36).slice(2)}` }
   });
   if (!result.data) throw new Error("Patient create returned no data");
@@ -51,6 +51,7 @@ export interface LinkPatientArgs extends ApiConfig {
 export async function linkPatientToPatientCase({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   verificationStatus,
@@ -62,7 +63,7 @@ export async function linkPatientToPatientCase({
     {
       method: "POST",
       payload: { verification_status: verificationStatus, openemr_patient_id: openemrPatientId },
-      config: { authToken },
+      config: { authToken, deviceId },
       headers: { "idempotency-key": `mobile-link-patient-${patientCaseId}-${Date.now()}` }
     }
   );
@@ -73,12 +74,13 @@ export async function linkPatientToPatientCase({
 export async function createProvisionalPatient({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<PatientCase> {
   const result = await requestJson<PatientCase>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/provisional-patient`, {
     method: "POST",
-    config: { authToken },
+    config: { authToken, deviceId },
     headers: { "idempotency-key": `mobile-provisional-${patientCaseId}-${Date.now()}` }
   });
   if (!result.data) throw new Error("Provisional patient create returned no data");

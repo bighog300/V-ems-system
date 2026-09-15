@@ -112,7 +112,7 @@ export default function RootNavigator() {
     if (!pendingDeepLink || state !== "signed-in" || !session || !navigatorReady) return;
     let cancelled = false;
     (async () => {
-      const jobs = await listMyAssignmentsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken });
+      const jobs = await listMyAssignmentsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId });
       if (cancelled) return;
       const job = jobs.value.find((candidate) => candidate.assignment_id === pendingDeepLink.assignmentId) ?? null;
       if (job && navigationRef.isReady()) {

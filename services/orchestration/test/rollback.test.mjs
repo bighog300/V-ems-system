@@ -14,12 +14,12 @@ maybeTest("rolls back the last migration and re-migrating reapplies it", async (
     const allIds = migrationFiles("postgres").map((m) => m.id);
     const lastId = allIds.at(-1);
     assert.equal(await lastAppliedMigration(db), lastId);
-    assert.ok(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'patient_case_attachments';"));
+    assert.ok(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'access_revocations';"));
 
     const rolledBack = await rollbackLastMigration(db);
     assert.equal(rolledBack, lastId);
     assert.equal(await lastAppliedMigration(db), allIds.at(-2));
-    assert.equal(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'patient_case_attachments';"), undefined);
+    assert.equal(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'access_revocations';"), undefined);
   } finally {
     await db.close();
   }
@@ -44,8 +44,11 @@ maybeTest("consecutive migrations can each be rolled back in turn, until one wit
     // reapplies anything missing before any assertion here.
     await db.execute("SELECT 1;");
 
-    // 015 (patient_case_attachments) and 014 (event_outbox_sequence) both
-    // ship rollback scripts; roll each back in turn.
+    // 016 (access_revocations), 015 (patient_case_attachments) and 014
+    // (event_outbox_sequence) all ship rollback scripts; roll each back in turn.
+    const rolledBack016 = await rollbackLastMigration(db);
+    assert.equal(rolledBack016, "016_access_revocations");
+
     const rolledBack015 = await rollbackLastMigration(db);
     assert.equal(rolledBack015, "015_patient_case_attachments");
     assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'event_outbox' AND column_name = 'event_seq';"));

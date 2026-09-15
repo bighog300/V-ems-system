@@ -21,6 +21,6 @@ export async function registerPushToken({ apiBaseUrl, authToken, fetchImpl = fet
   await requestJson(fetchImpl, `${apiBaseUrl}/api/push-tokens`, {
     method: "POST",
     payload: { expo_push_token: expoPushToken, platform, device_id: deviceId },
-    config: { authToken }
+    config: { authToken, deviceId }
   });
 }

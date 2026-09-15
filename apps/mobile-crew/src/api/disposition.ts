@@ -38,11 +38,12 @@ export interface PatientCaseDisposition {
 export async function getPatientCaseDisposition({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<PatientCaseDisposition | null> {
   const result = await requestJson<PatientCaseDisposition>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/disposition`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.notFound ? null : (result.data ?? null);
 }
@@ -61,6 +62,7 @@ export interface SetDispositionPayload {
 export async function setPatientCaseDisposition({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   payload
@@ -71,7 +73,7 @@ export async function setPatientCaseDisposition({
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/disposition`,
     method: "POST",
     payload,
-    config: { authToken },
+    config: { authToken, deviceId },
     scope: "disposition",
     patientCaseId,
     buildOptimisticResult: (entryId) => ({

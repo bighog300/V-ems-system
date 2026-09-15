@@ -23,20 +23,22 @@ export interface PatientCaseEncounter {
 export async function getPatientCaseEncounterCached({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<CachedResult<PatientCaseEncounter | null>> {
-  return withCache(`patient-case-encounter:${patientCaseId}`, () => getPatientCaseEncounter({ apiBaseUrl, authToken, fetchImpl, patientCaseId }));
+  return withCache(`patient-case-encounter:${patientCaseId}`, () => getPatientCaseEncounter({ apiBaseUrl, authToken, deviceId, fetchImpl, patientCaseId }));
 }
 
 export async function getPatientCaseEncounter({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<PatientCaseEncounter | null> {
   const result = await requestJson<PatientCaseEncounter>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/encounter`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.notFound ? null : (result.data ?? null);
 }
@@ -61,6 +63,7 @@ export async function createPatientCaseEncounter(
   {
     apiBaseUrl,
     authToken,
+    deviceId,
     fetchImpl = fetch,
     patientCaseId,
     payload
@@ -75,7 +78,7 @@ export async function createPatientCaseEncounter(
       url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/encounters`,
       method: "POST",
       payload,
-      config: { authToken },
+      config: { authToken, deviceId },
       scope: "encounter",
       patientCaseId,
       buildOptimisticResult: (entryId) => ({

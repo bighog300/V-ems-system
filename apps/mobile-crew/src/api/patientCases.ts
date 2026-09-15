@@ -36,26 +36,32 @@ export interface PatientCaseDemographics {
 export interface ApiConfig {
   apiBaseUrl: string;
   authToken: string;
+  // Threaded through to every request as x-device-id (see httpClient.ts's
+  // RequestConfig) for Stage 12's device/session revocation -- optional
+  // for the same reason Session.deviceId itself is.
+  deviceId?: string;
   fetchImpl?: typeof fetch;
 }
 
 export async function getPatientCaseCached({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<CachedResult<PatientCase>> {
-  return withCache(`patient-case:${patientCaseId}`, () => getPatientCase({ apiBaseUrl, authToken, fetchImpl, patientCaseId }));
+  return withCache(`patient-case:${patientCaseId}`, () => getPatientCase({ apiBaseUrl, authToken, deviceId, fetchImpl, patientCaseId }));
 }
 
 export async function getPatientCase({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<PatientCase> {
   const result = await requestJson<PatientCase>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   if (!result.data) throw new Error("Patient case fetch returned no data");
   return result.data;
@@ -64,15 +70,16 @@ export async function getPatientCase({
 export async function listPatientCasesCached({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   incidentId
 }: ApiConfig & { incidentId: string }): Promise<CachedResult<PatientCase[]>> {
-  return withCache(`patient-cases:incident:${incidentId}`, () => listPatientCases({ apiBaseUrl, authToken, fetchImpl, incidentId }));
+  return withCache(`patient-cases:incident:${incidentId}`, () => listPatientCases({ apiBaseUrl, authToken, deviceId, fetchImpl, incidentId }));
 }
 
-export async function listPatientCases({ apiBaseUrl, authToken, fetchImpl = fetch, incidentId }: ApiConfig & { incidentId: string }): Promise<PatientCase[]> {
+export async function listPatientCases({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch, incidentId }: ApiConfig & { incidentId: string }): Promise<PatientCase[]> {
   const result = await requestJson<{ patient_cases: PatientCase[] }>(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/patient-cases`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.data?.patient_cases ?? [];
 }
@@ -98,6 +105,7 @@ export async function createPatientCase(
   {
     apiBaseUrl,
     authToken,
+    deviceId,
     fetchImpl = fetch,
     incidentId,
     payload
@@ -114,7 +122,7 @@ export async function createPatientCase(
       url: `${apiBaseUrl}/api/incidents/${incidentId}/patient-cases`,
       method: "POST",
       payload,
-      config: { authToken },
+      config: { authToken, deviceId },
       scope: "patient_case_create",
       patientCaseId: localCaseId,
       buildOptimisticResult: () => ({
@@ -140,20 +148,22 @@ export async function createPatientCase(
 export async function getPatientCaseDemographicsCached({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<CachedResult<PatientCaseDemographics | null>> {
-  return withCache(`patient-case-demographics:${patientCaseId}`, () => getPatientCaseDemographics({ apiBaseUrl, authToken, fetchImpl, patientCaseId }));
+  return withCache(`patient-case-demographics:${patientCaseId}`, () => getPatientCaseDemographics({ apiBaseUrl, authToken, deviceId, fetchImpl, patientCaseId }));
 }
 
 export async function getPatientCaseDemographics({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<PatientCaseDemographics | null> {
   const result = await requestJson<PatientCaseDemographics | null>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/demographics`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.data ?? null;
 }
@@ -161,6 +171,7 @@ export async function getPatientCaseDemographics({
 export async function savePatientCaseDemographics({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   payload
@@ -171,7 +182,7 @@ export async function savePatientCaseDemographics({
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/demographics`,
     method: "PUT",
     payload,
-    config: { authToken },
+    config: { authToken, deviceId },
     scope: "demographics",
     patientCaseId,
     buildOptimisticResult: () => ({ patient_case_id: patientCaseId, ...payload, updated_at: now })

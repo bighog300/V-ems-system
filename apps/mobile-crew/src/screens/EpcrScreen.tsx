@@ -41,7 +41,7 @@ export default function EpcrScreen({ patientCaseId, session, onBack }: EpcrScree
   const [signerIdentity, setSignerIdentity] = useState("");
   const signaturePadRef = useRef<SignaturePadHandle>(null);
 
-  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken };
+  const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
   const load = useCallback(async () => {
     setLoading(true);

@@ -157,9 +157,9 @@ export default function PatientCaseDetailScreen({
         setError(null);
         try {
           const [refreshedCase, demographics, refreshedEncounter] = await Promise.all([
-            getPatientCaseCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
-            getPatientCaseDemographicsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id }),
-            getPatientCaseEncounterCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, patientCaseId: initialCase.patient_case_id })
+            getPatientCaseCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId, patientCaseId: initialCase.patient_case_id }),
+            getPatientCaseDemographicsCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId, patientCaseId: initialCase.patient_case_id }),
+            getPatientCaseEncounterCached({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId, patientCaseId: initialCase.patient_case_id })
           ]);
           if (cancelled) return;
           setCaseState(refreshedCase.value);
@@ -195,6 +195,7 @@ export default function PatientCaseDetailScreen({
       const saved = await savePatientCaseDemographics({
         apiBaseUrl: session.apiBaseUrl,
         authToken: session.authToken,
+        deviceId: session.deviceId,
         patientCaseId: caseState.patient_case_id,
         payload
       });
@@ -215,6 +216,7 @@ export default function PatientCaseDetailScreen({
       const created = await createPatientCaseEncounter({
         apiBaseUrl: session.apiBaseUrl,
         authToken: session.authToken,
+        deviceId: session.deviceId,
         patientCaseId: caseState.patient_case_id,
         payload: { care_started_at: new Date().toISOString(), presenting_complaint: presentingComplaint.trim(), ...location }
       });

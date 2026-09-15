@@ -28,11 +28,12 @@ export interface PatientCaseObservation {
 export async function listPatientCaseObservations({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId
 }: ApiConfig & { patientCaseId: string }): Promise<PatientCaseObservation[]> {
   const result = await requestJson<{ observations: PatientCaseObservation[] }>(fetchImpl, `${apiBaseUrl}/api/patient-cases/${patientCaseId}/observations`, {
-    config: { authToken }
+    config: { authToken, deviceId }
   });
   return result.data?.observations ?? [];
 }
@@ -40,6 +41,7 @@ export async function listPatientCaseObservations({
 export async function createPatientCaseObservation({
   apiBaseUrl,
   authToken,
+  deviceId,
   fetchImpl = fetch,
   patientCaseId,
   vitalSigns,
@@ -51,7 +53,7 @@ export async function createPatientCaseObservation({
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/observations`,
     method: "POST",
     payload: { vital_signs: vitalSigns, notes: notes || undefined },
-    config: { authToken },
+    config: { authToken, deviceId },
     scope: "observation",
     patientCaseId,
     buildOptimisticResult: (entryId) => ({
