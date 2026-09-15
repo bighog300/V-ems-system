@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 function classifyError(error) {
   if (!error) return "UNKNOWN";
   if (typeof error.classification === "string" && error.classification.length > 0) return error.classification;
@@ -37,7 +39,16 @@ export class SyncWorker {
     const results = [];
 
     for (const intent of intents) {
-      const token = `${process.pid}-${Date.now()}-${intent.intent_id}`;
+      // Stage 12 milestone 12j: process.pid + Date.now() alone can collide
+      // between two genuinely independent workers -- containerized/
+      // serverless deployments commonly run a single process as PID 1, so
+      // two separate worker instances processing the same intent in the
+      // same millisecond would generate an identical token. claim()'s
+      // reentrant same-token match (see its own comment) would then treat
+      // that as a legitimate re-claim rather than a real collision.
+      // randomUUID() removes the possibility of a collision regardless of
+      // pid/clock resolution.
+      const token = `${process.pid}-${Date.now()}-${intent.intent_id}-${randomUUID()}`;
       if (typeof this.syncIntents.claim === "function" && !(await this.syncIntents.claim(intent.intent_id, token, this.leaseMs ?? 30000))) continue;
       results.push(await this.processIntent({ ...intent, claim_token: token }));
     }

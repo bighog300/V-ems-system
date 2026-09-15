@@ -91,8 +91,19 @@ npm run perf:load
 Optional knobs:
 - `LOAD_TEST_TIMEOUT_MS` (default `15000`): per-request timeout for transport issues.
 - `LOAD_TEST_ROLE` (default `dispatcher`): request role header.
-- `LOAD_TEST_ENDPOINT_PATH` (default `/api/incidents`): POST endpoint used for baseline.
+- `LOAD_TEST_ENDPOINT_PATH` (default `/api/incidents`): endpoint used for baseline.
+- `LOAD_TEST_METHOD` (default `POST`): set to `GET`/`HEAD` for a read-workload baseline (no request body/idempotency-key sent).
+- `LOAD_TEST_PAYLOAD_JSON` (Stage 12 milestone 12j): a JSON template overriding the default incident-creation payload, for baselining a different endpoint/persona (e.g. crew push-token registration). `{{index}}` is substituted with each request's own index.
 - `LOAD_TEST_INCLUDE_METRICS_SNAPSHOT` (default enabled): set to `false` to skip internal metrics snapshots.
+
+A second scaffold, `npm run perf:load:sync-worker`
+(`scripts/load-test-sync-worker.mjs`), baselines the sync worker directly
+against a real Postgres backend (`VEMS_POSTGRES_URL`) rather than through
+the API gateway -- see `docs/ops/09-capacity-and-load-testing.md` for the
+documented concurrency/latency targets both scripts back (dispatcher/crew
+HTTP workloads and sync-worker throughput), the real race condition this
+exercise found and fixed in the sync worker's claim logic, and a known
+scaling limitation in the incident-board listing endpoint.
 
 The script prints JSON with:
 - throughput: `throughput_rps`

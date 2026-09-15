@@ -7,6 +7,14 @@ const role = process.env.LOAD_TEST_ROLE ?? "dispatcher";
 const timeoutMs = Number.parseInt(process.env.LOAD_TEST_TIMEOUT_MS ?? "15000", 10);
 const includeMetricsSnapshot = process.env.LOAD_TEST_INCLUDE_METRICS_SNAPSHOT !== "false";
 const endpointPath = process.env.LOAD_TEST_ENDPOINT_PATH ?? "/api/incidents";
+const httpMethod = process.env.LOAD_TEST_METHOD ?? "POST";
+// Stage 12 milestone 12j: an override payload template lets this same
+// scaffold exercise a different persona's endpoint (e.g. a crew workload
+// against /api/patients) without hardcoding every shape this script might
+// ever need -- {{index}} is replaced with the request's own index so
+// concurrent requests don't collide on uniqueness constraints, the same
+// way the default incident payload already varies per index.
+const payloadTemplate = process.env.LOAD_TEST_PAYLOAD_JSON ?? null;
 
 function createIncidentPayload(index) {
   return {
@@ -19,6 +27,11 @@ function createIncidentPayload(index) {
       patient_count: 1
     }
   };
+}
+
+function buildPayload(index) {
+  if (!payloadTemplate) return createIncidentPayload(index);
+  return JSON.parse(payloadTemplate.replaceAll("{{index}}", String(index)));
 }
 
 async function readGatewayMetricsSnapshot() {
@@ -37,15 +50,16 @@ async function runSingle(index) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const hasBody = httpMethod !== "GET" && httpMethod !== "HEAD";
     const response = await fetch(`${baseUrl}${endpointPath}`, {
-      method: "POST",
+      method: httpMethod,
       headers: {
         "content-type": "application/json",
         "x-user-role": role,
         "x-actor-id": `LOAD-${String(index).padStart(6, "0")}`,
-        "idempotency-key": `load-test-${index}-${Date.now()}`
+        ...(hasBody ? { "idempotency-key": `load-test-${index}-${Date.now()}` } : {})
       },
-      body: JSON.stringify(createIncidentPayload(index)),
+      body: hasBody ? JSON.stringify(buildPayload(index)) : undefined,
       signal: controller.signal
     });
 
@@ -111,6 +125,7 @@ function summarizeResults({ startedAtIso, finishedAtIso, startedAtMs, finishedAt
     finished_at: finishedAtIso,
     target: baseUrl,
     endpoint_path: endpointPath,
+    method: httpMethod,
     total_requests: totalRequests,
     concurrency,
     timeout_ms: timeoutMs,
