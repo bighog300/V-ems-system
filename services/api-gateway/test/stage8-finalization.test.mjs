@@ -46,6 +46,9 @@ test("Stage 8 Patient Case endpoints expose readiness, lifecycle, signatures, re
   assert.equal(exported.status, 200);
   assert.equal(exported.body.content_type, "application/pdf");
   assert.equal(exported.body.content_hash, summary.body.final_version.hash);
+  // Stage 13 milestone 13h: the export document format's own version
+  // number, independent of the clinical version_number above.
+  assert.equal(exported.body.export_format_version, 1);
   const pdf = Buffer.from(exported.body.content_base64, "base64");
   assert.equal(pdf.subarray(0, 5).toString("latin1"), "%PDF-");
 });

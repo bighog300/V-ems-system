@@ -14,6 +14,16 @@
 
 import PDFDocument from "pdfkit";
 
+// Stage 13 milestone 13h: the export *document format* gets its own
+// version number, independent of epcr_versions.version_number (which
+// tracks the clinical record's own history -- amendments, corrections --
+// not how this renderer lays a version out as a PDF). Bumping this is a
+// deliberate, reviewed change to the rendering/layout logic itself;
+// it lets a future consumer -- or a regression test -- tell which
+// rendering contract a given PDF was produced under, and stays fixed
+// across every schema change to the underlying content_json.
+export const EXPORT_FORMAT_VERSION = 1;
+
 function collectPdfBuffer(doc) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -65,7 +75,12 @@ export async function renderPcrDocument({ version, signatures }) {
       Author: "V-EMS",
       Producer: "V-EMS",
       CreationDate: createdAt,
-      ModDate: createdAt
+      ModDate: createdAt,
+      // Stage 13 milestone 13h: a custom Info dict entry is a real,
+      // parseable PDF field -- pdfkit writes every key of `info` as its
+      // own indirect object, not just the standard ones -- so this
+      // survives independently of anything printed in the document body.
+      VemsExportFormatVersion: String(EXPORT_FORMAT_VERSION)
     }
   });
   const bufferPromise = collectPdfBuffer(doc);
@@ -73,6 +88,7 @@ export async function renderPcrDocument({ version, signatures }) {
 
   doc.font("Helvetica-Bold").fontSize(16).text("Electronic Patient Care Record");
   doc.font("Helvetica").fontSize(10);
+  field(doc, "Export format:", EXPORT_FORMAT_VERSION);
   field(doc, "Patient case:", version.patient_case_id);
   field(doc, "Version:", `${version.version_number} (${version.lifecycle_state})`);
   field(doc, "Recorded at:", version.created_at);
@@ -141,4 +157,28 @@ export async function renderPcrDocument({ version, signatures }) {
 
   doc.end();
   return bufferPromise;
+}
+
+/**
+ * Reads the export-format version back out of a PDF this renderer
+ * produced, from the /Info dict's VemsExportFormatVersion entry -- a real
+ * parse of PDFKit's uncompressed object structure (indirect references
+ * followed to their literal string objects), not a byte-offset hack tied
+ * to any specific renderer output. Returns null if the PDF has no such
+ * field (e.g. one predating this milestone, or from something else
+ * entirely) rather than throwing, since "not present" is itself a
+ * meaningful, testable outcome for schema-compatibility checks.
+ */
+export function extractExportFormatVersion(pdfBuffer) {
+  const text = pdfBuffer.toString("latin1");
+  const trailerInfoMatch = text.match(/\/Info\s+(\d+)\s+0\s+R/);
+  if (!trailerInfoMatch) return null;
+  const infoObjNum = trailerInfoMatch[1];
+  const infoObjMatch = text.match(new RegExp(`(?:^|\\s)${infoObjNum} 0 obj\\s*<<([\\s\\S]*?)>>\\s*endobj`));
+  if (!infoObjMatch) return null;
+  const fieldRefMatch = infoObjMatch[1].match(/\/VemsExportFormatVersion\s+(\d+)\s+0\s+R/);
+  if (!fieldRefMatch) return null;
+  const refObjNum = fieldRefMatch[1];
+  const refObjMatch = text.match(new RegExp(`(?:^|\\s)${refObjNum} 0 obj\\s*\\(([^)]*)\\)\\s*endobj`));
+  return refObjMatch ? refObjMatch[1] : null;
 }
