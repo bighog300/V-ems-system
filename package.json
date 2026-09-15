@@ -15,6 +15,7 @@
     "stop:env": "./scripts/stop-env.sh",
     "smoke": "./scripts/smoke.sh development",
     "perf:load": "node ./scripts/load-test-api.mjs",
+    "perf:load:sync-worker": "node ./scripts/load-test-sync-worker.mjs",
     "lint": "node ./scripts/lint.mjs"
   }
 }

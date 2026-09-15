@@ -53,15 +53,50 @@ export class SyncIntentRepository {
     return rows.map(mapIntent);
   }
 
+  /**
+   * Stage 12 milestone 12j: claims an intent atomically in a single
+   * UPDATE ... WHERE ... RETURNING statement, not a separate SELECT
+   * followed by an UPDATE. Two sync-worker processes (each with their own
+   * Postgres connection) racing the read-then-write version could both
+   * read "claimable" before either write landed and both proceed to
+   * process the same intent -- reproduced concretely against a real
+   * Postgres instance: two concurrent claim() calls both returned true
+   * every time. A single UPDATE's WHERE evaluation and row lock are
+   * atomic per row under Postgres's (and SQLite's) transaction model: a
+   * second concurrent UPDATE against the same row blocks behind the
+   * first's row lock, then re-evaluates its WHERE clause against the
+   * now-committed row once unblocked, so at most one of two racing claims
+   * can match and return a row.
+   *
+   * The WHERE clause mirrors listPending()'s own claimability predicate
+   * (status='pending', or status='processing' with an expired lease) --
+   * not merely "status != 'processing'". A worker's local listPending()
+   * snapshot can go stale mid-loop (another worker finishes that intent
+   * while this one is still working through its own list); matching only
+   * "not currently processing" would let a stale-snapshot claim() succeed
+   * again against an already-'succeeded'/'dead_lettered' row and
+   * reprocess it a second time -- restricting to pending/expired-processing
+   * closes that even when the two claims aren't simultaneous.
+   *
+   * The `claim_token = token` branch lets a caller re-confirm/renew its
+   * own still-valid claim; this is only safe because every token the sole
+   * caller (SyncWorker.processPending) generates is globally unique
+   * (includes a random UUID, not just pid+timestamp) -- two independent
+   * workers can never legitimately share a token, so a match here can
+   * only mean "this is the same claim asking again," never a collision.
+   */
   async claim(intentId, token, leaseMs = 30000) {
     const now = new Date().toISOString();
     const expires = new Date(Date.now() + leaseMs).toISOString();
-    return this.db.withTransaction(async () => {
-      const current = await this.db.queryOne(`SELECT status,claim_token,lease_expires_at FROM sync_intents WHERE intent_id=${sqlValue(intentId)};`);
-      if (!current || (current.status === "processing" && current.lease_expires_at > now && current.claim_token !== token)) return false;
-      await this.db.execute(`UPDATE sync_intents SET status='processing', claim_token=${sqlValue(token)}, claimed_at=${sqlValue(now)}, lease_expires_at=${sqlValue(expires)} WHERE intent_id=${sqlValue(intentId)};`);
-      return true;
-    });
+    const claimed = await this.db.queryOne(`UPDATE sync_intents
+      SET status = 'processing', claim_token = ${sqlValue(token)}, claimed_at = ${sqlValue(now)}, lease_expires_at = ${sqlValue(expires)}
+      WHERE intent_id = ${sqlValue(intentId)}
+        AND (
+          status = 'pending'
+          OR (status = 'processing' AND (lease_expires_at IS NULL OR lease_expires_at <= ${sqlValue(now)} OR claim_token = ${sqlValue(token)}))
+        )
+      RETURNING intent_id;`);
+    return Boolean(claimed);
   }
 
   async markSucceeded(intentId, processedAt) {
