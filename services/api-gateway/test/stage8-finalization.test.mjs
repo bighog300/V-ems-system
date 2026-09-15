@@ -21,6 +21,15 @@ test("Stage 8 Patient Case endpoints expose readiness, lifecycle, signatures, re
   const request = async (path, method = "GET", body) => { const response = await fetch(base + path, { method, headers: { "content-type": "application/json", "x-user-role": "supervisor", "x-actor-id": "STAFF-001", ...(method !== "GET" ? { "idempotency-key": `${method}-${path}` } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); return { status: response.status, body: await response.json() }; };
   const id = patientCase.patient_case_id;
   assert.equal((await request(`/api/patient-cases/${id}/readiness`)).body.ready, true);
+  // Stage 13 milestone 13c: compliance (jurisdiction minimum-dataset
+  // validation) is a distinct, informational check from readiness -- this
+  // case satisfies Stage 8's workflow gate but not the reference profile
+  // (no dob/sex charted for an unidentified patient), and completion
+  // below must still succeed regardless.
+  const compliance = await request(`/api/patient-cases/${id}/compliance`);
+  assert.equal(compliance.status, 200);
+  assert.equal(compliance.body.profile_id, "reference-nemsis-v3");
+  assert.equal(compliance.body.ready, false);
   assert.equal((await request(`/api/patient-cases/${id}/complete`, "POST", {})).status, 200);
   assert.equal((await request(`/api/patient-cases/${id}/signatures`, "POST", { signer_role: "treating_clinician", signer_identity: "STAFF-001" })).status, 201);
   assert.equal((await request(`/api/patient-cases/${id}/submit`, "POST", {})).status, 200);
@@ -28,5 +37,7 @@ test("Stage 8 Patient Case endpoints expose readiness, lifecycle, signatures, re
   const locked = await request(`/api/patient-cases/${id}/assessments`, "POST", { section_type: "late", payload: {} });
   assert.equal(locked.status, 409);
   assert.equal(locked.body.error.code, "EPCR_LOCKED");
-  assert.equal((await request(`/api/patient-cases/${id}/summary`)).body.final_version.hash_algorithm, "sha256");
+  const summary = await request(`/api/patient-cases/${id}/summary`);
+  assert.equal(summary.body.final_version.hash_algorithm, "sha256");
+  assert.equal(summary.body.compliance.profile_id, "reference-nemsis-v3");
 });

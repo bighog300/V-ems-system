@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { ApiError } from "@vems/shared";
 import { sqlValue } from "./db.mjs";
+import { getActiveProfile, validateAgainstProfile } from "./compliance/index.mjs";
 
 export const EPCR_STATES = ["draft", "crew_complete", "signed", "submitted", "qa_review", "returned_for_correction", "final"];
 const SIGNATURE_ROLES = new Set(["treating_clinician", "crew_member", "patient", "guardian", "representative", "receiving_clinician", "witness"]);
@@ -90,6 +91,28 @@ export const epcrFinalizationMethods = {
     return true;
   },
   async getEpcrReadiness(patientCaseId) { await requireCase(this, patientCaseId); return requirements(this, patientCaseId); },
+  /**
+   * Stage 13 milestone 13c: validates the ePCR against the active
+   * jurisdiction's minimum-dataset profile (13a/13b), distinct from
+   * getEpcrReadiness()'s own workflow-completeness checks above (an
+   * encounter exists, serial observations were taken, handover happened
+   * -- Stage 8's own rules, unrelated to any jurisdiction's dataset).
+   * Deliberately informational, not a gate: crew-complete/submit still
+   * only ever depend on getEpcrReadiness() above, exactly as before this
+   * milestone. A jurisdiction's minimum-dataset rules are a different
+   * kind of requirement than the workflow gates that block progress --
+   * "the state must have a required destination facility field" doesn't
+   * belong in the same enforcement path as "an encounter must exist
+   * before observations can be charted" -- and are surfaced here for
+   * crews/QA to see and act on, not enforced as a hard state-machine
+   * block in this milestone.
+   */
+  async getEpcrComplianceReport(patientCaseId) {
+    await requireCase(this, patientCaseId);
+    const record = await snapshot(this, patientCaseId);
+    const profile = getActiveProfile();
+    return validateAgainstProfile(profile, record);
+  },
   async getEpcrLifecycle(patientCaseId) {
     await requireCase(this, patientCaseId);
     return { current_state: await currentState(this, patientCaseId), events: await this.db.queryAll(`SELECT * FROM epcr_lifecycle_events WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY occurred_at, lifecycle_event_id;`) };
@@ -157,6 +180,6 @@ export const epcrFinalizationMethods = {
   async updateEpcrQaFlag(patientCaseId, flagId, payload, meta) { const flag = await this.db.queryOne(`SELECT * FROM epcr_qa_flags WHERE patient_case_id=${sqlValue(patientCaseId)} AND flag_id=${sqlValue(flagId)};`); if (!flag) throw new ApiError("NOT_FOUND", "QA flag not found", 404); if (payload.resolution_note === undefined) throw new ApiError("INVALID_PAYLOAD", "resolution_note is required", 400); const updated = { ...flag, resolved_at: new Date().toISOString(), resolved_by: meta.actorId ?? null, resolution_note: payload.resolution_note }; await this.db.execute(`UPDATE epcr_qa_flags SET resolved_at=${sqlValue(updated.resolved_at)},resolved_by=${sqlValue(updated.resolved_by)},resolution_note=${sqlValue(updated.resolution_note)} WHERE flag_id=${sqlValue(flagId)};`); await audit(this, patientCaseId, "qaFlagResolved", meta, flag, updated); return updated; },
   async getEpcrSummary(patientCaseId) {
     const c = await requireCase(this, patientCaseId), lifecycle = await this.getEpcrLifecycle(patientCaseId), version = await latestVersion(this, patientCaseId);
-    return { patient_case: c, incident: await this.incidents.findById(c.incident_id), readiness: await this.getEpcrReadiness(patientCaseId), demographics: (await this.clinicalDemographics.find(patientCaseId)) ?? null, assessments: await this.clinicalAssessments.list(patientCaseId), observations: await this.clinicalObservations.list(patientCaseId), medications: await this.clinicalMedications.list(patientCaseId), procedures: await this.clinicalProcedures.list(patientCaseId), disposition: (await this.clinicalDispositions.find(patientCaseId)) ?? null, timeline: await this.clinicalTimeline.list(patientCaseId), signatures: await this.getEpcrSignatures(patientCaseId), lifecycle, final_version: version ? { version_id: version.version_id, version_number: version.version_number, hash: version.content_hash, hash_algorithm: version.hash_algorithm } : null, amendments: await this.listEpcrAmendments(patientCaseId), reviews: await this.listEpcrReviews(patientCaseId), qa_flags: await this.listEpcrQaFlags(patientCaseId) };
+    return { patient_case: c, incident: await this.incidents.findById(c.incident_id), readiness: await this.getEpcrReadiness(patientCaseId), compliance: await this.getEpcrComplianceReport(patientCaseId), demographics: (await this.clinicalDemographics.find(patientCaseId)) ?? null, assessments: await this.clinicalAssessments.list(patientCaseId), observations: await this.clinicalObservations.list(patientCaseId), medications: await this.clinicalMedications.list(patientCaseId), procedures: await this.clinicalProcedures.list(patientCaseId), disposition: (await this.clinicalDispositions.find(patientCaseId)) ?? null, timeline: await this.clinicalTimeline.list(patientCaseId), signatures: await this.getEpcrSignatures(patientCaseId), lifecycle, final_version: version ? { version_id: version.version_id, version_number: version.version_number, hash: version.content_hash, hash_algorithm: version.hash_algorithm } : null, amendments: await this.listEpcrAmendments(patientCaseId), reviews: await this.listEpcrReviews(patientCaseId), qa_flags: await this.listEpcrQaFlags(patientCaseId) };
   }
 };
