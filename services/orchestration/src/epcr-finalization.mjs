@@ -83,7 +83,7 @@ async function createVersion(service, patientCaseId, lifecycleState, meta, sourc
   }
   return row(version);
 }
-async function audit(service, patientCaseId, action, meta, before, after) { await service.audit("epcr", patientCaseId, action, meta.correlationId, before, after); await service.event(`Epcr${action[0].toUpperCase()}${action.slice(1)}`, meta.correlationId, { patient_case_id: patientCaseId, version_id: after?.version_id ?? null }); }
+async function audit(service, patientCaseId, action, meta, before, after) { await service.audit("epcr", patientCaseId, action, meta, before, after); await service.event(`Epcr${action[0].toUpperCase()}${action.slice(1)}`, meta.correlationId, { patient_case_id: patientCaseId, version_id: after?.version_id ?? null }); }
 
 export const epcrFinalizationMethods = {
   async assertPatientCaseClinicalMutable(patientCaseId) {

@@ -62,7 +62,7 @@ export const attachmentMethods = {
       created_at: now,
       correlation_id: meta.correlationId
     });
-    await this.audit("patient_case_attachment", attachmentId, "upload_attachment", meta.correlationId, undefined, { ...record, storage_key: undefined });
+    await this.audit("patient_case_attachment", attachmentId, "upload_attachment", meta, undefined, { ...record, storage_key: undefined });
     await this.event("PatientCaseAttachmentUploaded", meta.correlationId, { patient_case_id: patientCaseId, incident_id: patientCase.incident_id, attachment_id: attachmentId, kind: payload.kind, size_bytes: stored.sizeBytes });
     return record;
   },

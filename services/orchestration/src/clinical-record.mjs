@@ -80,7 +80,7 @@ export const clinicalRecordMethods = {
     const now = new Date().toISOString();
     const record = { patient_case_id: patientCaseId, ...payload, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
     await this.clinicalDemographics.save(record);
-    await this.audit("patient_case_demographics", patientCaseId, "update_demographics", meta.correlationId, before, record);
+    await this.audit("patient_case_demographics", patientCaseId, "update_demographics", meta, before, record);
     await this.event("PatientCaseDemographicsUpdated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id });
     await appendTimeline(this, { patient_case_id: patientCaseId, event_type: "demographics_updated", occurred_at: now, source_entity_type: "demographics", source_entity_id: patientCaseId, payload: { identity_source: payload.identity_source ?? null } }, meta);
     return this.clinicalDemographics.find(patientCaseId);
@@ -97,7 +97,7 @@ export const clinicalRecordMethods = {
     const record = { assessment_id: id("ASM"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, section_type: sectionType, payload: payload.payload, performed_at: performedAt, clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     await this.clinicalAssessments.create(record);
     if (meta.idempotencyKey) await this.idempotency.save("assessment", meta.idempotencyKey, record.assessment_id, record.created_at, fingerprint);
-    await this.audit("patient_case_assessment", record.assessment_id, "create_assessment", meta.correlationId, undefined, record);
+    await this.audit("patient_case_assessment", record.assessment_id, "create_assessment", meta, undefined, record);
     await this.event("PatientCaseAssessmentCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, assessment_id: record.assessment_id, section_type: sectionType });
     await appendTimeline(this, { ...record, timeline_event_id: undefined, event_type: "assessment_recorded", source_entity_type: "assessment", source_entity_id: record.assessment_id }, meta);
     return record;
@@ -123,7 +123,7 @@ export const clinicalRecordMethods = {
     await this.db.execute(`UPDATE clinical_observations SET openemr_observation_id=${sqlValue(record.openemr_observation_id)},downstream_status=${sqlValue(downstreamStatus)} WHERE observation_event_id=${sqlValue(record.observation_event_id)};`);
     record.downstream_status = downstreamStatus;
     if (meta.idempotencyKey) await this.idempotency.save("observation", meta.idempotencyKey, record.observation_event_id, record.created_at, fingerprint);
-    await this.audit("clinical_observation", record.observation_event_id, "create_observation", meta.correlationId, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, performed_at: performedAt, downstream_status: downstreamStatus });
+    await this.audit("clinical_observation", record.observation_event_id, "create_observation", meta, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, performed_at: performedAt, downstream_status: downstreamStatus });
     await this.event("PatientCaseObservationCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, observation_id: record.observation_event_id, downstream_status: downstreamStatus });
     await appendTimeline(this, { ...record, event_type: "observation_recorded", source_entity_type: "observation", source_entity_id: record.observation_event_id }, meta);
     return record;
@@ -142,7 +142,7 @@ export const clinicalRecordMethods = {
     await this.db.execute(`UPDATE medication_administrations SET openemr_reference_id=${sqlValue(record.openemr_reference_id)},downstream_status=${sqlValue(record.downstream_status)} WHERE medication_administration_id=${sqlValue(record.medication_administration_id)};`);
     if (record.stock_item_id) await this.recordClinicalStockUsage({ ...record, intervention_id: record.medication_administration_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "medication", name: record.medication_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta);
     if (meta.idempotencyKey) await this.idempotency.save("medication", meta.idempotencyKey, record.medication_administration_id, record.created_at, fingerprint);
-    await this.audit("medication_administration", record.medication_administration_id, "create_medication", meta.correlationId, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, medication_name: record.medication_name, downstream_status: record.downstream_status });
+    await this.audit("medication_administration", record.medication_administration_id, "create_medication", meta, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, medication_name: record.medication_name, downstream_status: record.downstream_status });
     await this.event("MedicationAdministrationCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, medication_administration_id: record.medication_administration_id });
     await appendTimeline(this, { ...record, event_type: "medication_administered", source_entity_type: "medication", source_entity_id: record.medication_administration_id }, meta);
     return this.clinicalMedications.find(record.medication_administration_id);
@@ -161,7 +161,7 @@ export const clinicalRecordMethods = {
     await this.db.execute(`UPDATE clinical_procedures SET openemr_reference_id=${sqlValue(record.openemr_reference_id)},downstream_status=${sqlValue(record.downstream_status)} WHERE procedure_id=${sqlValue(record.procedure_id)};`);
     if (record.stock_item_id) await this.recordClinicalStockUsage({ ...record, intervention_id: record.procedure_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "procedure", name: record.procedure_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta);
     if (meta.idempotencyKey) await this.idempotency.save("procedure", meta.idempotencyKey, record.procedure_id, record.created_at, fingerprint);
-    await this.audit("clinical_procedure", record.procedure_id, "create_procedure", meta.correlationId, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, procedure_name: record.procedure_name, downstream_status: record.downstream_status });
+    await this.audit("clinical_procedure", record.procedure_id, "create_procedure", meta, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, procedure_name: record.procedure_name, downstream_status: record.downstream_status });
     await this.event("ClinicalProcedureCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, procedure_id: record.procedure_id });
     await appendTimeline(this, { ...record, event_type: "procedure_performed", source_entity_type: "procedure", source_entity_id: record.procedure_id }, meta);
     return this.clinicalProcedures.find(record.procedure_id);
@@ -179,7 +179,7 @@ export const clinicalRecordMethods = {
     const record = { disposition_id: id("DISP"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, outcome: payload.outcome, outcome_code: codeFor("outcome", payload.outcome), destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, decision_at: iso(payload.decision_at ?? now, "decision_at"), reason: payload.reason ?? null, notes: payload.notes ?? null, ...location, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
     await this.clinicalDispositions.save(record);
     if (meta.idempotencyKey) await this.idempotency.save("disposition", meta.idempotencyKey, patientCaseId, now, fingerprint);
-    await this.audit("patient_case_disposition", patientCaseId, "set_disposition", meta.correlationId, before, record);
+    await this.audit("patient_case_disposition", patientCaseId, "set_disposition", meta, before, record);
     await this.event("PatientCaseDispositionSet", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, outcome: record.outcome });
     await appendTimeline(this, { ...record, event_type: "disposition_recorded", source_entity_type: "disposition", source_entity_id: record.disposition_id }, meta);
     if (current.status !== "Closed") await this.patientCases.save({ ...(await this.patientCases.find(patientCaseId)), status: "Closed", updated_at: now, correlation_id: meta.correlationId });

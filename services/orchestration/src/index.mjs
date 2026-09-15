@@ -116,7 +116,7 @@ export class OrchestrationService {
       const record = { incident_id: incidentId, call_id: callId, created_at: now, updated_at: now, correlation_id: meta.correlationId, ...normalized.incident, call_source: normalized.call.call_source, received_at: normalized.call.received_at };
       await this.db.execute(`INSERT INTO calls (call_id,call_source,received_at,created_at,correlation_id) VALUES (${sqlValue(callId)},${sqlValue(normalized.call.call_source)},${sqlValue(normalized.call.received_at)},${sqlValue(now)},${sqlValue(meta.correlationId)});`);
       await this.incidents.create(record);
-      await this.audit("incident", incidentId, "create_incident", meta.correlationId, undefined, record);
+      await this.audit("incident", incidentId, "create_incident", meta, undefined, record);
       await this.event("IncidentCreated", meta.correlationId, { incident_id: incidentId, call_id: callId, status: record.status });
       await this.syncIntent("incident", "createIncidentMirror", meta.correlationId, this.vtigerMapper.mapIncidentCreate(record, normalized.call));
       await this.vtigerLinks.upsert({ incident_id: incidentId, external_key: `${this.vtigerMapper.sourceNamespace}:${incidentId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, created_at: now, updated_at: now, remote_id: null, remote_number: null });
@@ -181,7 +181,7 @@ export class OrchestrationService {
 
     const updated = { ...current, status: nextStatus, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
     await this.incidents.updateStatus(incidentId, nextStatus, updated.updated_at, meta.correlationId);
-    await this.audit("incident", incidentId, `incident_action:${payload.action}`, meta.correlationId, current, updated);
+    await this.audit("incident", incidentId, `incident_action:${payload.action}`, meta, current, updated);
     await this.event("IncidentUpdated", meta.correlationId, { incident_id: incidentId, old_status: current.status, new_status: nextStatus });
     await this.syncIntent("incident", "updateIncidentMirror", meta.correlationId, this.vtigerMapper.mapIncidentUpdate(updated));
     return this.withClosureReadiness(updated);
@@ -253,7 +253,7 @@ export class OrchestrationService {
       const assignmentId = await this.assignments.nextAssignmentId();
       const record = { assignment_id: assignmentId, incident_id: incidentId, status: "Proposed", vehicle_status: "Assigned", ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
       await this.assignments.create(record);
-      await this.audit("assignment", assignmentId, "create_assignment", meta.correlationId, undefined, record);
+      await this.audit("assignment", assignmentId, "create_assignment", meta, undefined, record);
       await this.event("AssignmentCreated", meta.correlationId, { assignment_id: assignmentId, incident_id: incidentId, status: record.status });
       await this.syncIntent("assignment", "createAssignmentMirror", meta.correlationId, { ...this.vtigerMapper.mapAssignmentCreate(record), incident_id: incidentId, assignment_id: assignmentId });
       await this.assignmentVtigerLinks.upsert({ assignment_id: assignmentId, incident_id: incidentId, external_key: `${this.vtigerMapper.sourceNamespace}:assignment:${assignmentId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, incident_remote_id: null, created_at: now, updated_at: now });
@@ -286,7 +286,7 @@ export class OrchestrationService {
       const now = new Date().toISOString();
       const record = { ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
       await this.personnel.create(record);
-      await this.audit("personnel", record.staff_id, "create_personnel", meta.correlationId, undefined, record);
+      await this.audit("personnel", record.staff_id, "create_personnel", meta, undefined, record);
       await this.event("PersonnelCreated", meta.correlationId, { staff_id: record.staff_id, operational_status: record.operational_status });
       await this.syncIntent("personnel", "createPersonnelMirror", meta.correlationId, this.vtigerMapper.mapPersonnelCreate(record));
       await this.personnelVtigerLinks.upsert({ staff_id: record.staff_id, external_key: `${this.vtigerMapper.sourceNamespace}:personnel:${record.staff_id}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, created_at: now, updated_at: now });
@@ -316,7 +316,7 @@ export class OrchestrationService {
     if (payload.operational_status !== undefined && !PERSONNEL_STATUSES.includes(payload.operational_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid operational_status", 400);
     const updated = { ...current, ...payload, staff_id: staffId, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
     await this.personnel.update(updated);
-    await this.audit("personnel", staffId, payload.operational_status ? "personnel_status_change" : "update_personnel", meta.correlationId, current, updated);
+    await this.audit("personnel", staffId, payload.operational_status ? "personnel_status_change" : "update_personnel", meta, current, updated);
     await this.event(payload.operational_status ? "PersonnelStatusChanged" : "PersonnelUpdated", meta.correlationId, { staff_id: staffId, operational_status: updated.operational_status });
     const link = await this.personnelVtigerLinks.findByStaffId(staffId);
     await this.syncIntent("personnel", "updatePersonnelMirror", meta.correlationId, { ...this.vtigerMapper.mapPersonnelUpdate({ ...updated, remote_id: link?.remote_id }), staff_id: staffId });
@@ -352,7 +352,7 @@ export class OrchestrationService {
       const now = new Date().toISOString();
       const record = { ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
       await this.vehicles.create(record);
-      await this.audit("vehicle", record.vehicle_id, "create_vehicle", meta.correlationId, undefined, record);
+      await this.audit("vehicle", record.vehicle_id, "create_vehicle", meta, undefined, record);
       await this.event("VehicleCreated", meta.correlationId, { vehicle_id: record.vehicle_id, operational_status: record.operational_status, service_status: record.service_status });
       await this.syncIntent("vehicle", "createVehicleMirror", meta.correlationId, this.vtigerMapper.mapVehicleCreate(record));
       await this.vehicleVtigerLinks.upsert({ vehicle_id: record.vehicle_id, external_key: `${this.vtigerMapper.sourceNamespace}:vehicle:${record.vehicle_id}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, created_at: now, updated_at: now });
@@ -384,7 +384,7 @@ export class OrchestrationService {
     const updated = { ...current, ...payload, vehicle_id: vehicleId, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
     if (payload.operational_status && payload.operational_status !== current.operational_status && (await this.vehicles.countActiveAssignments(vehicleId)) > 0 && payload.operational_status === "Available") throw new ApiError("CONFLICT", `Vehicle ${vehicleId} has active assignments`, 409);
     await this.vehicles.update(updated);
-    await this.audit("vehicle", vehicleId, payload.operational_status || payload.service_status ? "vehicle_status_change" : "update_vehicle", meta.correlationId, current, updated);
+    await this.audit("vehicle", vehicleId, payload.operational_status || payload.service_status ? "vehicle_status_change" : "update_vehicle", meta, current, updated);
     await this.event(payload.operational_status || payload.service_status ? "VehicleStatusChanged" : "VehicleUpdated", meta.correlationId, { vehicle_id: vehicleId, operational_status: updated.operational_status, service_status: updated.service_status });
     const link = await this.vehicleVtigerLinks.findByVehicleId(vehicleId);
     await this.syncIntent("vehicle", "updateVehicleMirror", meta.correlationId, { ...this.vtigerMapper.mapVehicleUpdate({ ...updated, remote_id: link?.remote_id }), vehicle_id: vehicleId });
@@ -400,7 +400,7 @@ export class OrchestrationService {
       const conflict = await this.stockItems.findById(normalized.stock_item_id);
       if (conflict) { const comparable = ["name","category","unit_of_measure","item_type","active_status","description"].every((k) => conflict[k] === normalized[k]); if (comparable) return this.getStockItem(normalized.stock_item_id); throw new ApiError("CONFLICT", `Stock item ${normalized.stock_item_id} already exists with a different definition`, 409); }
       const now = new Date().toISOString(); const record = { ...normalized, created_at: now, updated_at: now, correlation_id: meta.correlationId };
-      await this.stockItems.create(record); await this.audit("stock_item", record.stock_item_id, "create_stock_item", meta.correlationId, undefined, record); await this.event("StockItemCreated", meta.correlationId, { stock_item_id: record.stock_item_id });
+      await this.stockItems.create(record); await this.audit("stock_item", record.stock_item_id, "create_stock_item", meta, undefined, record); await this.event("StockItemCreated", meta.correlationId, { stock_item_id: record.stock_item_id });
       await this.syncIntent("stock_item", "createStockItemMirror", meta.correlationId, this.vtigerMapper.mapStockItemCreate(record));
       await this.stockItemVtigerLinks.upsert({ stock_item_id: record.stock_item_id, external_key: `${this.vtigerMapper.sourceNamespace}:stock-item:${record.stock_item_id}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, created_at: now, updated_at: now });
       if (meta.idempotencyKey) await this.idempotency.save("stock_item", meta.idempotencyKey, record.stock_item_id, now, fingerprint);
@@ -430,7 +430,7 @@ export class OrchestrationService {
     if (payload.active_status !== undefined && !STOCK_ACTIVE_STATUSES.includes(payload.active_status)) throw new ApiError("INVALID_PAYLOAD", "Invalid active_status", 400);
     const updated = { ...current, ...payload, stock_item_id: id, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
     await this.stockItems.update(updated);
-    await this.audit("stock_item", id, "update_stock_item", meta.correlationId, current, updated);
+    await this.audit("stock_item", id, "update_stock_item", meta, current, updated);
     await this.event("StockItemUpdated", meta.correlationId, { stock_item_id: id, active_status: updated.active_status });
     const link = await this.stockItemVtigerLinks.findByStockItemId(id);
     await this.syncIntent("stock_item", "updateStockItemMirror", meta.correlationId, { ...this.vtigerMapper.mapStockItemUpdate({ ...updated, remote_id: link?.remote_id }), stock_item_id: id });
@@ -475,7 +475,7 @@ export class OrchestrationService {
       if (existing) await this.vehicleStock.update(row); else await this.vehicleStock.create(row);
       const txId = `STX-${randomUUID()}`;
       await this.db.execute(`INSERT INTO stock_transactions (transaction_id,vehicle_id,stock_item_id,transaction_type,quantity_delta,source_reference,reason,correlation_id,actor_id,created_at) VALUES (${sqlValue(txId)},${sqlValue(vehicleId)},${sqlValue(stockItemId)},${sqlValue(payload.type)},${sqlValue(delta)},${sqlValue(meta.idempotencyKey ?? txId)},${sqlValue(payload.reason)},${sqlValue(meta.correlationId)},${sqlValue(meta.actorId ?? null)},${sqlValue(now)});`);
-      await this.audit("vehicle_stock", `${vehicleId}:${stockItemId}`, "adjust_stock", meta.correlationId, existing, row);
+      await this.audit("vehicle_stock", `${vehicleId}:${stockItemId}`, "adjust_stock", meta, existing, row);
       await this.event("VehicleStockAdjusted", meta.correlationId, { vehicle_id: vehicleId, stock_item_id: stockItemId, quantity_delta: delta, transaction_id: txId });
       await this.syncIntent("vehicle_stock", "createVehicleStockMirror", meta.correlationId, this.vtigerMapper.mapVehicleStockCreate(row));
       const existingLink = await this.vehicleStockVtigerLinks.find(vehicleId, stockItemId);
@@ -510,7 +510,7 @@ export class OrchestrationService {
 
     const updated = { ...current, status: nextStatus, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
     await this.assignments.updateStatus(assignmentId, nextStatus, updated.updated_at, meta.correlationId);
-    await this.audit("assignment", assignmentId, `assignment_action:${payload.action}`, meta.correlationId, current, updated);
+    await this.audit("assignment", assignmentId, `assignment_action:${payload.action}`, meta, current, updated);
     await this.event("IncidentUpdated", meta.correlationId, {
       incident_id: current.incident_id,
       assignment_id: assignmentId,
@@ -527,13 +527,18 @@ export class OrchestrationService {
     return this.getAssignment(assignmentId);
   }
 
-  async audit(entityType, entityId, action, correlationId, beforeJson, afterJson) {
+  // Stage 13 milestone 13f: `meta` (not just its correlationId) is threaded
+  // through so the actor can be recorded alongside every audit entry --
+  // every caller already has a `meta` object with `actorId` on hand, so this
+  // is a call-site-wide signature change, not new plumbing.
+  async audit(entityType, entityId, action, meta, beforeJson, afterJson) {
     await this.audits.append({
       timestamp: new Date().toISOString(),
       entity_type: entityType,
       entity_id: entityId,
       action,
-      correlation_id: correlationId,
+      correlation_id: meta.correlationId,
+      actor_id: meta.actorId ?? null,
       before_json: beforeJson,
       after_json: afterJson
     });
@@ -616,7 +621,7 @@ export class OrchestrationService {
       correlation_id: meta.correlationId
     };
     await this.revocations.revoke(record);
-    await this.audit("access_revocation", record.revocation_id, "revoke_access", meta.correlationId, undefined, record);
+    await this.audit("access_revocation", record.revocation_id, "revoke_access", meta, undefined, record);
     await this.event("AccessRevoked", meta.correlationId, { scope: record.scope, target: record.target, revoked_by: record.revoked_by });
     return record;
   }
@@ -635,7 +640,7 @@ export class OrchestrationService {
 
   async searchPatient(payload, meta) {
     const result = await this.openemr.searchPatient(payload);
-    await this.audit("patient", payload.phone ?? payload.last_name ?? "search", "search_patient", meta.correlationId, undefined, result);
+    await this.audit("patient", payload.phone ?? payload.last_name ?? "search", "search_patient", meta, undefined, result);
     await this.event("PatientMatchRequested", meta.correlationId, { incident_id: payload.incident_id ?? null, match_status: result.match_status });
     return result;
   }
@@ -647,7 +652,7 @@ export class OrchestrationService {
     }
 
     const created = await this.openemr.createPatient(payload);
-    await this.audit("patient", created.patient_id, "create_patient", meta.correlationId, undefined, created);
+    await this.audit("patient", created.patient_id, "create_patient", meta, undefined, created);
     await this.event("PatientCreated", meta.correlationId, { patient_id: created.patient_id });
 
     if (meta.idempotencyKey) await this.idempotency.save("patient", meta.idempotencyKey, created.patient_id, new Date().toISOString());
@@ -749,7 +754,7 @@ export class OrchestrationService {
 
     const patientCase = await this.patientCases.find(encounter.patient_case_id);
     if (patientCase?.status === 'Encounter Open') await this.setPatientCaseStatus(encounter.patient_case_id, 'Care In Progress', meta);
-    await this.audit("observation", normalized.observation_id, "create_observation", meta.correlationId, undefined, {
+    await this.audit("observation", normalized.observation_id, "create_observation", meta, undefined, {
       ...normalized,
       incident_id: encounter.incident_id,
       patient_case_id: encounter.patient_case_id
@@ -792,7 +797,7 @@ export class OrchestrationService {
 
     const patientCase = await this.patientCases.find(encounter.patient_case_id);
     if (patientCase?.status === 'Encounter Open') await this.setPatientCaseStatus(encounter.patient_case_id, 'Care In Progress', meta);
-    await this.audit("intervention", normalized.intervention_id, "create_intervention", meta.correlationId, undefined, {
+    await this.audit("intervention", normalized.intervention_id, "create_intervention", meta, undefined, {
       ...normalized,
       incident_id: encounter.incident_id,
       patient_case_id: encounter.patient_case_id
@@ -842,7 +847,7 @@ export class OrchestrationService {
       }
       const usage = { stock_usage_id: usageId, intervention_id: payload.intervention_id, incident_id: payload.incident_id, patient_case_id: payload.patient_case_id ?? null, encounter_id: payload.encounter_id ?? null, stock_item_id: payload.stock_item_id, vehicle_id: vehicleId, quantity_used: qty, usage_source: "clinical_event", performed_at: payload.performed_at, intervention_type: payload.type, correlation_id: meta.correlationId, discrepancy_status: discrepancy, created_at: now };
       await this.stockUsage.create(usage);
-      await this.audit("stock_usage", usageId, "record_stock_usage", meta.correlationId, undefined, usage);
+      await this.audit("stock_usage", usageId, "record_stock_usage", meta, undefined, usage);
       await this.event(discrepancy ? "StockDiscrepancyRecorded" : "StockUsageRecorded", meta.correlationId, { patient_case_id: payload.patient_case_id ?? null, incident_id: payload.incident_id, stock_usage_id: usageId, stock_item_id: payload.stock_item_id, vehicle_id: vehicleId, discrepancy_status: discrepancy });
       await this.syncIntent("stock_usage", "recordStockUsageMirror", meta.correlationId, this.vtigerMapper.mapStockUsageRecord(Object.fromEntries(Object.entries(usage).filter(([key]) => key !== "patient_case_id"))));
       await this.stockUsageVtigerLinks.upsert({ stock_usage_id: usageId, external_key: `${this.vtigerMapper.sourceNamespace}:stock-usage:${usageId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, created_at: now, updated_at: now });
@@ -933,7 +938,7 @@ export class OrchestrationService {
       closure_ready: closureReady
     };
 
-    await this.audit("handover", normalized.handover_id, "create_handover", meta.correlationId, undefined, {
+    await this.audit("handover", normalized.handover_id, "create_handover", meta, undefined, {
       ...normalized,
       incident_id: encounter.incident_id,
       patient_case_id: encounter.patient_case_id

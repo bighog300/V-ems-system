@@ -79,7 +79,7 @@ export const patientCaseMethods = {
         status: payload.temporary_label ? 'Patient Identification Pending' : 'Created', ...context,
         temporary_label: payload.temporary_label ?? null, created_at: now, updated_at: now, correlation_id: meta.correlationId };
       await this.patientCases.save(record);
-      await this.audit('patient_case', record.patient_case_id, 'create_patient_case', meta.correlationId, undefined, record);
+      await this.audit('patient_case', record.patient_case_id, 'create_patient_case', meta, undefined, record);
       await this.event('PatientCaseCreated', meta.correlationId, { patient_case_id: record.patient_case_id, incident_id: incidentId, patient_sequence: record.patient_sequence });
       if (meta.idempotencyKey) await this.idempotency.save('patient_case', meta.idempotencyKey, record.patient_case_id, now, fingerprint);
       return this.getPatientCase(record.patient_case_id);
@@ -102,7 +102,7 @@ export const patientCaseMethods = {
       if (payload.lead_clinician_id === undefined && context.crew_ids.includes(before.lead_clinician_id)) context.lead_clinician_id = before.lead_clinician_id;
       const after = { ...before, ...context, updated_at: new Date().toISOString(), correlation_id: meta.correlationId };
       await this.patientCases.save(after);
-      await this.audit('patient_case', id, 'change_assignment', meta.correlationId, before, after);
+      await this.audit('patient_case', id, 'change_assignment', meta, before, after);
       await this.event('PatientCaseAssignmentChanged', meta.correlationId, { patient_case_id: id, incident_id: before.incident_id, assignment_id: after.assignment_id });
       return this.getPatientCase(id);
     });
@@ -122,7 +122,7 @@ export const patientCaseMethods = {
     if (!transitions[before.status]?.includes(status)) conflict(`Invalid patient case transition from ${before.status} to ${status}`);
     if (['Handover Completed','Closed'].includes(status) && !(await this.getPatientCase(id)).closure_ready) conflict('Persisted handover and disposition are required');
     await this.patientCases.save({ ...before, status, updated_at: new Date().toISOString(), correlation_id: meta.correlationId });
-    await this.audit('patient_case', id, 'change_status', meta.correlationId, before, await this.patientCases.find(id));
+    await this.audit('patient_case', id, 'change_status', meta, before, await this.patientCases.find(id));
     await this.event('PatientCaseStatusChanged', meta.correlationId, { patient_case_id: id, incident_id: before.incident_id, status });
     return this.getPatientCase(id);
   },
@@ -143,7 +143,7 @@ export const patientCaseMethods = {
         temporary_label: payload.temporary_label ?? c.temporary_label, verification_status: payload.verification_status,
         created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
       await this.patientLinks.save(record);
-      await this.audit('patient_case', id, 'link_patient', meta.correlationId, before, record);
+      await this.audit('patient_case', id, 'link_patient', meta, before, record);
       await this.event('PatientCasePatientLinked', meta.correlationId, { patient_case_id: id, incident_id: c.incident_id, verification_status: record.verification_status });
       if (record.openemr_patient_id && ['Created','Patient Identification Pending'].includes(c.status)) await this.setPatientCaseStatus(id, 'Patient Linked', meta);
       return record;
@@ -160,7 +160,7 @@ export const patientCaseMethods = {
       const record = { reconciliation_id: randomUUID(), patient_case_id: id, clinical_patient_id: c.openemr_patient_id,
         verified_patient_id: payload.verified_patient_id, reason: payload.reason, created_at: new Date().toISOString(), correlation_id: meta.correlationId };
       await this.db.execute(`INSERT INTO patient_case_identity_reconciliations(${Object.keys(record).join(',')}) VALUES (${Object.values(record).map(sqlValue).join(',')});`);
-      await this.audit('patient_case', id, 'reconcile_identity', meta.correlationId, { patient_case_id: id, incident_id: c.incident_id, clinical_patient_id: c.openemr_patient_id }, { ...record, incident_id: c.incident_id });
+      await this.audit('patient_case', id, 'reconcile_identity', meta, { patient_case_id: id, incident_id: c.incident_id, clinical_patient_id: c.openemr_patient_id }, { ...record, incident_id: c.incident_id });
       await this.event('PatientIdentityReconciled', meta.correlationId, { patient_case_id: id, incident_id: c.incident_id, administrative_merge_required: true });
       return this.getPatientCase(id);
     });
@@ -228,7 +228,7 @@ export const patientCaseMethods = {
         ...location, created_at: now, updated_at: now, correlation_id: meta.correlationId };
       await this.encounterLinks.save(record);
       await this.setPatientCaseStatus(id, 'Encounter Open', meta);
-      await this.audit('patient_case', id, 'create_encounter', meta.correlationId, undefined, record);
+      await this.audit('patient_case', id, 'create_encounter', meta, undefined, record);
       await this.event('PatientCaseEncounterCreated', meta.correlationId, { patient_case_id: id, incident_id: c.incident_id, encounter_id: created.encounter_id });
       await this.db.execute(`UPDATE patient_case_encounter_requests SET status='completed' WHERE patient_case_id=${sqlValue(id)};`);
       if (meta.idempotencyKey) await this.idempotency.save(scope, meta.idempotencyKey, created.encounter_id, now, fingerprint);
