@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { ApiError } from "@vems/shared";
 import { sqlValue } from "./db.mjs";
 import { getActiveProfile, validateAgainstProfile } from "./compliance/index.mjs";
+import { renderPcrDocument } from "./reporting/pcr-document.mjs";
 
 export const EPCR_STATES = ["draft", "crew_complete", "signed", "submitted", "qa_review", "returned_for_correction", "final"];
 const SIGNATURE_ROLES = new Set(["treating_clinician", "crew_member", "patient", "guardian", "representative", "receiving_clinician", "witness"]);
@@ -146,6 +147,38 @@ export const epcrFinalizationMethods = {
     return this.getEpcrSignatures(patientCaseId);
   },
   async getEpcrSignatures(patientCaseId) { await requireCase(this, patientCaseId); const rows = await this.db.queryAll(`SELECT * FROM epcr_signatures WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY signed_at;`); return rows.map(r => ({ ...r, witness_context: parseJson(r.witness_context_json) })); },
+  /**
+   * Stage 13 milestone 13d: renders the signed, versioned PDF export for
+   * one ePCR version (the latest, by default) -- see
+   * reporting/pcr-document.mjs for the deterministic-rendering design.
+   * Signatures are filtered to the ones actually signed against this
+   * specific version_id, since getEpcrSignatures() returns every
+   * signature the patient case has ever had across every version, and a
+   * signature only ever attests to the exact version it was signed
+   * against.
+   */
+  async getEpcrExport(patientCaseId, versionId = null) {
+    let version;
+    if (versionId) {
+      version = await this.getEpcrVersion(patientCaseId, versionId);
+    } else {
+      await requireCase(this, patientCaseId);
+      version = await latestVersion(this, patientCaseId);
+    }
+    if (!version) throw new ApiError("CONFLICT", "No ePCR version exists to export", 409);
+    const signatures = (await this.getEpcrSignatures(patientCaseId)).filter((s) => s.version_id === version.version_id);
+    const pdf = await renderPcrDocument({ version, signatures });
+    return {
+      patient_case_id: patientCaseId,
+      version_id: version.version_id,
+      version_number: version.version_number,
+      content_hash: version.content_hash,
+      hash_algorithm: version.hash_algorithm,
+      filename: `epcr-${patientCaseId}-v${version.version_number}.pdf`,
+      content_type: "application/pdf",
+      content_base64: pdf.toString("base64")
+    };
+  },
   async submitEpcr(patientCaseId, meta) { const v = await latestVersion(this, patientCaseId); if (!v) throw new ApiError("CONFLICT", "A version is required before submission", 409); await this.transitionEpcr(patientCaseId, "submitted", meta, meta.reason ?? null, v.version_id); return this.getEpcrLifecycle(patientCaseId); },
   async reviewEpcr(patientCaseId, payload, meta) {
     await requireCase(this, patientCaseId); if (!REVIEW_ACTIONS.has(payload.action)) throw new ApiError("INVALID_PAYLOAD", "Unsupported review action", 400);

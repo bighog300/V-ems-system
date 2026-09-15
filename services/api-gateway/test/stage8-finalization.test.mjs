@@ -40,4 +40,12 @@ test("Stage 8 Patient Case endpoints expose readiness, lifecycle, signatures, re
   const summary = await request(`/api/patient-cases/${id}/summary`);
   assert.equal(summary.body.final_version.hash_algorithm, "sha256");
   assert.equal(summary.body.compliance.profile_id, "reference-nemsis-v3");
+
+  // Stage 13 milestone 13d: signed/versioned PDF export.
+  const exported = await request(`/api/patient-cases/${id}/export`);
+  assert.equal(exported.status, 200);
+  assert.equal(exported.body.content_type, "application/pdf");
+  assert.equal(exported.body.content_hash, summary.body.final_version.hash);
+  const pdf = Buffer.from(exported.body.content_base64, "base64");
+  assert.equal(pdf.subarray(0, 5).toString("latin1"), "%PDF-");
 });
