@@ -858,11 +858,12 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
 
-      const epcrMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})\/(readiness|lifecycle|complete|versions|signatures|submit|amendments|review|reviews|qa-flags|summary)(?:\/([^/]+))?$/);
+      const epcrMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})\/(readiness|lifecycle|complete|versions|signatures|submit|amendments|review|reviews|qa-flags|summary|compliance)(?:\/([^/]+))?$/);
       if (epcrMatch) {
         const patientCaseId = epcrMatch[1], action = epcrMatch[2], childId = epcrMatch[3];
         const meta = { correlationId: context.correlationId, actorId: context.actorId, actorRole: context.role, idempotencyKey };
         if (method === "GET" && action === "readiness") return okJson(res, 200, await orchestration.getEpcrReadiness(patientCaseId), context);
+        if (method === "GET" && action === "compliance") return okJson(res, 200, await orchestration.getEpcrComplianceReport(patientCaseId), context);
         if (method === "GET" && action === "lifecycle") return okJson(res, 200, await orchestration.getEpcrLifecycle(patientCaseId), context);
         if (method === "GET" && action === "versions") return okJson(res, 200, childId ? await orchestration.getEpcrVersion(patientCaseId, childId) : await orchestration.listEpcrVersions(patientCaseId), context);
         if (method === "POST" && action === "versions") return okJson(res, 201, await orchestration.createEpcrVersion(patientCaseId, await parseJson(req), meta), context);
