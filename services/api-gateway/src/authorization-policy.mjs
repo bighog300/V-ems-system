@@ -16,6 +16,7 @@ export const RBAC_POLICIES = [
   { pattern: /^\/api\/patient-cases\/PCR-[0-9]{6,}\/(assignment|status)$/, method: 'PATCH', roles: ['field_crew_lead','supervisor','sys_admin'] },
 
   { pattern: /^\/api\/support\/diagnostics$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
+  { pattern: /^\/api\/reports\/(incidents|stock-usage|qa-flags)$/, method: "GET", roles: ["supervisor", "operations_manager", "sys_admin"] },
   { pattern: /^\/api\/revocations$/, method: "GET", roles: ["supervisor", "sys_admin"] },
   { pattern: /^\/api\/revocations$/, method: "POST", roles: ["supervisor", "sys_admin"] },
   { pattern: /^\/api\/support\/sync-intents\/([0-9]+)\/replay$/, method: "POST", roles: ["operations_manager", "sys_admin"] },
