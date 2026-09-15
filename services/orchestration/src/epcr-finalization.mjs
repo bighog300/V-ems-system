@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { ApiError } from "@vems/shared";
 import { sqlValue } from "./db.mjs";
 import { getActiveProfile, validateAgainstProfile } from "./compliance/index.mjs";
-import { renderPcrDocument } from "./reporting/pcr-document.mjs";
+import { renderPcrDocument, EXPORT_FORMAT_VERSION } from "./reporting/pcr-document.mjs";
 
 export const EPCR_STATES = ["draft", "crew_complete", "signed", "submitted", "qa_review", "returned_for_correction", "final"];
 const SIGNATURE_ROLES = new Set(["treating_clinician", "crew_member", "patient", "guardian", "representative", "receiving_clinician", "witness"]);
@@ -193,6 +193,7 @@ export const epcrFinalizationMethods = {
       version_number: version.version_number,
       content_hash: version.content_hash,
       hash_algorithm: version.hash_algorithm,
+      export_format_version: EXPORT_FORMAT_VERSION,
       filename: `epcr-${patientCaseId}-v${version.version_number}.pdf`,
       content_type: "application/pdf",
       content_base64: pdf.toString("base64")
