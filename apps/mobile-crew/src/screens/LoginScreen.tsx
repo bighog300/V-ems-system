@@ -2,10 +2,11 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";
 
 import { verifySession } from "../api/verifySession.ts";
-import { UnauthorizedError } from "../api/apiError.ts";
+import { ApiError, UnauthorizedError } from "../api/apiError.ts";
 import { getOrCreateDeviceId } from "../auth/deviceIdentity.ts";
 import { saveSession, type Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { recordTelemetryEvent } from "../telemetry/telemetry.ts";
 
 export interface LoginScreenProps {
   onSignedIn: (session: Session) => void;
@@ -35,11 +36,15 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
         deviceId
       };
       await saveSession(session);
+      recordTelemetryEvent({ name: "sign_in_succeeded", role: session.actorRole });
       onSignedIn(session);
     } catch (err) {
       if (err instanceof UnauthorizedError) {
+        recordTelemetryEvent({ name: "sign_in_failed", reason: "invalid_credentials" });
         setError("That token was rejected. Check the token and try again.");
       } else {
+        const reason = err instanceof ApiError && err.code !== "REQUEST_ABORTED" ? "unknown" : "network_error";
+        recordTelemetryEvent({ name: "sign_in_failed", reason });
         setError(err instanceof Error ? err.message : "Sign in failed.");
       }
     } finally {

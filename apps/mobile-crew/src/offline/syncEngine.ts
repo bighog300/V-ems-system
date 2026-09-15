@@ -3,6 +3,7 @@ import { isQueueableFailure, LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { requestJson } from "../api/httpClient.ts";
 import { listMutations, markMutationStatus, remapPatientCaseId, type OutboxEntry } from "./outboxStore.ts";
 import type { OfflineSqliteLike } from "./db.ts";
+import { recordTelemetryEvent } from "../telemetry/telemetry.ts";
 
 /** The only scope that mints a brand-new patient_case_id other entries' URLs reference. */
 const PATIENT_CASE_CREATE_SCOPE = "patient_case_create";
@@ -174,6 +175,8 @@ export async function runSync(db: OfflineSqliteLike, key: Uint8Array, session: S
       }
     }
   }
+
+  if (result.attempted > 0) recordTelemetryEvent({ name: "sync_cycle_completed", ...result });
 
   return result;
 }
