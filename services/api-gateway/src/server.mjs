@@ -923,7 +923,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline|attachments)(?:\/([^/]+))?)?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline|attachments|legal-hold)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -967,6 +967,10 @@ export function createApp(orchestration = new OrchestrationService()) {
           return okJson(res, 201, await orchestration.uploadPatientCaseAttachment(id, await parseJson(req, attachmentBodyMaxBytes), meta), context);
         }
         if (method === 'GET' && action === 'attachments' && childId) return okJson(res, 200, await orchestration.getPatientCaseAttachmentContent(id, childId), context);
+        // Stage 13 milestone 13g: legal-hold toggle. RBAC-gated to
+        // supervisor/sys_admin only (see authorization-policy.mjs) --
+        // narrower than every other patient-case mutation above.
+        if (method === 'PATCH' && action === 'legal-hold') return okJson(res, 200, await orchestration.setPatientCaseLegalHold(id, await parseJson(req), meta), context);
       }
 
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
