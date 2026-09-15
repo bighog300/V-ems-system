@@ -1,6 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { ApiError } from "@vems/shared";
 import { sqlValue } from "./db.mjs";
+import { getActiveProfile, resolveCode } from "./compliance/index.mjs";
+
+// Stage 13 milestone 13b: best-effort canonical-code resolution against
+// the active compliance profile, alongside the existing free-text field --
+// never blocking a write and never replacing the free text. An unmapped
+// or legacy value (no match in the active profile's code list) simply
+// leaves the *_code column null; the caller's charted text is unaffected
+// either way.
+function codeFor(category, rawValue) {
+  return resolveCode(getActiveProfile(), category, rawValue)?.code ?? null;
+}
 
 const OUTCOMES = new Set([
   "transported", "treated_not_transported", "refusal_assessment", "refusal_treatment",
@@ -121,7 +132,8 @@ export const clinicalRecordMethods = {
   async createPatientCaseMedication(patientCaseId, payload, meta) {
     const current = await requiredCase.call(this, patientCaseId); object(payload);
     await this.assertPatientCaseClinicalMutable(patientCaseId);
-    const record = { medication_administration_id: id("MED"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id, medication_name: text(payload.medication_name, "medication_name"), formulation: payload.formulation ?? null, dose: text(String(payload.dose ?? ""), "dose"), dose_unit: text(payload.dose_unit, "dose_unit"), route: text(payload.route, "route"), indication: payload.indication ?? null, performed_at: iso(payload.performed_at ?? new Date().toISOString(), "performed_at"), clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, authorization: payload.authorization ?? null, response: payload.response ?? null, adverse_reaction: payload.adverse_reaction ?? null, stock_item_id: payload.stock_item_id ?? null, vehicle_id: payload.vehicle_id ?? current.vehicle_id ?? null, quantity_used: payload.quantity_used ?? null, openemr_reference_id: null, downstream_status: "not_attempted", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
+    const medicationName = text(payload.medication_name, "medication_name");
+    const record = { medication_administration_id: id("MED"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id, medication_name: medicationName, medication_code: codeFor("medication", medicationName), formulation: payload.formulation ?? null, dose: text(String(payload.dose ?? ""), "dose"), dose_unit: text(payload.dose_unit, "dose_unit"), route: text(payload.route, "route"), indication: payload.indication ?? null, performed_at: iso(payload.performed_at ?? new Date().toISOString(), "performed_at"), clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, authorization: payload.authorization ?? null, response: payload.response ?? null, adverse_reaction: payload.adverse_reaction ?? null, stock_item_id: payload.stock_item_id ?? null, vehicle_id: payload.vehicle_id ?? current.vehicle_id ?? null, quantity_used: payload.quantity_used ?? null, openemr_reference_id: null, downstream_status: "not_attempted", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     if (!record.encounter_id) throw new ApiError("CONFLICT", "An encounter is required for medication administration", 409);
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, medication_name: record.medication_name, dose: record.dose, performed_at: record.performed_at, route: record.route });
     if (meta.idempotencyKey) { const existing = await this.idempotency.get("medication", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalMedications.find(existing.resource_id); } }
@@ -139,7 +151,8 @@ export const clinicalRecordMethods = {
   async createPatientCaseProcedure(patientCaseId, payload, meta) {
     const current = await requiredCase.call(this, patientCaseId); object(payload);
     await this.assertPatientCaseClinicalMutable(patientCaseId);
-    const record = { procedure_id: id("PROC"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id, procedure_type: text(payload.procedure_type, "procedure_type"), procedure_name: text(payload.procedure_name, "procedure_name"), performed_at: iso(payload.performed_at ?? new Date().toISOString(), "performed_at"), clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, attempts: payload.attempts ?? null, success: payload.success ?? null, complications: payload.complications ?? null, response: payload.response ?? null, stock_item_id: payload.stock_item_id ?? null, vehicle_id: payload.vehicle_id ?? current.vehicle_id ?? null, quantity_used: payload.quantity_used ?? null, openemr_reference_id: null, downstream_status: "not_attempted", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
+    const procedureName = text(payload.procedure_name, "procedure_name");
+    const record = { procedure_id: id("PROC"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id, procedure_type: text(payload.procedure_type, "procedure_type"), procedure_name: procedureName, procedure_code: codeFor("procedure", procedureName), performed_at: iso(payload.performed_at ?? new Date().toISOString(), "performed_at"), clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, attempts: payload.attempts ?? null, success: payload.success ?? null, complications: payload.complications ?? null, response: payload.response ?? null, stock_item_id: payload.stock_item_id ?? null, vehicle_id: payload.vehicle_id ?? current.vehicle_id ?? null, quantity_used: payload.quantity_used ?? null, openemr_reference_id: null, downstream_status: "not_attempted", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     if (!record.encounter_id) throw new ApiError("CONFLICT", "An encounter is required for procedures", 409);
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, procedure_type: record.procedure_type, procedure_name: record.procedure_name, performed_at: record.performed_at });
     if (meta.idempotencyKey) { const existing = await this.idempotency.get("procedure", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalProcedures.find(existing.resource_id); } }
@@ -163,7 +176,7 @@ export const clinicalRecordMethods = {
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, outcome: payload.outcome, destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, notes: payload.notes ?? null });
     if (meta.idempotencyKey) { const existing = await this.idempotency.get("disposition", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalDispositions.find(existing.resource_id); } }
     const now = new Date().toISOString();
-    const record = { disposition_id: id("DISP"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, outcome: payload.outcome, destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, decision_at: iso(payload.decision_at ?? now, "decision_at"), reason: payload.reason ?? null, notes: payload.notes ?? null, ...location, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
+    const record = { disposition_id: id("DISP"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, outcome: payload.outcome, outcome_code: codeFor("outcome", payload.outcome), destination_facility: payload.destination_facility ?? null, receiving_provider: payload.receiving_provider ?? null, decision_at: iso(payload.decision_at ?? now, "decision_at"), reason: payload.reason ?? null, notes: payload.notes ?? null, ...location, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
     await this.clinicalDispositions.save(record);
     if (meta.idempotencyKey) await this.idempotency.save("disposition", meta.idempotencyKey, patientCaseId, now, fingerprint);
     await this.audit("patient_case_disposition", patientCaseId, "set_disposition", meta.correlationId, before, record);
