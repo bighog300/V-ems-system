@@ -129,7 +129,26 @@ export const epcrFinalizationMethods = {
     if (!EPCR_STATES.includes(nextState) || !TRANSITIONS[previous]?.includes(nextState)) throw new ApiError("INVALID_STATUS_TRANSITION", `Invalid ePCR transition from ${previous} to ${nextState}`, 409);
     const event = { lifecycle_event_id: id("EPL"), patient_case_id: patientCaseId, previous_state: previous, new_state: nextState, actor_id: meta.actorId ?? null, actor_role: meta.actorRole ?? null, occurred_at: new Date().toISOString(), reason, record_version_id: versionId, correlation_id: meta.correlationId };
     await this.db.execute(`INSERT INTO epcr_lifecycle_events (${Object.keys(event).join(",")}) VALUES (${Object.values(event).map(sqlValue).join(",")});`);
-    await audit(this, patientCaseId, "lifecycleTransitioned", meta, { state: previous }, event); return this.getEpcrLifecycle(patientCaseId);
+    await audit(this, patientCaseId, "lifecycleTransitioned", meta, { state: previous }, event);
+    // Stage 13 milestone 13g: the retention clock starts when a record
+    // becomes an immutable legal document, i.e. on reaching "final" -- not
+    // at creation, when it's still an in-progress draft. Stamped once
+    // (never overwritten by a later re-finalization after an amendment)
+    // and only when a deployment has explicitly opted into a default
+    // retention period, mirroring VEMS_OBJECT_STORAGE_RETENTION_DAYS's
+    // opt-in posture: a case with no retention_expires_at set is never
+    // eligible for the purge job.
+    if (nextState === "final" && process.env.VEMS_RETENTION_DEFAULT_DAYS) {
+      const current = await this.patientCases.find(patientCaseId);
+      if (current && !current.retention_expires_at) {
+        const retentionDays = Number(process.env.VEMS_RETENTION_DEFAULT_DAYS);
+        if (Number.isFinite(retentionDays) && retentionDays > 0) {
+          const retentionExpiresAt = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000).toISOString();
+          await this.patientCases.save({ ...current, retention_expires_at: retentionExpiresAt, updated_at: new Date().toISOString(), correlation_id: meta.correlationId });
+        }
+      }
+    }
+    return this.getEpcrLifecycle(patientCaseId);
   },
   async completeEpcr(patientCaseId, meta) {
     const readiness = await this.getEpcrReadiness(patientCaseId); if (!readiness.ready) { const error = new ApiError("EPCR_INCOMPLETE", "ePCR is not ready for crew completion", 409); error.details = readiness; throw error; }
