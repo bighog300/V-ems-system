@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import pg from "pg";
+import { connectionStringHasInsecurePassword, isInsecureSecret, isProductionEnv } from "@vems/shared";
 import { migrationFiles } from "./migration-files.mjs";
 import { sqlValue } from "./sql-value.mjs";
 
@@ -30,6 +31,13 @@ export class PostgresClient {
 
   constructor(options = {}) {
     const connectionString = options.connectionString ?? process.env.VEMS_POSTGRES_URL ?? process.env.DATABASE_URL;
+    // Stage 12 milestone 12f: refuse to start in production against a
+    // missing connection string or one embedding a common default
+    // password (e.g. postgres:postgres@...) -- below this point, every
+    // clinical record in the system would sit behind a guessable login.
+    if (isProductionEnv() && (isInsecureSecret(connectionString) || connectionStringHasInsecurePassword(connectionString))) {
+      throw new Error("A real VEMS_POSTGRES_URL/DATABASE_URL is required in production (missing or an insecure default password).");
+    }
     this.pool = options.pool ?? new Pool({
       connectionString,
       max: options.poolSize ?? 10

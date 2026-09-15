@@ -4,3 +4,4 @@ export * from "./errors.mjs";
 export * from "./ids.mjs";
 
 export * from "./logging.mjs";
+export * from "./secure-startup.mjs";

@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
-import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCIDENT_STATUSES, createLogger } from "@vems/shared";
+import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCIDENT_STATUSES, createLogger, isInsecureSecret, isProductionEnv } from "@vems/shared";
 import { authenticateRequest } from "./auth.mjs";
 import { RBAC_POLICIES } from "./authorization-policy.mjs";
 
@@ -607,6 +607,19 @@ export function createApp(orchestration = new OrchestrationService()) {
     jwksUri: process.env.JWT_JWKS_URI,
     jwksCacheTtlMs: Number(process.env.JWT_JWKS_CACHE_TTL_MS ?? 300000)
   };
+  // Stage 12 milestone 12f: refuse to start in production with header-based
+  // auth trusted (anyone could forge an identity header) or with no way to
+  // verify a bearer token at all (a missing/placeholder HS256 secret and no
+  // JWKS URI configured for RS256) -- below this point every request would
+  // be effectively unauthenticated.
+  if (isProductionEnv()) {
+    if (authConfig.trustHeaders) {
+      throw new Error("AUTH_TRUST_HEADERS must not be enabled in production -- it bypasses JWT verification entirely.");
+    }
+    if (isInsecureSecret(authConfig.jwtSecret) && !authConfig.jwksUri) {
+      throw new Error("A real JWT_HS256_SECRET (or JWT_JWKS_URI for RS256) is required in production (missing or an insecure default).");
+    }
+  }
   const alertThresholds = {
     rbac_deny_count_warn: Number(process.env.ALERT_RBAC_DENY_WARN ?? 10),
     dead_letter_count_warn: Number(process.env.ALERT_DEAD_LETTER_WARN ?? 5),

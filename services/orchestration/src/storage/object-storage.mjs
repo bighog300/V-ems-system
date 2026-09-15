@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { isInsecureSecret, isProductionEnv } from "@vems/shared";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -8,6 +9,14 @@ const AUTH_TAG_LENGTH = 16;
 
 function resolveEncryptionKey(options) {
   const configured = options.encryptionKey ?? process.env.VEMS_OBJECT_STORAGE_KEY;
+  // Stage 12 milestone 12f: refuse to start in production without a real
+  // key -- missing, or set to one of a handful of common placeholder
+  // values (e.g. VEMS_OBJECT_STORAGE_KEY=changeme). Below this point,
+  // attachments would be "encrypted" with a key anyone can read out of
+  // this source file.
+  if (isProductionEnv() && isInsecureSecret(configured)) {
+    throw new Error("VEMS_OBJECT_STORAGE_KEY is required in production (missing or an insecure default).");
+  }
   if (configured) {
     const key = /^[0-9a-f]{64}$/i.test(configured) ? Buffer.from(configured, "hex") : Buffer.from(configured, "base64");
     if (key.length !== 32) throw new Error("VEMS_OBJECT_STORAGE_KEY must decode to exactly 32 bytes (64 hex characters, or base64)");
@@ -15,10 +24,8 @@ function resolveEncryptionKey(options) {
   }
   // Deterministic, publicly-known, INSECURE fallback key so local/test runs
   // (and any deployment that hasn't configured one yet) work with zero
-  // setup -- never used once VEMS_OBJECT_STORAGE_KEY is set. Refusing to
-  // start in production with an insecure default is a cross-cutting
-  // concern (JWT secret, DB credentials, this key) that belongs to Stage 12
-  // milestone 12f's centralized startup check, not scattered per-module.
+  // setup -- never used once VEMS_OBJECT_STORAGE_KEY is set, and rejected
+  // outright in production above.
   return createHash("sha256").update("vems-object-storage-dev-key-insecure").digest();
 }
 
