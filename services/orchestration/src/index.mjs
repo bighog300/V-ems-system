@@ -31,6 +31,9 @@ import { PatientCaseDemographicsRepository, PatientCaseAssessmentRepository, Cli
 import { clinicalRecordMethods } from "./clinical-record.mjs";
 import { epcrFinalizationMethods } from "./epcr-finalization.mjs";
 import { DevicePushTokenRepository } from "./repositories/device-push-token-repository.mjs";
+import { PatientCaseAttachmentRepository } from "./repositories/patient-case-attachment-repository.mjs";
+import { FilesystemObjectStorage } from "./storage/object-storage.mjs";
+import { attachmentMethods } from "./attachments.mjs";
 
 const DEVICE_PUSH_TOKEN_PLATFORMS = ["ios", "android"];
 
@@ -74,6 +77,8 @@ export class OrchestrationService {
     this.clinicalDispositions = new PatientCaseDispositionRepository(this.db);
     this.clinicalTimeline = new PatientCaseTimelineRepository(this.db);
     this.pushTokens = new DevicePushTokenRepository(this.db);
+    this.attachments = new PatientCaseAttachmentRepository(this.db);
+    this.objectStorage = options.objectStorage ?? new FilesystemObjectStorage(options.objectStorageOptions ?? {});
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
   }
@@ -937,3 +942,4 @@ export class OrchestrationService {
 Object.assign(OrchestrationService.prototype, patientCaseMethods);
 Object.assign(OrchestrationService.prototype, clinicalRecordMethods);
 Object.assign(OrchestrationService.prototype, epcrFinalizationMethods);
+Object.assign(OrchestrationService.prototype, attachmentMethods);
