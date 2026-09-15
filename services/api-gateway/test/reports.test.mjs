@@ -78,3 +78,51 @@ test("RBAC: only supervisor/operations_manager/sys_admin can read /api/reports/*
   const allowedSupervisor = await harness.request("/api/reports/qa-flags", "GET", undefined, { "x-user-role": "supervisor" });
   assert.equal(allowedSupervisor.status, 200);
 });
+
+test("GET /api/reports/audit surfaces actor, entity and filter query params", async (t) => {
+  const harness = await startServer();
+  t.after(() => harness.close());
+
+  await harness.request("/api/incidents", "POST", {
+    call: { call_source: "phone", received_at: "2026-09-06T10:00:00Z" },
+    incident: { category: "medical_emergency", priority: "high", description: "Audit API test", address: "1 Main St", patient_count: 1 }
+  }, { "x-user-role": "dispatcher", "x-actor-id": "STAFF-DISPATCH" });
+
+  const empty = await harness.request("/api/reports/audit?entity_type=nonexistent-entity");
+  assert.equal(empty.status, 200);
+  assert.equal(empty.body.entries.length, 0);
+  assert.equal(empty.body.has_more, false);
+
+  const byEntityType = await harness.request("/api/reports/audit?entity_type=incident");
+  assert.equal(byEntityType.status, 200);
+  assert.equal(byEntityType.body.entries.length, 1);
+  assert.equal(byEntityType.body.entries[0].actor_id, "STAFF-DISPATCH");
+  assert.equal(byEntityType.body.entries[0].action, "create_incident");
+  assert.deepEqual(byEntityType.body.filters.entity_type, "incident");
+
+  const byActor = await harness.request("/api/reports/audit?actor_id=STAFF-DISPATCH");
+  assert.equal(byActor.body.entries.length, 1);
+
+  const byOtherActor = await harness.request("/api/reports/audit?actor_id=STAFF-NOBODY");
+  assert.equal(byOtherActor.body.entries.length, 0);
+});
+
+test("RBAC: /api/reports/audit is narrower than the other report routes -- operations_manager is denied", async (t) => {
+  const priorRbac = process.env.RBAC_ENFORCE;
+  process.env.RBAC_ENFORCE = "true";
+  const harness = await startServer();
+  if (priorRbac === undefined) delete process.env.RBAC_ENFORCE; else process.env.RBAC_ENFORCE = priorRbac;
+  t.after(() => harness.close());
+
+  const deniedOperationsManager = await harness.request("/api/reports/audit", "GET", undefined, { "x-user-role": "operations_manager" });
+  assert.equal(deniedOperationsManager.status, 403);
+
+  const deniedFieldCrew = await harness.request("/api/reports/audit", "GET", undefined, { "x-user-role": "field_crew" });
+  assert.equal(deniedFieldCrew.status, 403);
+
+  const allowedSupervisor = await harness.request("/api/reports/audit", "GET", undefined, { "x-user-role": "supervisor" });
+  assert.equal(allowedSupervisor.status, 200);
+
+  const allowedSysAdmin = await harness.request("/api/reports/audit", "GET", undefined, { "x-user-role": "sys_admin" });
+  assert.equal(allowedSysAdmin.status, 200);
+});

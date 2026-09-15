@@ -798,6 +798,23 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (method === "GET" && url.pathname === "/api/reports/qa-flags") {
         return okJson(res, 200, await orchestration.getQaFlagReport({ from: url.searchParams.get("from"), to: url.searchParams.get("to") }), context);
       }
+      // Stage 13 milestone 13f: the first read surface over audit_logs.
+      // Narrower RBAC than the other /api/reports/* routes (no
+      // operations_manager) since raw audit entries -- including who did
+      // what to which record -- are a supervisor/sys_admin-level concern,
+      // not a general operations-reporting one.
+      if (method === "GET" && url.pathname === "/api/reports/audit") {
+        return okJson(res, 200, await orchestration.getAuditLogReport({
+          entityType: url.searchParams.get("entity_type"),
+          entityId: url.searchParams.get("entity_id"),
+          actorId: url.searchParams.get("actor_id"),
+          action: url.searchParams.get("action"),
+          from: url.searchParams.get("from"),
+          to: url.searchParams.get("to"),
+          limit: url.searchParams.get("limit"),
+          beforeId: url.searchParams.get("before_id")
+        }), context);
+      }
 
       if (method === "GET" && url.pathname === "/api/incidents") {
         const incidents = await orchestration.listIncidentsForBoard();
@@ -807,21 +824,26 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (method === "POST" && url.pathname === "/api/incidents") {
         const payload = await parseJson(req);
         validateCreateIncident(payload);
-        const incident = await orchestration.createIncident(payload, { correlationId: context.correlationId, idempotencyKey });
+        // Stage 13 milestone 13f: actorId is threaded into every mutation's
+        // meta below (this route and the ones through line ~1075) so
+        // audit_logs.actor_id (new in this milestone) is populated on write
+        // rather than defaulting to null for everything except the small
+        // handful of routes that already happened to pass it.
+        const incident = await orchestration.createIncident(payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey });
         return okJson(res, 201, incident, context);
       }
 
       if (method === "POST" && url.pathname === "/api/patients/search") {
         const payload = await parseJson(req);
         validatePatientSearch(payload);
-        const result = await orchestration.searchPatient(payload, { correlationId: context.correlationId });
+        const result = await orchestration.searchPatient(payload, { correlationId: context.correlationId, actorId: context.actorId });
         return okJson(res, 200, result, context);
       }
 
       if (method === "POST" && url.pathname === "/api/patients") {
         const payload = await parseJson(req);
         validatePatientCreate(payload);
-        const patient = await orchestration.createPatient(payload, { correlationId: context.correlationId, idempotencyKey });
+        const patient = await orchestration.createPatient(payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey });
         return okJson(res, 201, patient, context);
       }
 
@@ -831,32 +853,32 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (method === "POST" && url.pathname === "/api/vehicles") {
         const payload = await parseJson(req);
         validateCreateVehicle(payload);
-        return okJson(res, 201, await orchestration.createVehicle(payload, { correlationId: context.correlationId, idempotencyKey }), context);
+        return okJson(res, 201, await orchestration.createVehicle(payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey }), context);
       }
       if (method === "GET" && url.pathname === "/api/personnel") return okJson(res, 200, { personnel: await orchestration.listPersonnel() }, context);
       if (method === "POST" && url.pathname === "/api/personnel") {
         const payload = await parseJson(req);
         validateCreatePersonnel(payload);
-        return okJson(res, 201, await orchestration.createPersonnel(payload, { correlationId: context.correlationId, idempotencyKey }), context);
+        return okJson(res, 201, await orchestration.createPersonnel(payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey }), context);
       }
       const personnelMatch = url.pathname.match(/^\/api\/personnel\/(STAFF-[0-9]{3,})$/);
       if (personnelMatch && method === "GET") return okJson(res, 200, await orchestration.getPersonnel(personnelMatch[1]), context);
       if (personnelMatch && method === "PATCH") {
         const payload = await parseJson(req);
         validateUpdatePersonnel(payload);
-        return okJson(res, 200, await orchestration.updatePersonnel(personnelMatch[1], payload, { correlationId: context.correlationId }), context);
+        return okJson(res, 200, await orchestration.updatePersonnel(personnelMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId }), context);
       }
       if (method === "GET" && url.pathname === "/api/stock-items") return okJson(res, 200, { stock_items: await orchestration.listStockItems() }, context);
-      if (method === "POST" && url.pathname === "/api/stock-items") { const payload = await parseJson(req); validateCreateStockItem(payload); return okJson(res, 201, await orchestration.createStockItem(payload, { correlationId: context.correlationId, idempotencyKey }), context); }
+      if (method === "POST" && url.pathname === "/api/stock-items") { const payload = await parseJson(req); validateCreateStockItem(payload); return okJson(res, 201, await orchestration.createStockItem(payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey }), context); }
       const stockItemMatch = url.pathname.match(/^\/api\/stock-items\/(ITEM-[0-9]{3,})$/);
       if (stockItemMatch && method === "GET") return okJson(res, 200, await orchestration.getStockItem(stockItemMatch[1]), context);
-      if (stockItemMatch && method === "PATCH") { const payload = await parseJson(req); validateUpdateStockItem(payload); return okJson(res, 200, await orchestration.updateStockItem(stockItemMatch[1], payload, { correlationId: context.correlationId }), context); }
+      if (stockItemMatch && method === "PATCH") { const payload = await parseJson(req); validateUpdateStockItem(payload); return okJson(res, 200, await orchestration.updateStockItem(stockItemMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId }), context); }
       const vehicleMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})$/);
       if (vehicleMatch && method === "GET") return okJson(res, 200, await orchestration.getVehicle(vehicleMatch[1]), context);
       if (vehicleMatch && method === "PATCH") {
         const payload = await parseJson(req);
         validateUpdateVehicle(payload);
-        return okJson(res, 200, await orchestration.updateVehicle(vehicleMatch[1], payload, { correlationId: context.correlationId }), context);
+        return okJson(res, 200, await orchestration.updateVehicle(vehicleMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId }), context);
       }
       const vehicleStockMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})\/stock$/);
       if (vehicleStockMatch && method === "GET") return okJson(res, 200, { vehicle_id: vehicleStockMatch[1], stock: await orchestration.getVehicleStock(vehicleStockMatch[1]) }, context);
@@ -871,7 +893,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (incidentMatch && method === "PATCH") {
         const payload = await parseJson(req);
         validateAction(payload);
-        const incident = await orchestration.updateIncident(incidentMatch[1], payload, { correlationId: context.correlationId });
+        const incident = await orchestration.updateIncident(incidentMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId });
         return okJson(res, 200, incident, context);
       }
 
@@ -955,7 +977,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (patientLinkMatch && method === "POST") {
         const payload = await parseJson(req);
         validatePatientLink(payload);
-        const link = await orchestration.linkPatientToIncidentContext(patientLinkMatch[1], payload, { correlationId: context.correlationId });
+        const link = await orchestration.linkPatientToIncidentContext(patientLinkMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId });
         return okJson(res, 200, link, context);
       }
 
@@ -967,7 +989,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (assignmentCreateMatch && method === "POST") {
         const payload = await parseJson(req);
         validateCreateAssignment(payload);
-        const assignment = await orchestration.createAssignment(assignmentCreateMatch[1], payload, { correlationId: context.correlationId, idempotencyKey });
+        const assignment = await orchestration.createAssignment(assignmentCreateMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey });
         return okJson(res, 201, assignment, context);
       }
 
@@ -999,7 +1021,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (encounterCreateMatch && method === "POST") {
         const payload = await parseJson(req);
         validateCreateEncounter(payload);
-        const encounter = await orchestration.createEncounterForIncident(encounterCreateMatch[1], payload, { correlationId: context.correlationId, idempotencyKey });
+        const encounter = await orchestration.createEncounterForIncident(encounterCreateMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey });
         if (!ENCOUNTER_STATUSES.includes(encounter.status)) {
           throw new ApiError("DOWNSTREAM_UNAVAILABLE", "Encounter status not recognized", 502, true);
         }
@@ -1012,7 +1034,7 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateEncounterId(encounterId);
         const payload = await parseJson(req);
         validateCreateObservation(payload);
-        const observation = await orchestration.createObservationForEncounter(encounterId, payload, { correlationId: context.correlationId });
+        const observation = await orchestration.createObservationForEncounter(encounterId, payload, { correlationId: context.correlationId, actorId: context.actorId });
         return okJson(res, 201, observation, context);
       }
 
@@ -1028,7 +1050,7 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateEncounterId(encounterId);
         const payload = await parseJson(req);
         validateCreateIntervention(payload);
-        const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId: context.correlationId, idempotencyKey });
+        const intervention = await orchestration.createInterventionForEncounter(encounterId, payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey });
         return okJson(res, 201, intervention, context);
       }
 
@@ -1044,7 +1066,7 @@ export function createApp(orchestration = new OrchestrationService()) {
         validateEncounterId(encounterId);
         const payload = await parseJson(req);
         validateCreateHandover(payload);
-        const handover = await orchestration.createHandoverForEncounter(encounterId, payload, { correlationId: context.correlationId });
+        const handover = await orchestration.createHandoverForEncounter(encounterId, payload, { correlationId: context.correlationId, actorId: context.actorId });
         return okJson(res, 201, handover, context);
       }
 
@@ -1055,7 +1077,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (assignmentPatchMatch && method === "PATCH") {
         const payload = await parseJson(req);
         validateAction(payload);
-        const assignment = await orchestration.updateAssignment(assignmentPatchMatch[1], payload, { correlationId: context.correlationId });
+        const assignment = await orchestration.updateAssignment(assignmentPatchMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId });
         return okJson(res, 200, assignment, context);
       }
 
