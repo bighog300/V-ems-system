@@ -92,6 +92,12 @@ export class OpenEmrPayloadMapper {
     };
   }
 
+  mapPatientHistoryRequest(context) {
+    return {
+      patient_id: context.patient_id
+    };
+  }
+
   mapPatientSearchResponse(response) {
     return {
       match_status: response.match_status,
@@ -165,6 +171,27 @@ export class OpenEmrPayloadMapper {
       handover_status: response.handover_status,
       disposition: response.disposition,
       closure_ready: Boolean(response.handover_status === "Handover Completed")
+    };
+  }
+
+  // Read-only prior-history summary: known medications and recent
+  // encounters, sourced entirely from OpenEMR -- V-EMS never writes to
+  // either list, it only displays what OpenEMR already has on file.
+  mapPatientHistoryResponse(response) {
+    if (!response || typeof response !== "object") return { as_of: null, medications: [], encounters: [] };
+    return {
+      as_of: response.as_of ?? null,
+      medications: Array.isArray(response.medications) ? response.medications.map((medication) => ({
+        medication_name: medication.medication_name ?? null,
+        dose: medication.dose ?? null,
+        frequency: medication.frequency ?? null,
+        status: medication.status ?? null
+      })) : [],
+      encounters: Array.isArray(response.encounters) ? response.encounters.map((encounter) => ({
+        encounter_date: encounter.encounter_date ?? null,
+        reason: encounter.reason ?? null,
+        facility: encounter.facility ?? null
+      })) : []
     };
   }
 }

@@ -65,4 +65,9 @@ export class OpenEmrAdapterClient {
     const response = await this.invoke("getHandover", this.mapper.mapHandoverReadRequest(context));
     return this.mapper.mapHandoverReadResponse(response);
   }
+
+  async getPatientHistory(context) {
+    const response = await this.invoke("getPatientHistory", this.mapper.mapPatientHistoryRequest(context));
+    return this.mapper.mapPatientHistoryResponse(response);
+  }
 }
