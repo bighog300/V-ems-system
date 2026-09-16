@@ -33,6 +33,38 @@ test("searchPatients posts criteria and returns the match result", async () => {
   assert.equal(result.candidates.length, 2);
 });
 
+test("searchPatients posts identity_number, hospital_card_number and address criteria unchanged", async () => {
+  let capturedBody: unknown;
+  const fetchImpl = async (_url: string, options: any) => {
+    capturedBody = JSON.parse(options.body);
+    return new Response(JSON.stringify({ match_status: "no_match", match_confidence: 0, patient_id: null, candidates: [] }), { status: 200 });
+  };
+
+  await searchPatients({
+    apiBaseUrl: "https://api.example.test",
+    authToken: "token",
+    criteria: { identity_number: "ID-4471829" },
+    fetchImpl: fetchImpl as typeof fetch
+  });
+  assert.deepEqual(capturedBody, { identity_number: "ID-4471829" });
+
+  await searchPatients({
+    apiBaseUrl: "https://api.example.test",
+    authToken: "token",
+    criteria: { hospital_card_number: "HC-208831" },
+    fetchImpl: fetchImpl as typeof fetch
+  });
+  assert.deepEqual(capturedBody, { hospital_card_number: "HC-208831" });
+
+  await searchPatients({
+    apiBaseUrl: "https://api.example.test",
+    authToken: "token",
+    criteria: { first_name: "Ada", last_name: "Lovelace", dob: "1990-01-01", address: "1400 Riverside Dr" },
+    fetchImpl: fetchImpl as typeof fetch
+  });
+  assert.deepEqual(capturedBody, { first_name: "Ada", last_name: "Lovelace", dob: "1990-01-01", address: "1400 Riverside Dr" });
+});
+
 test("createPatient posts to /api/patients and returns the created patient", async () => {
   let capturedUrl = "";
   const fetchImpl = async (url: string) => {
