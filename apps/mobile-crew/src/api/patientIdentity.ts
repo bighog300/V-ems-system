@@ -14,7 +14,11 @@ export interface PatientSearchResult {
 }
 
 export interface SearchPatientsArgs extends ApiConfig {
-  criteria: { first_name?: string; last_name?: string; dob?: string; sex?: string; phone?: string };
+  // identity_number/hospital_card_number/address round out the three ways a
+  // crew actually identifies someone in the field (Stage 15's tablet
+  // workflow sketch) -- the backend search now accepts all of them
+  // (services/orchestration/src/adapters/openemr/openemr-payload-mapper.mjs).
+  criteria: { first_name?: string; last_name?: string; dob?: string; sex?: string; phone?: string; address?: string; identity_number?: string; hospital_card_number?: string };
 }
 
 export async function searchPatients({ apiBaseUrl, authToken, deviceId, fetchImpl = fetch, criteria }: SearchPatientsArgs): Promise<PatientSearchResult> {

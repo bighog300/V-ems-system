@@ -11,7 +11,20 @@ import {
 } from "../api/patientIdentity.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
+import BarcodeScannerModal from "../scanning/BarcodeScannerModal.tsx";
 import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+
+// Three ways a crew actually identifies someone in the field: an identity
+// number, a hospital's own card number, or -- lacking either -- name, date
+// of birth and a known address to break ties between common names. All
+// three now reach the downstream search (see patientIdentity.ts's
+// SearchPatientsArgs) -- this screen just needs a field set per mode.
+type SearchMode = "identity_number" | "hospital_card_number" | "name";
+const SEARCH_MODES: { mode: SearchMode; label: string }[] = [
+  { mode: "identity_number", label: "ID number" },
+  { mode: "hospital_card_number", label: "Hospital card" },
+  { mode: "name", label: "Name + DOB + address" }
+];
 
 export interface PatientIdentityScreenProps {
   patientCase: PatientCase;
@@ -21,10 +34,15 @@ export interface PatientIdentityScreenProps {
 }
 
 export default function PatientIdentityScreen({ patientCase, session, onBack, onLinked }: PatientIdentityScreenProps) {
+  const [searchMode, setSearchMode] = useState<SearchMode>("name");
+  const [identityNumber, setIdentityNumber] = useState("");
+  const [hospitalCardNumber, setHospitalCardNumber] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [dob, setDob] = useState("");
+  const [address, setAddress] = useState("");
   const [sex, setSex] = useState("");
+  const [scanTarget, setScanTarget] = useState<"identity_number" | "hospital_card_number" | null>(null);
 
   const [searching, setSearching] = useState(false);
   const [result, setResult] = useState<PatientSearchResult | null>(null);
@@ -34,19 +52,36 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
 
   const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
+  const canSearch =
+    searchMode === "identity_number"
+      ? Boolean(identityNumber.trim())
+      : searchMode === "hospital_card_number"
+        ? Boolean(hospitalCardNumber.trim())
+        : Boolean(firstName.trim() || lastName.trim() || dob.trim() || address.trim());
+
+  function handleScanned(code: string) {
+    if (scanTarget === "identity_number") setIdentityNumber(code);
+    else if (scanTarget === "hospital_card_number") setHospitalCardNumber(code);
+    setScanTarget(null);
+  }
+
   async function handleSearch() {
     setSearching(true);
     setError(null);
     setResult(null);
     try {
-      const searchResult = await searchPatients({
-        ...config,
-        criteria: {
-          first_name: firstName.trim() || undefined,
-          last_name: lastName.trim() || undefined,
-          dob: dob.trim() || undefined
-        }
-      });
+      const criteria =
+        searchMode === "identity_number"
+          ? { identity_number: identityNumber.trim() || undefined }
+          : searchMode === "hospital_card_number"
+            ? { hospital_card_number: hospitalCardNumber.trim() || undefined }
+            : {
+                first_name: firstName.trim() || undefined,
+                last_name: lastName.trim() || undefined,
+                dob: dob.trim() || undefined,
+                address: address.trim() || undefined
+              };
+      const searchResult = await searchPatients({ ...config, criteria });
       setResult(searchResult);
       setShowCreateForm(searchResult.match_status === "no_match");
     } catch (err) {
@@ -144,34 +179,104 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Search OpenEMR</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="First name"
-          accessibilityLabel="First name"
-          value={firstName}
-          onChangeText={setFirstName}
-          testID="search-first-name"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Last name"
-          accessibilityLabel="Last name"
-          value={lastName}
-          onChangeText={setLastName}
-          testID="search-last-name"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="DOB (YYYY-MM-DD)"
-          accessibilityLabel="Date of birth"
-          value={dob}
-          onChangeText={setDob}
-          testID="search-dob"
-        />
+
+        <View style={styles.tabRow}>
+          {SEARCH_MODES.map(({ mode, label }) => (
+            <Pressable
+              key={mode}
+              onPress={() => setSearchMode(mode)}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: searchMode === mode }}
+              style={[styles.tab, searchMode === mode && styles.tabActive]}
+              testID={`search-mode-${mode}`}
+            >
+              <Text style={[styles.tabText, searchMode === mode && styles.tabTextActive]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {searchMode === "identity_number" ? (
+          <View style={styles.scanRow}>
+            <TextInput
+              style={[styles.input, styles.scanInput]}
+              placeholder="Identity number"
+              accessibilityLabel="Identity number"
+              value={identityNumber}
+              onChangeText={setIdentityNumber}
+              testID="search-identity-number"
+            />
+            <Pressable
+              onPress={() => setScanTarget("identity_number")}
+              accessibilityRole="button"
+              accessibilityLabel="Scan identity number barcode"
+              style={styles.scanButton}
+              testID="scan-identity-number"
+            >
+              <Text style={styles.scanButtonText}>Scan</Text>
+            </Pressable>
+          </View>
+        ) : searchMode === "hospital_card_number" ? (
+          <View style={styles.scanRow}>
+            <TextInput
+              style={[styles.input, styles.scanInput]}
+              placeholder="Hospital card number"
+              accessibilityLabel="Hospital card number"
+              value={hospitalCardNumber}
+              onChangeText={setHospitalCardNumber}
+              testID="search-hospital-card-number"
+            />
+            <Pressable
+              onPress={() => setScanTarget("hospital_card_number")}
+              accessibilityRole="button"
+              accessibilityLabel="Scan hospital card barcode"
+              style={styles.scanButton}
+              testID="scan-hospital-card-number"
+            >
+              <Text style={styles.scanButtonText}>Scan</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="First name"
+              accessibilityLabel="First name"
+              value={firstName}
+              onChangeText={setFirstName}
+              testID="search-first-name"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Last name"
+              accessibilityLabel="Last name"
+              value={lastName}
+              onChangeText={setLastName}
+              testID="search-last-name"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="DOB (YYYY-MM-DD)"
+              accessibilityLabel="Date of birth"
+              value={dob}
+              onChangeText={setDob}
+              testID="search-dob"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Known address"
+              accessibilityLabel="Known address"
+              value={address}
+              onChangeText={setAddress}
+              testID="search-address"
+            />
+          </>
+        )}
+
         <Pressable
-          style={[styles.button, searching && styles.buttonDisabled]}
+          style={[styles.button, (searching || !canSearch) && styles.buttonDisabled]}
           onPress={handleSearch}
-          disabled={searching}
+          disabled={searching || !canSearch}
           accessibilityRole="button"
           accessibilityLabel="Search"
           testID="search-submit"
@@ -179,6 +284,8 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
           {searching ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Search</Text>}
         </Pressable>
       </View>
+
+      <BarcodeScannerModal visible={scanTarget !== null} onScanned={handleScanned} onClose={() => setScanTarget(null)} />
 
       {result ? (
         <View style={styles.card} testID="search-results">
@@ -299,6 +406,55 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 14,
     minHeight: TOUCH_TARGET_MIN
+  },
+  tabRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12
+  },
+  tab: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    minHeight: CHIP_TARGET_MIN,
+    justifyContent: "center"
+  },
+  tabActive: {
+    borderColor: "#1a4fd6",
+    backgroundColor: "#eef2ff"
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#555"
+  },
+  tabTextActive: {
+    color: "#1a4fd6"
+  },
+  scanRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  scanInput: {
+    flex: 1
+  },
+  scanButton: {
+    minHeight: TOUCH_TARGET_MIN,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#1a4fd6",
+    borderRadius: 8,
+    marginBottom: 12
+  },
+  scanButtonText: {
+    color: "#1a4fd6",
+    fontSize: 13,
+    fontWeight: "700"
   },
   button: {
     backgroundColor: "#1a4fd6",
