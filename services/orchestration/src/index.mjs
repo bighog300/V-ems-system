@@ -27,7 +27,7 @@ import { VehicleStockRepository, normalizeDecimal, normalizeSignedDecimal, addDe
 import { VehicleStockVtigerLinkRepository } from "./repositories/vehicle-stock-vtiger-link-repository.mjs";
 import { StockUsageRepository } from "./repositories/stock-usage-repository.mjs";
 import { StockUsageVtigerLinkRepository } from "./repositories/stock-usage-vtiger-link-repository.mjs";
-import { PatientCaseDemographicsRepository, PatientCaseAssessmentRepository, ClinicalObservationRepository, MedicationAdministrationRepository, ClinicalProcedureRepository, PatientCaseDispositionRepository, PatientCaseTimelineRepository } from "./repositories/clinical-record-repository.mjs";
+import { PatientCaseDemographicsRepository, PatientCaseAssessmentRepository, ClinicalObservationRepository, MedicationAdministrationRepository, ClinicalProcedureRepository, PatientCaseDispositionRepository, PatientCaseNoteRepository, PatientCaseTimelineRepository } from "./repositories/clinical-record-repository.mjs";
 import { clinicalRecordMethods } from "./clinical-record.mjs";
 import { epcrFinalizationMethods } from "./epcr-finalization.mjs";
 import { DevicePushTokenRepository } from "./repositories/device-push-token-repository.mjs";
@@ -79,6 +79,7 @@ export class OrchestrationService {
     this.clinicalMedications = new MedicationAdministrationRepository(this.db);
     this.clinicalProcedures = new ClinicalProcedureRepository(this.db);
     this.clinicalDispositions = new PatientCaseDispositionRepository(this.db);
+    this.clinicalNotes = new PatientCaseNoteRepository(this.db);
     this.clinicalTimeline = new PatientCaseTimelineRepository(this.db);
     this.pushTokens = new DevicePushTokenRepository(this.db);
     this.attachments = new PatientCaseAttachmentRepository(this.db);

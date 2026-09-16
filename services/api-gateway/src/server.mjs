@@ -932,7 +932,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline|attachments|legal-hold|history)(?:\/([^/]+))?)?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -969,6 +969,8 @@ export function createApp(orchestration = new OrchestrationService()) {
         if (method === 'POST' && action === 'procedures') return okJson(res, 201, await orchestration.createPatientCaseProcedure(id, await parseJson(req), meta), context);
         if (method === 'GET' && action === 'disposition') return okJson(res, 200, await orchestration.getPatientCaseDisposition(id), context);
         if (method === 'POST' && action === 'disposition') return okJson(res, 201, await orchestration.setPatientCaseDisposition(id, await parseJson(req), meta), context);
+        if (method === 'GET' && action === 'notes') return okJson(res, 200, { notes: await orchestration.listPatientCaseNotes(id) }, context);
+        if (method === 'POST' && action === 'notes') return okJson(res, 201, await orchestration.createPatientCaseNote(id, await parseJson(req), meta), context);
         if (method === 'GET' && action === 'timeline') return okJson(res, 200, { timeline: await orchestration.listPatientCaseTimeline(id) }, context);
         if (method === 'GET' && action === 'attachments' && !childId) return okJson(res, 200, { attachments: await orchestration.listPatientCaseAttachments(id) }, context);
         if (method === 'POST' && action === 'attachments' && !childId) {

@@ -45,7 +45,8 @@ async function snapshot(service, patientCaseId) {
     demographics: (await service.clinicalDemographics.find(patientCaseId)) ?? null,
     assessments: await service.clinicalAssessments.list(patientCaseId), observations: await service.clinicalObservations.list(patientCaseId),
     medications: await service.clinicalMedications.list(patientCaseId), procedures: await service.clinicalProcedures.list(patientCaseId),
-    disposition: (await service.clinicalDispositions.find(patientCaseId)) ?? null, timeline: await service.clinicalTimeline.list(patientCaseId)
+    disposition: (await service.clinicalDispositions.find(patientCaseId)) ?? null, notes: await service.clinicalNotes.list(patientCaseId),
+    timeline: await service.clinicalTimeline.list(patientCaseId)
   });
 }
 async function requirements(service, patientCaseId) {
@@ -75,8 +76,14 @@ async function createVersion(service, patientCaseId, lifecycleState, meta, sourc
   await service.db.execute(`INSERT INTO epcr_versions (${Object.keys(version).join(",")}) VALUES (${Object.values(version).map(sqlValue).join(",")});`);
   const discrepancies = await service.db.queryAll(`SELECT stock_usage_id, discrepancy_status FROM stock_usage WHERE patient_case_id=${sqlValue(patientCaseId)} AND discrepancy_status IS NOT NULL AND discrepancy_status <> '';`);
   const disposition = await service.clinicalDispositions.find(patientCaseId);
+  // Stage 15 milestone 15d: a note tagged safeguarding_concern auto-raises
+  // a QA flag the same way a refusal disposition already does below --
+  // informational for every other tag, matching 13c's "informational, not
+  // a new hard gate" precedent.
+  const safeguardingNotes = (await service.clinicalNotes.list(patientCaseId)).filter(note => note.tags.includes("safeguarding_concern"));
   const automaticFlags = discrepancies.map(item => ({ type: "medication_discrepancy", severity: "high", source: "system:stock_discrepancy", note: item.discrepancy_status }))
-    .concat(["refusal_assessment", "refusal_treatment", "refusal_transport"].includes(disposition?.outcome) ? [{ type: "refusal", severity: "warning", source: "system:disposition", note: disposition.outcome }] : []);
+    .concat(["refusal_assessment", "refusal_treatment", "refusal_transport"].includes(disposition?.outcome) ? [{ type: "refusal", severity: "warning", source: "system:disposition", note: disposition.outcome }] : [])
+    .concat(safeguardingNotes.map(note => ({ type: "safeguarding_concern", severity: "high", source: "system:patient_case_note", note: note.note_id })));
   for (const flag of automaticFlags) {
     const qa = { flag_id: id("QAF"), patient_case_id: patientCaseId, version_id: version.version_id, flag_type: flag.type, severity: flag.severity, source: flag.source, raised_at: version.created_at, raised_by: "system", resolved_at: null, resolved_by: null, resolution_note: flag.note, correlation_id: meta.correlationId };
     await service.db.execute(`INSERT INTO epcr_qa_flags (${Object.keys(qa).join(",")}) VALUES (${Object.values(qa).map(sqlValue).join(",")});`);
@@ -233,6 +240,6 @@ export const epcrFinalizationMethods = {
   async updateEpcrQaFlag(patientCaseId, flagId, payload, meta) { const flag = await this.db.queryOne(`SELECT * FROM epcr_qa_flags WHERE patient_case_id=${sqlValue(patientCaseId)} AND flag_id=${sqlValue(flagId)};`); if (!flag) throw new ApiError("NOT_FOUND", "QA flag not found", 404); if (payload.resolution_note === undefined) throw new ApiError("INVALID_PAYLOAD", "resolution_note is required", 400); const updated = { ...flag, resolved_at: new Date().toISOString(), resolved_by: meta.actorId ?? null, resolution_note: payload.resolution_note }; await this.db.execute(`UPDATE epcr_qa_flags SET resolved_at=${sqlValue(updated.resolved_at)},resolved_by=${sqlValue(updated.resolved_by)},resolution_note=${sqlValue(updated.resolution_note)} WHERE flag_id=${sqlValue(flagId)};`); await audit(this, patientCaseId, "qaFlagResolved", meta, flag, updated); return updated; },
   async getEpcrSummary(patientCaseId) {
     const c = await requireCase(this, patientCaseId), lifecycle = await this.getEpcrLifecycle(patientCaseId), version = await latestVersion(this, patientCaseId);
-    return { patient_case: c, incident: await this.incidents.findById(c.incident_id), readiness: await this.getEpcrReadiness(patientCaseId), compliance: await this.getEpcrComplianceReport(patientCaseId), demographics: (await this.clinicalDemographics.find(patientCaseId)) ?? null, assessments: await this.clinicalAssessments.list(patientCaseId), observations: await this.clinicalObservations.list(patientCaseId), medications: await this.clinicalMedications.list(patientCaseId), procedures: await this.clinicalProcedures.list(patientCaseId), disposition: (await this.clinicalDispositions.find(patientCaseId)) ?? null, timeline: await this.clinicalTimeline.list(patientCaseId), signatures: await this.getEpcrSignatures(patientCaseId), lifecycle, final_version: version ? { version_id: version.version_id, version_number: version.version_number, hash: version.content_hash, hash_algorithm: version.hash_algorithm } : null, amendments: await this.listEpcrAmendments(patientCaseId), reviews: await this.listEpcrReviews(patientCaseId), qa_flags: await this.listEpcrQaFlags(patientCaseId) };
+    return { patient_case: c, incident: await this.incidents.findById(c.incident_id), readiness: await this.getEpcrReadiness(patientCaseId), compliance: await this.getEpcrComplianceReport(patientCaseId), demographics: (await this.clinicalDemographics.find(patientCaseId)) ?? null, assessments: await this.clinicalAssessments.list(patientCaseId), observations: await this.clinicalObservations.list(patientCaseId), medications: await this.clinicalMedications.list(patientCaseId), procedures: await this.clinicalProcedures.list(patientCaseId), disposition: (await this.clinicalDispositions.find(patientCaseId)) ?? null, notes: await this.clinicalNotes.list(patientCaseId), timeline: await this.clinicalTimeline.list(patientCaseId), signatures: await this.getEpcrSignatures(patientCaseId), lifecycle, final_version: version ? { version_id: version.version_id, version_number: version.version_number, hash: version.content_hash, hash_algorithm: version.hash_algorithm } : null, amendments: await this.listEpcrAmendments(patientCaseId), reviews: await this.listEpcrReviews(patientCaseId), qa_flags: await this.listEpcrQaFlags(patientCaseId) };
   }
 };

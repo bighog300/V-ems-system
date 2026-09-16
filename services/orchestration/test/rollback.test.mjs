@@ -14,12 +14,12 @@ maybeTest("rolls back the last migration and re-migrating reapplies it", async (
     const allIds = migrationFiles("postgres").map((m) => m.id);
     const lastId = allIds.at(-1);
     assert.equal(await lastAppliedMigration(db), lastId);
-    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'patient_cases' AND column_name = 'legal_hold';"));
+    assert.ok(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'patient_case_notes';"));
 
     const rolledBack = await rollbackLastMigration(db);
     assert.equal(rolledBack, lastId);
     assert.equal(await lastAppliedMigration(db), allIds.at(-2));
-    assert.equal(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'patient_cases' AND column_name = 'legal_hold';"), undefined);
+    assert.equal(await db.queryOne("SELECT table_name FROM information_schema.tables WHERE table_name = 'patient_case_notes';"), undefined);
   } finally {
     await db.close();
   }
@@ -44,10 +44,14 @@ maybeTest("consecutive migrations can each be rolled back in turn, until one wit
     // reapplies anything missing before any assertion here.
     await db.execute("SELECT 1;");
 
-    // 019 (retention_and_legal_hold), 018 (audit_log_actor), 017
-    // (clinical_terminology_codes), 016 (access_revocations), 015
-    // (patient_case_attachments) and 014 (event_outbox_sequence) all ship
-    // rollback scripts; roll each back in turn.
+    // 020 (patient_case_notes), 019 (retention_and_legal_hold), 018
+    // (audit_log_actor), 017 (clinical_terminology_codes), 016
+    // (access_revocations), 015 (patient_case_attachments) and 014
+    // (event_outbox_sequence) all ship rollback scripts; roll each back in
+    // turn.
+    const rolledBack020 = await rollbackLastMigration(db);
+    assert.equal(rolledBack020, "020_patient_case_notes");
+
     const rolledBack019 = await rollbackLastMigration(db);
     assert.equal(rolledBack019, "019_retention_and_legal_hold");
 
