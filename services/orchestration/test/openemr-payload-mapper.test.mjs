@@ -164,3 +164,26 @@ test("openemr payload mapper maps handover create request/response", () => {
     notes: "Care handed over"
   });
 });
+
+test("openemr payload mapper maps patient history request/response", () => {
+  const mapper = new OpenEmrPayloadMapper();
+  const request = mapper.mapPatientHistoryRequest({ patient_id: "OE-740", encounter_id: "ignored" });
+  assert.deepEqual(request, { patient_id: "OE-740" });
+
+  const response = mapper.mapPatientHistoryResponse({
+    as_of: "2026-08-30T00:00:00Z",
+    medications: [{ medication_name: "Metformin", dose: "500mg", frequency: "BID", status: "active", ignored: true }],
+    encounters: [{ encounter_date: "2026-07-12", reason: "Chest pain", facility: "General Hospital", ignored: true }]
+  });
+  assert.deepEqual(response, {
+    as_of: "2026-08-30T00:00:00Z",
+    medications: [{ medication_name: "Metformin", dose: "500mg", frequency: "BID", status: "active" }],
+    encounters: [{ encounter_date: "2026-07-12", reason: "Chest pain", facility: "General Hospital" }]
+  });
+});
+
+test("openemr payload mapper defaults patient history response to empty lists when malformed", () => {
+  const mapper = new OpenEmrPayloadMapper();
+  assert.deepEqual(mapper.mapPatientHistoryResponse(null), { as_of: null, medications: [], encounters: [] });
+  assert.deepEqual(mapper.mapPatientHistoryResponse({}), { as_of: null, medications: [], encounters: [] });
+});

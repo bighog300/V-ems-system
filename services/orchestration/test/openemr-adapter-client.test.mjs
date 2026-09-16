@@ -20,7 +20,9 @@ test("openemr adapter methods route mapped payloads through transport", async ()
     mapHandoverCreateRequest: (payload) => ({ ...payload, mapped_type: "handover-create" }),
     mapHandoverCreateResponse: (response) => ({ ...response, mapped: true }),
     mapHandoverReadRequest: (payload) => ({ ...payload, mapped_type: "handover-read" }),
-    mapHandoverReadResponse: (response) => ({ ...response, mapped: true })
+    mapHandoverReadResponse: (response) => ({ ...response, mapped: true }),
+    mapPatientHistoryRequest: (payload) => ({ ...payload, mapped_type: "patient-history" }),
+    mapPatientHistoryResponse: (response) => ({ ...response, mapped: true })
   };
 
   const client = new OpenEmrAdapterClient({
@@ -34,7 +36,8 @@ test("openemr adapter methods route mapped payloads through transport", async ()
       if (request.method === "createIntervention") return { intervention_id: "INT-001", encounter_id: "ENC-001", status: "recorded" };
       if (request.method === "getInterventions") return [{ intervention_id: "INT-READ-001", encounter_id: "ENC-001", status: "recorded" }];
       if (request.method === "createHandover") return { handover_id: "HND-001", encounter_id: "ENC-001", handover_time: "2026-04-16T10:30:00Z", disposition: "transport_to_facility", handover_status: "Handover Completed" };
-      return { handover_id: "HND-READ-001", encounter_id: "ENC-001", disposition: "transport_to_facility", handover_status: "Handover Completed" };
+      if (request.method === "getHandover") return { handover_id: "HND-READ-001", encounter_id: "ENC-001", disposition: "transport_to_facility", handover_status: "Handover Completed" };
+      return { as_of: "2026-08-30T00:00:00Z", medications: [], encounters: [] };
     }
   });
 
@@ -46,6 +49,7 @@ test("openemr adapter methods route mapped payloads through transport", async ()
   const interventions = await client.getInterventions({ encounter_id: "ENC-001" });
   const handover = await client.createHandover({ encounter_id: "ENC-001", disposition: "transport_to_facility", handover_status: "Handover Completed" });
   const handoverRead = await client.getHandover({ encounter_id: "ENC-001" });
+  const history = await client.getPatientHistory({ patient_id: "OE-123" });
 
   assert.deepEqual(calls, [
     { method: "searchPatient", payload: { first_name: "Jane", type: "patient-search" } },
@@ -76,6 +80,10 @@ test("openemr adapter methods route mapped payloads through transport", async ()
     {
       method: "getHandover",
       payload: { encounter_id: "ENC-001", mapped_type: "handover-read" }
+    },
+    {
+      method: "getPatientHistory",
+      payload: { patient_id: "OE-123", mapped_type: "patient-history" }
     }
   ]);
   assert.equal(search.mapped, true);
@@ -86,6 +94,7 @@ test("openemr adapter methods route mapped payloads through transport", async ()
   assert.equal(interventions.at(0).mapped, true);
   assert.equal(handover.mapped, true);
   assert.equal(handoverRead.mapped, true);
+  assert.equal(history.mapped, true);
 });
 
 test("openemr adapter without transport fails explicitly", async () => {

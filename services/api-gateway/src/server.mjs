@@ -923,7 +923,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline|attachments|legal-hold)(?:\/([^/]+))?)?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|timeline|attachments|legal-hold|history)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -971,6 +971,9 @@ export function createApp(orchestration = new OrchestrationService()) {
         // supervisor/sys_admin only (see authorization-policy.mjs) --
         // narrower than every other patient-case mutation above.
         if (method === 'PATCH' && action === 'legal-hold') return okJson(res, 200, await orchestration.setPatientCaseLegalHold(id, await parseJson(req), meta), context);
+        // Closes the history-retrieval gap: a read-only view of the
+        // linked patient's prior medications/encounters from OpenEMR.
+        if (method === 'GET' && action === 'history') return okJson(res, 200, await orchestration.getPatientCaseHistory(id, meta), context);
       }
 
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);
