@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { AssignedJob } from "../api/assignments.ts";
+import { updateIncidentStatus } from "../api/incidents.ts";
 import { LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { createPatientCase, listPatientCasesCached, type PatientCase } from "../api/patientCases.ts";
 import type { Session } from "../auth/session.ts";
+import IncidentStatusStepper from "../components/IncidentStatusStepper.tsx";
+import NavigateButton from "../components/NavigateButton.tsx";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 
 // A case created while offline gets a client-minted LOCAL-<entryId> id and
@@ -44,6 +47,23 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
   const [label, setLabel] = useState("");
   const [creating, setCreating] = useState(false);
   const [showingCached, setShowingCached] = useState(false);
+  const [status, setStatus] = useState<string | null>(incident?.status ?? null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  async function handleStatusAction(action: string) {
+    if (!incidentId) return;
+    setStatusBusy(true);
+    setStatusError(null);
+    try {
+      const result = await updateIncidentStatus({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId, incidentId, action });
+      setStatus(result.status);
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : "Failed to update status.");
+    } finally {
+      setStatusBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     if (!incidentId) return;
@@ -92,10 +112,23 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Incident</Text>
-        <Row label="Status" value={incident?.status ?? "Unavailable"} />
+        <Row label="Status" value={status ?? "Unavailable"} />
         <Row label="Priority" value={incident?.priority ?? "Unavailable"} />
-        <Row label="Location" value={incident?.location_summary ?? "Unavailable"} />
+        <View style={styles.locationRow}>
+          <Text style={styles.rowLabel}>Location</Text>
+          <View style={styles.locationValue}>
+            <Text style={styles.rowValue}>{incident?.location_summary ?? "Unavailable"}</Text>
+            <NavigateButton address={incident?.location_summary} />
+          </View>
+        </View>
       </View>
+
+      {incidentId && status ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Call status</Text>
+          <IncidentStatusStepper status={status} onAction={handleStatusAction} busy={statusBusy} error={statusError} />
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Assignment</Text>
@@ -218,6 +251,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingVertical: 4
+  },
+  locationRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 4,
+    gap: 12
+  },
+  locationValue: {
+    flex: 1,
+    alignItems: "flex-end",
+    gap: 8
   },
   rowLabel: {
     fontSize: 14,

@@ -21,6 +21,7 @@ import AssessmentScreen from "../screens/AssessmentScreen.tsx";
 import DispositionScreen from "../screens/DispositionScreen.tsx";
 import EpcrScreen from "../screens/EpcrScreen.tsx";
 import IncidentDetailScreen from "../screens/IncidentDetailScreen.tsx";
+import IncidentWorkspaceScreen from "../screens/IncidentWorkspaceScreen.tsx";
 import InterventionsScreen from "../screens/InterventionsScreen.tsx";
 import JobsListScreen from "../screens/JobsListScreen.tsx";
 import LoginScreen from "../screens/LoginScreen.tsx";
@@ -28,6 +29,7 @@ import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
 import PatientIdentityScreen from "../screens/PatientIdentityScreen.tsx";
 import SyncStatusScreen from "../screens/SyncStatusScreen.tsx";
 import VitalsScreen from "../screens/VitalsScreen.tsx";
+import { useIsTabletLayout } from "../theme/useIsTabletLayout.ts";
 
 type RootStackParamList = {
   Login: undefined;
@@ -55,6 +57,7 @@ export default function RootNavigator() {
   const [pendingDeepLink, setPendingDeepLink] = useState<AssignmentDeepLink | null>(null);
   const appStateRef = useRef(AppState.currentState);
   const sync = useSyncTriggers(state === "signed-in" ? session : null);
+  const isTabletLayout = useIsTabletLayout();
 
   // Configures the foreground notification handler once, captures the deep
   // link that caused a cold start (if any), and subscribes for taps while
@@ -187,15 +190,25 @@ export default function RootNavigator() {
         {state === "signed-in" && session ? (
           <>
             <Stack.Screen name="JobsList">
-              {({ navigation }) => (
-                <JobsListScreen
-                  session={session}
-                  onSignedOut={handleSignedOut}
-                  onSelectJob={(job) => navigation.navigate("IncidentDetail", { job })}
-                  onOpenSyncStatus={() => navigation.navigate("SyncStatus")}
-                  sync={sync}
-                />
-              )}
+              {({ navigation }) =>
+                isTabletLayout ? (
+                  <IncidentWorkspaceScreen
+                    session={session}
+                    onSignedOut={handleSignedOut}
+                    onOpenSyncStatus={() => navigation.navigate("SyncStatus")}
+                    sync={sync}
+                    onSelectPatientCase={(patientCase) => navigation.navigate("PatientCaseDetail", { patientCase })}
+                  />
+                ) : (
+                  <JobsListScreen
+                    session={session}
+                    onSignedOut={handleSignedOut}
+                    onSelectJob={(job) => navigation.navigate("IncidentDetail", { job })}
+                    onOpenSyncStatus={() => navigation.navigate("SyncStatus")}
+                    sync={sync}
+                  />
+                )
+              }
             </Stack.Screen>
             <Stack.Screen name="SyncStatus">
               {({ navigation }) => <SyncStatusScreen sync={sync} onBack={() => navigation.goBack()} />}
