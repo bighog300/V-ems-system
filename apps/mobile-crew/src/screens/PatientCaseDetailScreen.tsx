@@ -25,6 +25,7 @@ export interface PatientCaseDetailScreenProps {
   onOpenInterventions: (patientCaseId: string) => void;
   onOpenAssessment: (patientCaseId: string) => void;
   onOpenDisposition: (patientCaseId: string) => void;
+  onOpenNotes: (patientCaseId: string) => void;
   onOpenEpcr: (patientCaseId: string) => void;
 }
 
@@ -37,6 +38,7 @@ export default function PatientCaseDetailScreen({
   onOpenInterventions,
   onOpenAssessment,
   onOpenDisposition,
+  onOpenNotes,
   onOpenEpcr
 }: PatientCaseDetailScreenProps) {
   const [caseState, setCaseState] = useState(initialCase);
@@ -492,6 +494,15 @@ export default function PatientCaseDetailScreen({
                   testID="open-disposition"
                 >
                   <Text style={styles.buttonText}>Disposition</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.button, styles.spacedButton]}
+                  onPress={() => onOpenNotes(caseState.patient_case_id)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Notes"
+                  testID="open-notes"
+                >
+                  <Text style={styles.buttonText}>Notes</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.button, styles.spacedButton]}

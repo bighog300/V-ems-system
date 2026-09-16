@@ -25,6 +25,7 @@ import IncidentWorkspaceScreen from "../screens/IncidentWorkspaceScreen.tsx";
 import InterventionsScreen from "../screens/InterventionsScreen.tsx";
 import JobsListScreen from "../screens/JobsListScreen.tsx";
 import LoginScreen from "../screens/LoginScreen.tsx";
+import NotesScreen from "../screens/NotesScreen.tsx";
 import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
 import PatientIdentityScreen from "../screens/PatientIdentityScreen.tsx";
 import SyncStatusScreen from "../screens/SyncStatusScreen.tsx";
@@ -41,6 +42,7 @@ type RootStackParamList = {
   Interventions: { patientCaseId: string };
   Assessment: { patientCaseId: string };
   Disposition: { patientCaseId: string };
+  Notes: { patientCaseId: string };
   Epcr: { patientCaseId: string };
   SyncStatus: undefined;
 };
@@ -234,6 +236,7 @@ export default function RootNavigator() {
                   onOpenInterventions={(patientCaseId) => navigation.navigate("Interventions", { patientCaseId })}
                   onOpenAssessment={(patientCaseId) => navigation.navigate("Assessment", { patientCaseId })}
                   onOpenDisposition={(patientCaseId) => navigation.navigate("Disposition", { patientCaseId })}
+                  onOpenNotes={(patientCaseId) => navigation.navigate("Notes", { patientCaseId })}
                   onOpenEpcr={(patientCaseId) => navigation.navigate("Epcr", { patientCaseId })}
                 />
               )}
@@ -266,6 +269,11 @@ export default function RootNavigator() {
             <Stack.Screen name="Disposition">
               {({ route, navigation }) => (
                 <DispositionScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
+              )}
+            </Stack.Screen>
+            <Stack.Screen name="Notes">
+              {({ route, navigation }) => (
+                <NotesScreen patientCaseId={route.params.patientCaseId} session={session} onBack={() => navigation.goBack()} />
               )}
             </Stack.Screen>
             <Stack.Screen name="Epcr">

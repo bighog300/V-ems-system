@@ -48,6 +48,7 @@ function renderScreen() {
         onOpenInterventions={jest.fn()}
         onOpenAssessment={jest.fn()}
         onOpenDisposition={jest.fn()}
+        onOpenNotes={jest.fn()}
         onOpenEpcr={jest.fn()}
       />
     </NavigationContainer>
@@ -138,6 +139,7 @@ describe("PatientCaseDetailScreen — on-device patient history", () => {
           onOpenInterventions={jest.fn()}
           onOpenAssessment={jest.fn()}
           onOpenDisposition={jest.fn()}
+          onOpenNotes={jest.fn()}
           onOpenEpcr={jest.fn()}
         />
       </NavigationContainer>
