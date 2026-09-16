@@ -19,6 +19,16 @@ const OUTCOMES = new Set([
   "cancelled_before_contact", "death_on_scene", "resuscitation_terminated"
 ]);
 
+// Stage 15 milestone 15d: a small controlled tag vocabulary for structured
+// crew notes (multi-select, not exclusive) -- see the Stage 15 plan doc's
+// "Notes" design decision. `safeguarding_concern` auto-raises a QA flag
+// the same way a refusal disposition already does in epcr-finalization.mjs's
+// createVersion(); every other tag stays purely informational.
+export const NOTE_TAGS = new Set([
+  "scene_safety", "mechanism_of_injury", "family_bystander_report", "refusal_context",
+  "communication_barrier", "safeguarding_concern", "law_enforcement_involvement", "general"
+]);
+
 const requiredCase = async function (id) {
   const record = await this.getPatientCase(id);
   if (!record) throw new ApiError("NOT_FOUND", `Patient case ${id} not found`, 404);
@@ -165,6 +175,23 @@ export const clinicalRecordMethods = {
     await this.event("ClinicalProcedureCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, procedure_id: record.procedure_id });
     await appendTimeline(this, { ...record, event_type: "procedure_performed", source_entity_type: "procedure", source_entity_id: record.procedure_id }, meta);
     return this.clinicalProcedures.find(record.procedure_id);
+  },
+  async listPatientCaseNotes(patientCaseId) { await requiredCase.call(this, patientCaseId); return this.clinicalNotes.list(patientCaseId); },
+  async createPatientCaseNote(patientCaseId, payload, meta) {
+    const current = await requiredCase.call(this, patientCaseId); object(payload);
+    await this.assertPatientCaseClinicalMutable(patientCaseId);
+    if (!Array.isArray(payload.tags) || payload.tags.length === 0) throw new ApiError("INVALID_PAYLOAD", "tags must be a non-empty array", 400);
+    const tags = [...new Set(payload.tags)];
+    const unknownTags = tags.filter(tag => !NOTE_TAGS.has(tag));
+    if (unknownTags.length) throw new ApiError("INVALID_PAYLOAD", `Unknown note tags: ${unknownTags.join(", ")}. Allowed: ${[...NOTE_TAGS].join(", ")}`, 400);
+    const noteText = text(payload.text, "text");
+    const authoredAt = iso(payload.authored_at ?? new Date().toISOString(), "authored_at");
+    const record = { note_id: id("NOTE"), patient_case_id: patientCaseId, encounter_id: payload.encounter_id ?? current.openemr_encounter_id ?? null, tags, note_text: noteText, authored_at: authoredAt, clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, created_at: new Date().toISOString(), correlation_id: meta.correlationId };
+    await this.clinicalNotes.create(record);
+    await this.audit("patient_case_note", record.note_id, "create_note", meta, undefined, record);
+    await this.event("PatientCaseNoteCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, note_id: record.note_id, tags });
+    await appendTimeline(this, { ...record, event_type: "note_recorded", source_entity_type: "note", source_entity_id: record.note_id }, meta);
+    return record;
   },
   async getPatientCaseDisposition(patientCaseId) { await requiredCase.call(this, patientCaseId); return (await this.clinicalDispositions.find(patientCaseId)) ?? null; },
   async setPatientCaseDisposition(patientCaseId, payload, meta) {

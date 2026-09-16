@@ -124,6 +124,18 @@ export class PatientCaseDispositionRepository {
   }
 }
 
+export class PatientCaseNoteRepository {
+  constructor(db) { this.db = db; }
+  async create(record) {
+    const { tags, ...rest } = record;
+    await insert(this.db, "patient_case_notes", { ...rest, tags_json: tags ?? [] }, ["tags_json"]);
+  }
+  async list(patientCaseId) {
+    const rows = await this.db.queryAll(`SELECT * FROM patient_case_notes WHERE patient_case_id=${sqlValue(patientCaseId)} ORDER BY authored_at, note_id;`);
+    return rows.map((row) => ({ ...row, tags: parseJson(row.tags_json, []) }));
+  }
+}
+
 export class PatientCaseTimelineRepository {
   constructor(db) { this.db = db; }
   async create(record) {
