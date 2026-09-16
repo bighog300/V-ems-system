@@ -8,7 +8,14 @@ import { createPatientCase, listPatientCasesCached, type PatientCase } from "../
 import type { Session } from "../auth/session.ts";
 import IncidentStatusStepper from "../components/IncidentStatusStepper.tsx";
 import NavigateButton from "../components/NavigateButton.tsx";
+import { purgePatientHistoryForCases } from "../history/patientHistoryStore.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+
+// Incident statuses at which every patient case under this incident has
+// been delivered -- the point past which on-device history for any of
+// them must be gone, per the Stage 15 design decision (see
+// patientHistoryStore.ts).
+const HISTORY_PURGE_STATUSES = new Set(["At Destination", "Handover Complete"]);
 
 // A case created while offline gets a client-minted LOCAL-<entryId> id and
 // no patient_sequence yet (that's assigned by the server) — shown as
@@ -58,6 +65,9 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
     try {
       const result = await updateIncidentStatus({ apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId, incidentId, action });
       setStatus(result.status);
+      if (HISTORY_PURGE_STATUSES.has(result.status)) {
+        purgePatientHistoryForCases(cases.map((patientCase) => patientCase.patient_case_id));
+      }
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : "Failed to update status.");
     } finally {

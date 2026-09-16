@@ -6,8 +6,10 @@ import { captureDocument, capturePhoto } from "../attachments/captureAttachment.
 import { createPatientCaseEncounter, getPatientCaseEncounterCached, type PatientCaseEncounter } from "../api/encounters.ts";
 import { LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { getPatientCaseCached, getPatientCaseDemographicsCached, savePatientCaseDemographics, type PatientCase, type PatientCaseDemographics } from "../api/patientCases.ts";
+import { getPatientCaseHistory, type PatientHistory } from "../api/patientHistory.ts";
 import type { Session } from "../auth/session.ts";
 import LocationPermissionNotice from "../components/LocationPermissionNotice.tsx";
+import { getPatientHistory, isPatientHistoryPurged, setPatientHistory } from "../history/patientHistoryStore.ts";
 import { captureLocation, getLocationPermissionStatus, requestLocationPermission, type LocationPermissionStatus } from "../location/captureLocation.ts";
 import { getOrCreateEncryptionKey } from "../offline/crypto.ts";
 import { getOfflineDatabase } from "../offline/db.ts";
@@ -51,6 +53,10 @@ export default function PatientCaseDetailScreen({
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [showingCached, setShowingCached] = useState(false);
+
+  const [history, setHistory] = useState<PatientHistory | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const [encounter, setEncounter] = useState<PatientCaseEncounter | null>(null);
   const [presentingComplaint, setPresentingComplaint] = useState("");
@@ -178,6 +184,52 @@ export default function PatientCaseDetailScreen({
     }, [isPendingSync, initialCase, session.apiBaseUrl, session.authToken])
   );
 
+  // History is intentionally NOT part of the load above: it must never
+  // touch cachedRequest.ts's durable cache, only the short-lived
+  // in-memory store in patientHistoryStore.ts (purged from
+  // IncidentDetailScreen once the incident reaches "At Destination" /
+  // "Handover Complete"). Once purged, this deliberately never re-fetches
+  // it for this case again, for the lifetime of the app process.
+  useFocusEffect(
+    useCallback(() => {
+      if (isPendingSync) return;
+      if (isPatientHistoryPurged(initialCase.patient_case_id)) {
+        setHistory(null);
+        return;
+      }
+      const stored = getPatientHistory(initialCase.patient_case_id);
+      if (stored) {
+        setHistory(stored);
+        return;
+      }
+      if (!caseState.openemr_patient_id) return;
+
+      let cancelled = false;
+      (async () => {
+        setHistoryLoading(true);
+        setHistoryError(null);
+        try {
+          const fetched = await getPatientCaseHistory({
+            apiBaseUrl: session.apiBaseUrl,
+            authToken: session.authToken,
+            deviceId: session.deviceId,
+            patientCaseId: initialCase.patient_case_id
+          });
+          if (cancelled) return;
+          setPatientHistory(initialCase.patient_case_id, fetched);
+          setHistory(fetched);
+        } catch (err) {
+          if (!cancelled) setHistoryError(err instanceof Error ? err.message : "Failed to load patient history.");
+        } finally {
+          if (!cancelled) setHistoryLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [isPendingSync, initialCase.patient_case_id, caseState.openemr_patient_id, session.apiBaseUrl, session.authToken])
+  );
+
   async function handleSave() {
     setSaving(true);
     setError(null);
@@ -276,6 +328,57 @@ export default function PatientCaseDetailScreen({
             >
               <Text style={styles.buttonText}>{caseState.openemr_patient_id ? "View identity" : "Identify patient"}</Text>
             </Pressable>
+          </View>
+
+          <View style={styles.card} testID="patient-history-card">
+            <Text style={styles.cardTitle}>Patient history</Text>
+            <Text style={styles.hint}>On this device only while transporting — cleared once handover is complete.</Text>
+            {historyError ? (
+              <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="history-error">
+                {historyError}
+              </Text>
+            ) : null}
+            {historyLoading ? (
+              <ActivityIndicator testID="history-loading" />
+            ) : !caseState.openemr_patient_id ? (
+              <Text style={styles.hint} testID="history-unavailable">
+                Identify the patient to view prior history.
+              </Text>
+            ) : !history ? (
+              <Text style={styles.hint} testID="history-cleared">
+                No history available on this device.
+              </Text>
+            ) : (
+              <>
+                <Text style={[styles.identityStatus, styles.historySectionLabel]}>Known medications</Text>
+                {history.medications.length === 0 ? (
+                  <Text style={styles.hint} testID="history-medications-empty">
+                    None on file.
+                  </Text>
+                ) : (
+                  history.medications.map((medication, index) => (
+                    <View key={`${medication.medication_name ?? "medication"}-${index}`} style={styles.historyRow} testID={`history-medication-${index}`}>
+                      <Text style={styles.historyPrimary}>{medication.medication_name ?? "Unknown medication"}</Text>
+                      <Text style={styles.hint}>{[medication.dose, medication.frequency, medication.status].filter(Boolean).join(" · ") || "No detail on file"}</Text>
+                    </View>
+                  ))
+                )}
+
+                <Text style={[styles.identityStatus, styles.historySectionLabel]}>Recent encounters</Text>
+                {history.encounters.length === 0 ? (
+                  <Text style={styles.hint} testID="history-encounters-empty">
+                    None on file.
+                  </Text>
+                ) : (
+                  history.encounters.map((encounter, index) => (
+                    <View key={`${encounter.encounter_date ?? "encounter"}-${index}`} style={styles.historyRow} testID={`history-encounter-${index}`}>
+                      <Text style={styles.historyPrimary}>{encounter.reason ?? "Encounter"}</Text>
+                      <Text style={styles.hint}>{[encounter.encounter_date, encounter.facility].filter(Boolean).join(" · ") || "No detail on file"}</Text>
+                    </View>
+                  ))
+                )}
+              </>
+            )}
           </View>
 
           <View style={styles.card}>
@@ -549,6 +652,20 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 13,
     color: "#999"
+  },
+  historySectionLabel: {
+    marginTop: 12,
+    marginBottom: 4
+  },
+  historyRow: {
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0"
+  },
+  historyPrimary: {
+    fontSize: 14,
+    color: "#111",
+    fontWeight: "600"
   },
   attachmentRow: {
     paddingVertical: 8,
