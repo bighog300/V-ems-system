@@ -642,7 +642,7 @@ export class OrchestrationService {
 
   async searchPatient(payload, meta) {
     const result = await this.openemr.searchPatient(payload);
-    await this.audit("patient", payload.phone ?? payload.last_name ?? "search", "search_patient", meta, undefined, result);
+    await this.audit("patient", payload.identity_number ?? payload.hospital_card_number ?? payload.phone ?? payload.last_name ?? "search", "search_patient", meta, undefined, result);
     await this.event("PatientMatchRequested", meta.correlationId, { incident_id: payload.incident_id ?? null, match_status: result.match_status });
     return result;
   }

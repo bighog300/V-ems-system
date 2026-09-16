@@ -2,6 +2,33 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { OpenEmrPayloadMapper } from "../src/adapters/openemr/openemr-payload-mapper.mjs";
 
+test("openemr payload mapper forwards identity_number, hospital_card_number and address to the downstream patient search", () => {
+  const mapper = new OpenEmrPayloadMapper();
+
+  const byIdentity = mapper.mapPatientSearchRequest({ identity_number: "ID-4471829" });
+  assert.equal(byIdentity.identity_number, "ID-4471829");
+
+  const byHospitalCard = mapper.mapPatientSearchRequest({ hospital_card_number: "HC-208831" });
+  assert.equal(byHospitalCard.hospital_card_number, "HC-208831");
+
+  const byNameDobAddress = mapper.mapPatientSearchRequest({
+    first_name: "Ada",
+    last_name: "Lovelace",
+    dob: "1990-01-01",
+    address: "1400 Riverside Dr"
+  });
+  assert.deepEqual(byNameDobAddress, {
+    first_name: "Ada",
+    last_name: "Lovelace",
+    dob: "1990-01-01",
+    sex: undefined,
+    phone: undefined,
+    address: "1400 Riverside Dr",
+    identity_number: undefined,
+    hospital_card_number: undefined
+  });
+});
+
 test("openemr payload mapper maps encounter create request/response", () => {
   const mapper = new OpenEmrPayloadMapper();
 

@@ -399,7 +399,16 @@ function validateAction(payload) {
 
 function validatePatientSearch(payload) {
   if (!payload || typeof payload !== "object") throw new ApiError("INVALID_PAYLOAD", "Patient search payload is required", 400);
-  const hasAnyField = [payload.first_name, payload.last_name, payload.dob, payload.sex, payload.phone].some(Boolean);
+  // Three ways a crew actually identifies someone in the field: an
+  // identity number, a hospital's own card number, or -- lacking either
+  // -- name/DOB/address. identity_number and hospital_card_number were
+  // added alongside address (see mapPatientSearchRequest) to close the
+  // gap flagged in the crew-tablet workflow sketch, where only
+  // name/dob/sex/phone reached the downstream search at all.
+  const hasAnyField = [
+    payload.first_name, payload.last_name, payload.dob, payload.sex, payload.phone,
+    payload.address, payload.identity_number, payload.hospital_card_number
+  ].some(Boolean);
   if (!hasAnyField) throw new ApiError("INVALID_PAYLOAD", "At least one search field is required", 400);
   if (payload.sex && !PATIENT_SEX_VALUES.includes(payload.sex)) throw new ApiError("INVALID_PAYLOAD", "Invalid sex", 400);
 }

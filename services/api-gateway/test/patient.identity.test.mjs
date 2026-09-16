@@ -67,6 +67,56 @@ test("patient search path routes through orchestration OpenEMR adapter", async (
   }
 });
 
+test("patient search accepts identity_number, hospital_card_number or address as the sole search field", async () => {
+  const calls = [];
+  const { server, base } = await startServerWithOpenemrTransport(async (request) => {
+    calls.push(request);
+    return { match_status: "no_match", match_confidence: 0, candidates: [] };
+  });
+
+  try {
+    const byIdentity = await jsonFetch(base, "/api/patients/search", {
+      method: "POST",
+      body: JSON.stringify({ identity_number: "ID-4471829" })
+    });
+    assert.equal(byIdentity.status, 200);
+
+    const byHospitalCard = await jsonFetch(base, "/api/patients/search", {
+      method: "POST",
+      body: JSON.stringify({ hospital_card_number: "HC-208831" })
+    });
+    assert.equal(byHospitalCard.status, 200);
+
+    const byAddress = await jsonFetch(base, "/api/patients/search", {
+      method: "POST",
+      body: JSON.stringify({ first_name: "Ada", last_name: "Lovelace", dob: "1990-01-01", address: "1400 Riverside Dr" })
+    });
+    assert.equal(byAddress.status, 200);
+
+    assert.deepEqual(calls.map((c) => c.payload), [
+      { identity_number: "ID-4471829" },
+      { hospital_card_number: "HC-208831" },
+      { first_name: "Ada", last_name: "Lovelace", dob: "1990-01-01", address: "1400 Riverside Dr" }
+    ]);
+  } finally {
+    server.close();
+  }
+});
+
+test("patient search rejects a payload with no recognized search field", async () => {
+  const { server, base } = await startServerWithOpenemrTransport(async () => ({ match_status: "no_match", match_confidence: 0, candidates: [] }));
+  try {
+    const response = await jsonFetch(base, "/api/patients/search", {
+      method: "POST",
+      body: JSON.stringify({ notes: "irrelevant field" })
+    });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.error.code, "INVALID_PAYLOAD");
+  } finally {
+    server.close();
+  }
+});
+
 test("patient create path routes through orchestration OpenEMR adapter", async () => {
   const calls = [];
   const { server, base } = await startServerWithOpenemrTransport(async (request) => {

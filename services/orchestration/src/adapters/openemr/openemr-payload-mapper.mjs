@@ -1,11 +1,21 @@
 export class OpenEmrPayloadMapper {
+  // Three ways a crew actually identifies someone in the field: an
+  // identity number, a hospital's own card number, or -- lacking either
+  // -- name, date of birth and a known address to break ties between
+  // common names. identity_number/hospital_card_number/address used to
+  // be silently dropped here even when the API layer accepted them,
+  // which was the real gap flagged in the crew-tablet workflow sketch:
+  // the field set reached this mapper, but never reached OpenEMR.
   mapPatientSearchRequest(criteria) {
     const mapped = {
       first_name: criteria.first_name,
       last_name: criteria.last_name,
       dob: criteria.dob,
       sex: criteria.sex,
-      phone: criteria.phone
+      phone: criteria.phone,
+      address: criteria.address,
+      identity_number: criteria.identity_number,
+      hospital_card_number: criteria.hospital_card_number
     };
     return mapped;
   }
