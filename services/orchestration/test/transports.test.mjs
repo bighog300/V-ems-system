@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv } from "../src/adapters/transports.mjs";
+import { createOpenEmrTransportFromEnv, createVtigerTransportFromEnv, createLifenetTransportFromEnv } from "../src/adapters/transports.mjs";
 
 async function withServer(handler, fn) {
   const server = createServer(handler);
@@ -20,6 +20,56 @@ test("openemr transport requires auth token when auth is required", () => {
 
 test("vtiger transport requires auth token when auth is required", () => {
   assert.throws(() => createVtigerTransportFromEnv({ VTIGER_BASE_URL: "http://example.test" }), /VTIGER_API_TOKEN/);
+});
+
+test("lifenet transport returns undefined when LIFENET_BASE_URL is not configured", () => {
+  assert.equal(createLifenetTransportFromEnv({}), undefined);
+});
+
+test("lifenet transport requires an explicit case-vitals route -- no default is guessed", () => {
+  assert.throws(() => createLifenetTransportFromEnv({ LIFENET_BASE_URL: "http://example.test" }), /LIFENET_CASE_VITALS_ROUTE/);
+});
+
+test("lifenet transport fetches the configured route with the case reference templated in and an auth header", async () => {
+  let capturedRequest;
+  await withServer((req, res) => {
+    capturedRequest = { url: req.url, headers: req.headers };
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify([{ recorded_at: "2026-09-17T10:00:00.000Z", heart_rate_bpm: 88 }]));
+  }, async (port) => {
+    const transport = createLifenetTransportFromEnv({
+      LIFENET_BASE_URL: `http://127.0.0.1:${port}`,
+      LIFENET_CASE_VITALS_ROUTE: "/cases/:case_reference/vitals",
+      LIFENET_API_TOKEN: "test-token"
+    });
+
+    const response = await transport({ method: "fetchCaseVitals", payload: { case_reference: "LP15-CASE-1" } });
+    assert.deepEqual(response, [{ recorded_at: "2026-09-17T10:00:00.000Z", heart_rate_bpm: 88 }]);
+  });
+  assert.equal(capturedRequest.url, "/cases/LP15-CASE-1/vitals");
+  assert.equal(capturedRequest.headers.authorization, "Bearer test-token");
+});
+
+test("lifenet transport rejects a method other than fetchCaseVitals", () => {
+  const transport = createLifenetTransportFromEnv({ LIFENET_BASE_URL: "http://example.test", LIFENET_CASE_VITALS_ROUTE: "/cases/:case_reference/vitals" });
+  return assert.rejects(transport({ method: "somethingElse", payload: {} }), /LIFENET route not configured/);
+});
+
+test("lifenet transport classifies downstream 5xx as unavailable", async () => {
+  await withServer((req, res) => {
+    res.writeHead(503, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "unavailable" }));
+  }, async (port) => {
+    const transport = createLifenetTransportFromEnv({
+      LIFENET_BASE_URL: `http://127.0.0.1:${port}`,
+      LIFENET_CASE_VITALS_ROUTE: "/cases/:case_reference/vitals"
+    });
+
+    await assert.rejects(
+      transport({ method: "fetchCaseVitals", payload: { case_reference: "LP15-CASE-1" } }),
+      (error) => error.classification === "DOWNSTREAM_UNAVAILABLE"
+    );
+  });
 });
 
 test("openemr transport classifies downstream auth failure", async () => {

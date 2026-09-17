@@ -412,6 +412,15 @@ function validateLinkDevicePairingToPatientCase(payload) {
   if (typeof payload.patient_case_id !== "string" || !payload.patient_case_id.trim()) throw new ApiError("INVALID_PAYLOAD", "patient_case_id is required", 400);
 }
 
+function validateLifenetImport(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Lifenet import payload is required", 400);
+  const allowed = new Set(["lifenet_case_reference", "device_pairing_id"]);
+  const unknown = Object.keys(payload).filter((field) => !allowed.has(field));
+  if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown lifenet import fields: ${unknown.join(", ")}`, 400);
+  if (typeof payload.lifenet_case_reference !== "string" || !payload.lifenet_case_reference.trim()) throw new ApiError("INVALID_PAYLOAD", "lifenet_case_reference is required", 400);
+  if (typeof payload.device_pairing_id !== "string" || !payload.device_pairing_id.trim()) throw new ApiError("INVALID_PAYLOAD", "device_pairing_id is required", 400);
+}
+
 function validatePatientSearch(payload) {
   if (!payload || typeof payload !== "object") throw new ApiError("INVALID_PAYLOAD", "Patient search payload is required", 400);
   // Three ways a crew actually identifies someone in the field: an
@@ -980,7 +989,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history)(?:\/([^/]+))?)?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history|lifenet-import)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -1033,6 +1042,14 @@ export function createApp(orchestration = new OrchestrationService()) {
         // Closes the history-retrieval gap: a read-only view of the
         // linked patient's prior medications/encounters from OpenEMR.
         if (method === 'GET' && action === 'history') return okJson(res, 200, await orchestration.getPatientCaseHistory(id, meta), context);
+        // Stage 15 milestone 15g: imports a Physio-Control LIFEPAK 15
+        // case's vitals from LIFENET into this patient case's clinical
+        // observations, with device-pairing provenance.
+        if (method === 'POST' && action === 'lifenet-import') {
+          const payload = await parseJson(req);
+          validateLifenetImport(payload);
+          return okJson(res, 201, await orchestration.importLifenetCaseVitals(id, payload, meta), context);
+        }
       }
 
       const patientLinkMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-link$/);

@@ -347,6 +347,31 @@ export function createVtigerTransportFromEnv(env = process.env) {
   };
 }
 
+export function createLifenetTransportFromEnv(env = process.env) {
+  const baseUrl = env.LIFENET_BASE_URL;
+  if (!baseUrl) return undefined;
+  // See lifenet-adapter-client.mjs's module comment: no default route or
+  // response schema is guessed here -- both are required configuration
+  // because Physio-Control's actual LIFENET case-export API is not
+  // publicly documented and this session has no vendor data-sharing
+  // agreement to work from. The configured route's response is expected
+  // to already be an array of { recorded_at, heart_rate_bpm?, ... }
+  // readings (or { readings: [...] }) -- if a deployment's real LIFENET
+  // endpoint returns something else, translate it here before returning,
+  // once real API documentation exists.
+  const routePath = requiredEnv("LIFENET_CASE_VITALS_ROUTE", env);
+  const token = env.LIFENET_API_TOKEN;
+  const timeoutMs = Number(env.LIFENET_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
+
+  return async ({ method, payload }) => {
+    if (method !== "fetchCaseVitals") throw new Error(`LIFENET route not configured for method ${method}`);
+    const headers = { accept: "application/json" };
+    if (token) headers.authorization = `Bearer ${token}`;
+    const path = routePath.replace(":case_reference", encodeURIComponent(payload.case_reference));
+    return requestJson(`${baseUrl}${path}`, { method: "GET", headers }, "lifenet", method, timeoutMs);
+  };
+}
+
 export function createExpoPushTransportFromEnv(env = process.env) {
   if (env.EXPO_PUSH_DISABLED === "true") return undefined;
   const baseUrl = env.EXPO_PUSH_BASE_URL ?? "https://exp.host/--/api/v2/push/send";
