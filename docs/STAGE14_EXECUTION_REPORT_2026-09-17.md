@@ -350,3 +350,351 @@ passed without changing timeouts or assertions. Stage 14 remains incomplete;
 rendered Android UI login/navigation and the directly observable synthetic
 clinical, synchronization, offline/reconnect, and downstream outage/recovery
 workflows remain open.
+
+## Isolated runtime and emulator continuation — 2026-09-17
+
+### Active topology
+
+```text
+VEMS API gateway       host port 3001 (temporary process overrides)
+Isolated OpenEMR       vems-openemr-stage14-installer, host port 8085
+Shared OpenEMR         host port 8083 — untouched
+Vtiger                 host port 8080
+Disposable OpenEMR DB  vems-mysql-stage14-openemr-test2, Docker port 3306
+Shared MySQL           host port 3307 — untouched
+Redis                  development instances on host ports 6380 and 6379
+Metro                  Expo dev client, host port 8081
+Android                emulator-5554, org.vems.mobilecrew installed
+ADB reverse            host-19 tcp:3001 tcp:3001
+                       host-19 tcp:8081 tcp:8081
+```
+
+The VEMS process used temporary environment overrides for
+`OPENEMR_BASE_URL=http://127.0.0.1:8085`, standard OpenEMR API mode, and an
+in-memory synthetic bearer token. No protected environment file or repository
+endpoint was edited.
+
+### Actual VEMS-to-isolated-OpenEMR evidence
+
+```text
+VEMS authenticated readiness       PASS; HTTP 200; OpenEMR status 200; Vtiger status 200
+VEMS authenticated patient search  PASS; HTTP 200; synthetic no-match result
+Direct OpenEMR discovery/token/API  PASS; 200/200/200
+Invalid OpenEMR credentials         PASS; HTTP 400
+OpenEMR/Vtiger adapter acceptance   PASS
+Synthetic VEMS smoke workflow       PASS
+```
+
+The direct OpenEMR request and the VEMS patient-search request are separate
+pieces of evidence; both succeeded after the gateway was run with the isolated
+endpoint override.
+
+### Rendered Android result
+
+The emulator was online and the login screen rendered with controls for API
+base URL, session token, crew ID, role, and the `Sign in` action. A submission
+was performed using synthetic data. The first attempt using `127.0.0.1` showed
+`fetch failed: unexpected end of stream`; the gateway saw no corresponding
+request because the current ADB server's `host-19` reverse target did not reach
+the Linux-side listener. A retry using the emulator host alias left the login
+view but produced a blank post-submit hierarchy with no authenticated screen
+marker and no usable first authenticated screen. UI login/navigation is
+therefore **BLOCKED**, not a PASS. Temporary screenshots were kept outside the
+repository; credentials and tokens were not recorded. Metro remained active and
+the reverse mappings were preserved.
+
+### Observable workflow matrix
+
+| Workflow | Result | Evidence boundary |
+|---|---|---|
+| Assignment/incident retrieval in rendered UI | BLOCKED | UI did not reach authenticated screen |
+| Multi-patient, known/provisional patient flows | NOT EXECUTED | No authenticated UI/session workflow |
+| Patient Case, history, notes, observations | NOT EXECUTED | No direct service-backed end-to-end run |
+| Medications, procedures, disposition, handover | NOT EXECUTED | No direct service-backed end-to-end run |
+| Signatures, readiness, finalization/amendment | NOT EXECUTED | No authenticated UI workflow |
+| Background/foreground and process restart | NOT EXECUTED | No authenticated UI state to preserve |
+| Offline charting, durable outbox, replay/remapping | NOT EXECUTED | No authenticated UI workflow |
+| Attachment synchronization | NOT EXECUTED | No authenticated UI workflow |
+| Vtiger/OpenEMR outage and recovery | NOT EXECUTED | No destructive or shared-service outage test performed |
+
+Automated synthetic coverage remains green for the corresponding API,
+orchestration, mobile unit/component, smoke, adapter, and offline-support
+tests, but those tests are not substituted for directly observed emulator
+acceptance. Physical-device, iOS, production signing/store, security,
+clinical-safety, DR, and vendor-device gates remain open.
+
+## Android token-authentication and API reverse-path diagnosis — 2026-09-17
+
+### Token contract and verification
+
+The repository-supported synthetic mechanism is the HS256 construction used by
+`scripts/smoke-test.mjs`: JWT header `alg=HS256`, `typ=JWT`; claims include
+`sub`, `role`, `iss`, `aud`, `iat`, and `exp`; the signature is an HMAC-SHA256
+over the base64url header and payload. The active API process used
+`JWT_ISSUER=local-dev`, `JWT_AUDIENCE=vems-platform`, and a process-local
+synthetic HS256 secret. The minimum Stage 14 identity was `STAFF-001` with
+role `field_crew`; no scope claim was required by the readiness endpoint.
+`LoginScreen` calls `GET /api/support/readiness` with
+`Authorization: Bearer <token>` and persists the resulting session only after
+that request succeeds.
+
+A fresh token was generated from the active process configuration and verified
+against `http://127.0.0.1:3001/api/support/readiness` before UI use:
+
+```text
+length=232
+sha256_prefix=e72f6a66ad20
+issued_at=1789661907
+expires_at=1789662207
+claims=sub:STAFF-001,role:field_crew,iss:local-dev,aud:vems-platform,alg:HS256
+HTTP=200
+temporary_file=/tmp/vems-stage14-token, mode=0600, no trailing CR/LF
+```
+
+The token was copied through the Windows clipboard without printing its
+content, and the temporary file was removed after the UI attempt.
+
+### Controlled UI attempt
+
+The Android form contained the exact URL `http://127.0.0.1:3001`, the pasted
+token, `STAFF-001`, and `field_crew`; the Sign in control was enabled. The
+token was confirmed unexpired with 207 seconds remaining immediately before
+submission. At `2026-09-17T16:20:28Z`, logcat recorded only sanitized
+`sign_in_failed` telemetry with `reason: network_error`. The hierarchy remained
+on `login-screen`; no authenticated screen or session-navigation marker was
+present. No fatal JavaScript or native error was recorded.
+
+There was no VEMS API request log matching the submission timestamp. Earlier
+API log entries from direct verification showed authenticated `STAFF-001`
+readiness requests completing successfully, proving the token and verifier
+configuration agree. The UI failure therefore occurs before API token
+verification: the listed ADB mapping `host-19 tcp:3001 tcp:3001` does not expose
+the WSL VEMS listener to emulator `127.0.0.1:3001` in the current namespace.
+The configured mapping exists, but the transport is not connected to the
+running API. This is an environment/relay blocker, not a token-authentication
+or LoginScreen defect.
+
+Android UI login remains **BLOCKED**. Session persistence/readback,
+navigation, named authenticated-screen rendering, and all service-backed
+clinical, synchronization, offline/reconnect, attachment, and outage/recovery
+workflows remain unexecuted. No authentication policy, token verifier, or
+protected environment file was changed.
+
+## Android UI authentication PASS through Windows API relay — 2026-09-17
+
+The established relay topology was used without changing its mappings:
+
+```text
+Windows 127.0.0.1:13001 -> WSL VEMS API 3001
+emulator tcp:3001 -> host tcp:13001
+emulator tcp:8081 -> host tcp:8082
+Metro project root: /home/bighog/repos/vems/V-ems-system/apps/mobile-crew
+```
+
+A fresh synthetic HS256 token was generated from the active API process
+configuration and verified through Windows relay port 13001. Metadata was
+recorded as length 232, SHA-256 prefix `eff697c37b40`, subject `STAFF-001`,
+role `field_crew`, issuer `local-dev`, audience `vems-platform`, issued at
+epoch `1789663659`, and expired at epoch `1789663959`. It was copied via the
+Windows clipboard from a mode-0600 temporary file and removed after use.
+
+At `2026-09-17T16:51:37Z`, the rendered Android UI submitted the token using
+`http://127.0.0.1:3001`. The VEMS API recorded authenticated
+`GET /api/support/readiness` for `STAFF-001`/`field_crew` at
+`16:51:37.898Z` and completed it successfully. Android emitted sanitized
+`sign_in_succeeded` telemetry at `16:51:40.827Z`.
+
+The post-login hierarchy visibly contained both `incident-workspace-screen`
+and `jobs-list-screen`, plus the `sign-out` control. The captured screen showed
+`STAFF-001 (field_crew)`, the authenticated workspace, sync controls, and the
+assignment-detail placeholder. No fatal React Native, Android runtime, SQLite,
+or native errors were present. This satisfies the Android UI login PASS
+criteria, including API success, session persistence through successful
+navigation, and a named authenticated screen.
+
+The previously added development-only phase diagnostics were removed after the
+successful reproduction; no production authentication behavior was changed.
+Service-backed synthetic workflow continuation is now permitted. Unsupported
+physical-device, iOS, production signing/store, security, clinical-safety, DR,
+and vendor-device gates remain open.
+
+### Post-login validation — 2026-09-17
+
+The successful UI attempt was followed by service-backed automated validation:
+
+```text
+Mobile typecheck                         PASS
+Mobile unit tests                        PASS; 39/39
+Mobile component tests                   PASS; 73/73 across 18 suites
+API gateway                              PASS; 128/128
+Orchestration                            PASS; 263 passed, 0 failed, 11 skipped
+Adapter connectivity                     PASS; isolated OpenEMR and Vtiger
+Synthetic smoke                          PASS
+Resolved development Compose config      PASS
+git diff --check                         PASS
+```
+
+The authenticated UI screenshot and hierarchy from `16:51:37Z` remain the
+direct emulator evidence: `incident-workspace-screen`, `jobs-list-screen`,
+`sign-out`, `STAFF-001 (field_crew)`, sync controls, and the assignment-detail
+placeholder were visibly rendered. The API logged the corresponding
+authenticated readiness and assignment requests, and Android emitted
+`sign_in_succeeded` without fatal JavaScript/native errors.
+
+A later force-stop/relaunch check reached the native activity but did not
+produce a stable JS accessibility hierarchy while Metro was reloading, so
+cross-process SecureStore readback is recorded as **NOT independently
+OBSERVED**. The login flow itself awaits `saveSession` before navigation, so
+session persistence was part of the successful navigation path; this does not
+substitute for a separate restart/readback observation.
+
+Service-backed acceptance is now permitted for directly observable synthetic
+workflows. Clinical workflow breadth, offline/reconnect replay, attachment
+synchronization, downstream outage/recovery, and the unobserved restart
+readback gate remain open or not executed. No shared OpenEMR data or protected
+environment file was modified.
+
+## Windows API loopback relay proof — 2026-09-17
+
+The relay gate was tested before generating credentials:
+
+```text
+Windows 127.0.0.1:3001/health                 PASS; HTTP 200; {"status":"ok"}
+ADB reverse listing                            PASS; host-19 tcp:3001 tcp:3001
+Emulator emulator-5554                        PASS; device online
+Emulator 127.0.0.1:3001 HTTP probe            FAIL; no response within 5 seconds
+Matching VEMS API log                         FAIL; no request observed
+```
+
+The Windows portproxy table contains `127.0.0.1:3001 ->
+172.22.103.130:3001`, and Windows owns a listener on port 3001. However, the
+correlation-tagged emulator request at `2026-09-17T16:30:55Z` did not return an
+HTTP response and did not appear in the VEMS API log. Refreshing the same ADB
+reverse rule produced the same result. No token was generated, copied, or
+submitted during this proof attempt.
+
+The remaining Android gate is therefore **BLOCKED** by the ADB/Windows loopback
+transport namespace. Token generation and UI acceptance must wait until an
+emulator-originated request through `127.0.0.1:3001` is visibly correlated in
+the VEMS API log.
+
+## Focused Android UI login diagnosis — 2026-09-17
+
+### Metro/source provenance
+
+The initial port-8081 process was PID 49384 (`node .../expo start
+--dev-client --clear --lan --port 8081`) with working directory
+`/home/bighog/repos/vems/V-ems-system/apps/mobile-crew`. After the controlled
+restart, Metro was again launched from that authoritative checkout with cache
+clearing and LAN mode; `/status` returned `packager-status:running`.
+
+The relevant source hashes (`verifySession.ts`, `RootNavigator.tsx`, and
+`LoginScreen.tsx`) match between the authoritative checkout and `/mnt/e/s14b`.
+`package.json` differs only in native launch scripts (`expo start` versus
+`expo run:android`/`expo run:ios`), so `/mnt/e/s14b` remains a native build
+workspace and was not used as the JavaScript acceptance source.
+
+The decisive emulator probe was:
+
+```text
+GET /status through emulator 127.0.0.1:8081
+HTTP 200; X-React-Native-Project-Root: E:\\s14b\\apps\\mobile-crew
+packager-status:running
+```
+
+The same stale `E:\\s14b` project-root response was returned through
+`10.0.2.2:8081` and `192.168.88.34:8081`. Therefore the ADB server's `host-19`
+reverse endpoint is terminating at the Windows-side Metro, not the Linux Metro
+started from the authoritative checkout. The Android dev menu initially also
+showed persisted bundle location `10.0.2.2:8081`; the documented USB/reverse
+value is `localhost:8081`. The emulator-side field was corrected to exactly
+`localhost:8081`, but the active ADB server still resolved the stale Windows
+endpoint.
+
+### API configuration and login evidence
+
+The mobile API base URL is entered at runtime in `LoginScreen.tsx`, passed to
+`verifySession.ts`, and persisted in the session object; there is no bundled
+`127.0.0.1`, `10.0.2.2`, or production endpoint. `verifySession` calls
+`/api/support/readiness` with the entered bearer token. The host-side VEMS
+runtime independently returned HTTP 200 for readiness and the authenticated
+synthetic patient search against isolated OpenEMR.
+
+Rendered UI submission evidence was captured after entering synthetic API URL,
+session token, crew ID, and role. With the stale bundle/reverse path, the app
+reported `fetch failed: java.io.IOException: unexpected end of stream` and
+remained on LoginScreen. After the dev-client bundle-location correction, the
+post-submit hierarchy became blank; it contained no authenticated screen,
+`jobs-list-screen`, `Assigned jobs`, or `No active assignments` marker. The
+mobile process remained alive, but logcat had no ReactNativeJS, AndroidRuntime,
+Expo, SQLite, or unhandled-promise fatal entry. No VEMS request was observed
+from the stale endpoint attempt. UI login is **BLOCKED** because the installed
+dev client is not loading the authoritative Metro bundle through the current
+ADB server; no authentication PASS or navigation PASS is claimed.
+
+Metro also emitted a non-fatal local tooling warning that React Native DevTools
+could not load because `libnspr4.so` is unavailable. Metro continued serving,
+and this warning was not treated as the login root cause.
+
+No repository code change was proven necessary in this diagnosis. Existing
+mobile unit/component and LoginScreen regression coverage remains the applicable
+regression guard. The remaining required action is to connect the emulator's
+ADB server/reverse endpoint to the authoritative Linux Metro (or run the
+native build's dev client from that same authoritative host) before repeating
+UI acceptance. Service-backed clinical, synchronization, offline/reconnect,
+attachment, and outage/recovery workflows remain NOT EXECUTED.
+## Authoritative Metro relay and repeated Android login — 2026-09-17
+
+### Relay and runtime evidence
+
+```text
+Metro relay PID 76396       cwd /home/bighog/repos/vems/V-ems-system/apps/mobile-crew
+Metro relay                   port 8082; /status HTTP 200; packager-status:running
+Metro project-root header     /home/bighog/repos/vems/V-ems-system/apps/mobile-crew
+Emulator                      emulator-5554 device; org.vems.mobilecrew installed
+ADB reverse                   host-19 tcp:3001 tcp:3001
+                              host-19 tcp:8081 tcp:8082
+```
+
+The host-side `10.0.2.2:8082/status` probe returned HTTP 200 and the
+authoritative Linux project-root header. The emulator-side raw probe to
+`127.0.0.1:8081` did not return a response through the Windows relay namespace;
+the configured reverse mapping is nevertheless recorded exactly as
+`8081 -> 8082`. The dev-client bundle-location field remained
+`localhost:8081`. The VEMS API was reachable from the emulator at the temporary
+WSL address `http://172.22.103.130:3001`; `/health` returned HTTP 200. The
+active API process was PID 71106 with temporary isolated-OpenEMR overrides;
+non-secret settings were `JWT_ISSUER=local-dev`, `JWT_AUDIENCE=vems-platform`,
+`AUTH_TRUST_HEADERS=false`, and `RBAC_ENFORCE=false`.
+
+Using the active process-local synthetic secret without printing it, a direct
+authenticated `/api/support/readiness` request returned HTTP 200. This is
+direct API evidence only and is not UI evidence.
+
+### UI attempts and evidence boundary
+
+At `2026-09-17T15:38:34Z`, the rendered form was submitted with a temporary
+base URL missing its scheme. The visible error was the deterministic Android
+`MalformedURLException: no protocol` for the resulting readiness URL; no API
+request was expected from that malformed request.
+
+At `2026-09-17T15:46:40Z`, after entering
+`http://172.22.103.130:3001`, the rendered form showed the deterministic
+`invalid_credentials` error and remained on `LoginScreen`. A later controlled
+submission at `2026-09-17T15:49:46Z` produced the same visible rejection.
+The screen hierarchy contained `login-screen` and `login-error`, and no
+`jobs-list-screen`, `Assigned jobs`, `No active assignments`, or `Sign out`
+marker. Logcat showed only the sanitized `sign_in_failed` telemetry entry and
+no fatal `ReactNativeJS`, `AndroidRuntime`, SQLite, or native exception. The
+captured screenshot showed the login form and its error, not an authenticated
+screen.
+
+The process-local synthetic token was independently proven valid by direct
+HTTP readiness, but the UI path did not produce a matching authenticated
+navigation result. Therefore the required UI acceptance tuple—submit observed,
+API success correlated to that submit, session persistence/readback,
+navigation, named authenticated screen, and no fatal errors—is **BLOCKED**.
+No service-backed clinical, synchronization, offline/reconnect, attachment, or
+outage/recovery workflows were started because the authenticated-screen gate
+was not met. Physical-device, iOS, production signing/store, security,
+clinical-safety, DR, and vendor-device gates remain open.
