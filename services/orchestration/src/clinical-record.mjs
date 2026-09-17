@@ -121,9 +121,20 @@ export const clinicalRecordMethods = {
     if (!observations || typeof observations !== "object" || Array.isArray(observations)) throw new ApiError("INVALID_PAYLOAD", "observations or vital_signs is required", 400);
     const encounterId = payload.encounter_id ?? current.openemr_encounter_id;
     if (!encounterId) throw new ApiError("CONFLICT", "An encounter is required for clinical observations", 409);
-    const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, encounter_id: encounterId, performed_at: performedAt, observations, notes: payload.notes ?? null });
+    // Stage 15 milestone 15f: reading provenance. A BLE-sourced observation
+    // names the device_pairings row that produced it; the pairing must
+    // actually be linked to this patient case (linkDevicePairingToPatientCase
+    // in device-pairings.mjs) so the provenance link can't be forged to a
+    // pairing used for a different patient.
+    const devicePairingId = payload.device_pairing_id ?? null;
+    if (devicePairingId) {
+      const pairing = await this.devicePairings.find(devicePairingId);
+      if (!pairing) throw new ApiError("NOT_FOUND", `Device pairing ${devicePairingId} not found`, 404);
+      if (pairing.patient_case_id !== patientCaseId) throw new ApiError("CONFLICT", `Device pairing ${devicePairingId} is not linked to patient case ${patientCaseId}`, 409);
+    }
+    const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, encounter_id: encounterId, performed_at: performedAt, observations, notes: payload.notes ?? null, device_pairing_id: devicePairingId });
     if (meta.idempotencyKey) { const existing = await this.idempotency.get("observation", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalObservations.find(existing.resource_id); } }
-    const record = { observation_event_id: id("OBS"), patient_case_id: patientCaseId, encounter_id: encounterId, performed_at: performedAt, clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, observations, notes: payload.notes ?? null, openemr_observation_id: null, downstream_status: "pending", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
+    const record = { observation_event_id: id("OBS"), patient_case_id: patientCaseId, encounter_id: encounterId, performed_at: performedAt, clinician_id: payload.clinician_id ?? current.lead_clinician_id ?? null, observations, notes: payload.notes ?? null, device_pairing_id: devicePairingId, openemr_observation_id: null, downstream_status: "pending", created_at: new Date().toISOString(), correlation_id: meta.correlationId };
     await this.clinicalObservations.create(record);
     let downstreamStatus = "not_attempted";
     try {

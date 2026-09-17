@@ -38,6 +38,8 @@ import { reportingMethods } from "./reporting/reporting-methods.mjs";
 import { retentionMethods } from "./retention/retention-methods.mjs";
 import { patientHistoryMethods } from "./patient-history.mjs";
 import { RevocationRepository } from "./repositories/revocation-repository.mjs";
+import { DevicePairingRepository } from "./repositories/device-pairing-repository.mjs";
+import { devicePairingMethods } from "./device-pairings.mjs";
 
 const DEVICE_PUSH_TOKEN_PLATFORMS = ["ios", "android"];
 
@@ -63,6 +65,7 @@ export class OrchestrationService {
     this.vtigerLinks = new VtigerLinkRepository(this.db);
     this.assignmentVtigerLinks = new AssignmentVtigerLinkRepository(this.db);
     this.vehicles = new VehicleRepository(this.db);
+    this.devicePairings = new DevicePairingRepository(this.db);
     this.vehicleVtigerLinks = new VehicleVtigerLinkRepository(this.db);
     this.personnel = new PersonnelRepository(this.db);
     this.personnelVtigerLinks = new PersonnelVtigerLinkRepository(this.db);
@@ -1004,3 +1007,4 @@ Object.assign(OrchestrationService.prototype, attachmentMethods);
 Object.assign(OrchestrationService.prototype, reportingMethods);
 Object.assign(OrchestrationService.prototype, retentionMethods);
 Object.assign(OrchestrationService.prototype, patientHistoryMethods);
+Object.assign(OrchestrationService.prototype, devicePairingMethods);

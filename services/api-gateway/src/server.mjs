@@ -397,6 +397,21 @@ function validateAction(payload) {
   if (!payload?.action || typeof payload.action !== "string") throw new ApiError("INVALID_PAYLOAD", "action is required", 400);
 }
 
+function validatePairDevice(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "Device pairing payload is required", 400);
+  const allowed = new Set(["serial_number", "vendor", "model"]);
+  const unknown = Object.keys(payload).filter((field) => !allowed.has(field));
+  if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown device pairing fields: ${unknown.join(", ")}`, 400);
+  for (const field of ["serial_number", "vendor", "model"]) {
+    if (typeof payload[field] !== "string" || !payload[field].trim()) throw new ApiError("INVALID_PAYLOAD", `${field} is required`, 400);
+  }
+}
+
+function validateLinkDevicePairingToPatientCase(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new ApiError("INVALID_PAYLOAD", "patient_case_id is required", 400);
+  if (typeof payload.patient_case_id !== "string" || !payload.patient_case_id.trim()) throw new ApiError("INVALID_PAYLOAD", "patient_case_id is required", 400);
+}
+
 function validatePatientSearch(payload) {
   if (!payload || typeof payload !== "object") throw new ApiError("INVALID_PAYLOAD", "Patient search payload is required", 400);
   // Three ways a crew actually identifies someone in the field: an
@@ -893,6 +908,39 @@ export function createApp(orchestration = new OrchestrationService()) {
       if (vehicleStockMatch && method === "GET") return okJson(res, 200, { vehicle_id: vehicleStockMatch[1], stock: await orchestration.getVehicleStock(vehicleStockMatch[1]) }, context);
       const vehicleStockAdjustmentMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})\/stock\/(ITEM-[0-9]{3,})\/adjustments$/);
       if (vehicleStockAdjustmentMatch && method === "POST") { const payload = await parseJson(req); validateStockAdjustment(payload); return okJson(res, 201, await orchestration.adjustVehicleStock(vehicleStockAdjustmentMatch[1], vehicleStockAdjustmentMatch[2], payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey }), context); }
+
+      // Stage 15 milestone 15f: device pairing + reading provenance.
+      // Recall/miscalibration lookup by serial number is intentionally not
+      // vehicle- or patient-case-scoped (see listDevicePairingsBySerial) --
+      // matched before the vehicle-scoped routes below so a literal
+      // "by-serial" path segment never collides with an AMB- vehicle id.
+      if (method === "GET" && url.pathname === "/api/device-pairings/by-serial") {
+        const serialNumber = url.searchParams.get("serial_number");
+        if (!serialNumber) throw new ApiError("INVALID_PAYLOAD", "serial_number query parameter is required", 400);
+        return okJson(res, 200, { device_pairings: await orchestration.listDevicePairingsBySerial(serialNumber) }, context);
+      }
+      const vehicleDevicePairingsMatch = url.pathname.match(/^\/api\/vehicles\/(AMB-[0-9]{3,})\/device-pairings$/);
+      if (vehicleDevicePairingsMatch && method === "GET") {
+        return okJson(res, 200, { device_pairings: await orchestration.listDevicePairingsForVehicle(vehicleDevicePairingsMatch[1]) }, context);
+      }
+      if (vehicleDevicePairingsMatch && method === "POST") {
+        const payload = await parseJson(req);
+        validatePairDevice(payload);
+        return okJson(res, 201, await orchestration.pairDevice(vehicleDevicePairingsMatch[1], payload, { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey }), context);
+      }
+      const devicePairingMatch = url.pathname.match(/^\/api\/device-pairings\/([^/]+)(?:\/(patient-case|unpair))?$/);
+      if (devicePairingMatch) {
+        const pairingId = devicePairingMatch[1];
+        const action = devicePairingMatch[2];
+        const meta = { correlationId: context.correlationId, actorId: context.actorId, idempotencyKey };
+        if (method === "GET" && !action) return okJson(res, 200, await orchestration.getDevicePairing(pairingId), context);
+        if (method === "PATCH" && action === "patient-case") {
+          const payload = await parseJson(req);
+          validateLinkDevicePairingToPatientCase(payload);
+          return okJson(res, 200, await orchestration.linkDevicePairingToPatientCase(pairingId, payload, meta), context);
+        }
+        if (method === "PATCH" && action === "unpair") return okJson(res, 200, await orchestration.unpairDevice(pairingId, meta), context);
+      }
 
       const incidentMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})$/);
       if (incidentMatch && method === "GET") {
