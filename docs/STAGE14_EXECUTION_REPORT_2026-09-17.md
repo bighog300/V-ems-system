@@ -128,12 +128,12 @@ This report records observed evidence only and does not claim overall Stage 14 a
 
 ### Git state
 
-The current branch is `stage14/field-validation-release-readiness` at `5096e69`
-(`Stage 18: AI voice/text call intake milestone plan (#143)`). The LoginScreen fix,
-its regression test, and this report were staged but were not committed at the start
-of this continuation. `infra/.env.development` was modified in the worktree and
-`infra/.env.development.bak` was untracked; both protected files were left unstaged,
-unprinted, and unchanged. No push or merge was performed.
+The current branch is `stage14/field-validation-release-readiness` at `693a0b3`
+(`docs(stage14): record emulator acceptance evidence`). The LoginScreen fix, its
+regression test, and the prior Stage 14 report are committed. `infra/.env.development`
+was modified in the worktree and `infra/.env.development.bak` was untracked; both
+protected files were left unstaged, unprinted, and unchanged. No push or merge was
+performed.
 
 ### OpenEMR diagnosis and narrow correction
 
@@ -169,9 +169,8 @@ executed. It then exposed an independent image/environment issue: the OpenEMR ba
 image's MariaDB client rejects the local MySQL self-signed certificate with
 `TLS/SSL error: Certificate verification failure: The certificate is NOT trusted`.
 No `--skip-ssl` change was introduced because that would weaken the local database
-transport and exceed the requested delimiter-only correction. OpenEMR HTTP/OAuth/API
-acceptance therefore remains **BLOCKED** pending an explicit trusted-CA or approved
-local TLS configuration.
+transport. OpenEMR HTTP/OAuth/API acceptance therefore remains **BLOCKED** pending
+OpenEMR OAuth configuration, but the database TLS trust gate is addressed below.
 
 ### Individual orchestration failure diagnosis
 
@@ -208,3 +207,45 @@ clinical workflow was claimed. Direct API evidence remains distinct from rendere
 evidence; synthetic login was validated at the API/readiness layer only in this
 continuation. Physical-device, iOS/tablet, real-crew, clinical-safety, outage/recovery,
 backup/DR, production-signing, rollout/rollback, and support/training gates remain open.
+
+## Explicit development CA continuation — 2026-09-17
+
+The prior MySQL auto-generated server certificate had no SAN for the Compose
+hostname `mysql`; the OpenEMR MariaDB client consequently failed with
+`TLS/SSL error: Certificate verification failure: The certificate is NOT trusted`.
+The development correction generates ignored material under `infra/.tls/mysql`,
+configures MySQL with that server certificate, and mounts only the public `ca.pem`
+into OpenEMR. The initializer uses `--ssl-ca` and `--ssl-verify-server-cert`.
+The server certificate SAN includes `mysql`, `vems-mysql-dev`, `localhost`, and
+`127.0.0.1`. Production TLS and hostname verification are unchanged.
+
+Regression and live evidence:
+
+```text
+development-tls.test.sh                                      PASS
+init-openemr.test.sh                                         PASS
+openssl verify -CAfile ca.pem -verify_hostname mysql ...     OK
+OpenEMR public-CA-only mysqladmin TLS ping                   ALIVE
+OpenEMR initialization and HTTP service                      PASS; HTTP 302
+OpenEMR readiness ping                                        PASS; HTTP 200
+OpenEMR OAuth/API endpoint probes                            HTTP 500 (config gate)
+Vtiger connectivity and adapter reachability                  PASS; HTTP 301
+```
+
+The HTTP 500 responses are an OpenEMR OAuth/API configuration gate, not a TLS
+verification failure. No database or Docker volume was deleted.
+
+The complete orchestration run was clean when serialized: 274 discovered, 263
+passed, 0 failed, 11 skipped. The parallel run’s one retention failure was shared
+SQLite/test-resource contention; the isolated retention test passed. API gateway
+was 128/128; mobile unit tests were 214/214; mobile components were 18 suites,
+73/73; smoke and `git diff --check` passed. The emulator rendered the login screen
+with adb reverse on 3001 and 8081, but UI sign-in did not complete reliably and is
+not claimed as a pass. Clinical, synchronization, offline/reconnect, and
+outage/recovery workflows remain unexecuted pending OAuth/API configuration.
+
+Uncommitted implementation files are `.gitignore`, `infra/docker-compose.dev.yml`,
+the OpenEMR entrypoint/init scripts and focused tests, and the two development TLS/
+startup scripts. Generated `infra/.tls/` is ignored. Proposed logical commits for
+manual review: `fix(openemr): configure explicit development MySQL CA trust` and
+`docs(stage14): record explicit OpenEMR trust acceptance`. No commit was created.
