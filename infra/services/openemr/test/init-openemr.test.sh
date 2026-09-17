@@ -49,6 +49,12 @@ if grep -F -- 'apache2-foreground' "$ROOT_DIR/infra/services/openemr/init-script
   echo 'unsupported OpenEMR Apache launcher remains' >&2
   exit 1
 fi
-grep -F -- 'exec /usr/sbin/httpd -D FOREGROUND' "$ROOT_DIR/infra/services/openemr/init-scripts/entrypoint.sh" >/dev/null
+grep -F -- 'exec ./openemr.sh' "$ROOT_DIR/infra/services/openemr/init-scripts/entrypoint.sh" >/dev/null
+grep -F -- '$sqlconf = [' "$ROOT_DIR/infra/services/openemr/config/openemr.conf.php" >/dev/null
+grep -F -- 'required('"'"'MYSQL_PASSWORD'"'"')' "$ROOT_DIR/infra/services/openemr/config/openemr.conf.php" >/dev/null
+if grep -E 'pass[[:space:]]*=>[[:space:]]*['"'"'][^$]' "$ROOT_DIR/infra/services/openemr/config/openemr.conf.php" >/dev/null; then
+  echo 'hard-coded OpenEMR database password remains' >&2
+  exit 1
+fi
 
 echo 'OpenEMR initializer delimiter regression passed.'
