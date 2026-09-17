@@ -128,12 +128,13 @@ This report records observed evidence only and does not claim overall Stage 14 a
 
 ### Git state
 
-The current branch is `stage14/field-validation-release-readiness` at `693a0b3`
-(`docs(stage14): record emulator acceptance evidence`). The LoginScreen fix, its
-regression test, and the prior Stage 14 report are committed. `infra/.env.development`
-was modified in the worktree and `infra/.env.development.bak` was untracked; both
-protected files were left unstaged, unprinted, and unchanged. No push or merge was
-performed.
+The current branch is `stage14/field-validation-release-readiness` at `0ce6268`
+(`docs(stage14): record explicit OpenEMR trust acceptance`). The LoginScreen fix,
+regression test, and MySQL/OpenEMR TLS work are committed. The current OAuth/API
+provisioning corrections remain uncommitted for review. `infra/.env.development`
+was already modified in the worktree and `infra/.env.development.bak` was untracked;
+both protected files were left unstaged, unprinted, and unchanged. No push or merge
+was performed.
 
 ### OpenEMR diagnosis and narrow correction
 
@@ -244,8 +245,108 @@ with adb reverse on 3001 and 8081, but UI sign-in did not complete reliably and 
 not claimed as a pass. Clinical, synchronization, offline/reconnect, and
 outage/recovery workflows remain unexecuted pending OAuth/API configuration.
 
-Uncommitted implementation files are `.gitignore`, `infra/docker-compose.dev.yml`,
-the OpenEMR entrypoint/init scripts and focused tests, and the two development TLS/
-startup scripts. Generated `infra/.tls/` is ignored. Proposed logical commits for
-manual review: `fix(openemr): configure explicit development MySQL CA trust` and
-`docs(stage14): record explicit OpenEMR trust acceptance`. No commit was created.
+The current uncommitted implementation files are `infra/docker-compose.dev.yml`,
+`infra/services/openemr/Dockerfile`,
+`infra/services/openemr/config/openemr.conf.php`, the OpenEMR entrypoint/init
+scripts and focused tests, plus this report. The development TLS work is already
+committed in `1c79f7b`, and the preceding report update is committed in `0ce6268`.
+Proposed logical commit for the remaining files:
+`fix(openemr): provision API-ready development site`. No commit was created during
+this continuation.
+
+## OpenEMR OAuth/API continuation — 2026-09-17
+
+At `2026-09-17T13:02:53Z`, `GET http://127.0.0.1:8083/oauth2/default/token`
+returned HTTP 500. The matching OpenEMR PHP log identified
+`RuntimeException: sqlconf.php did not define $sqlconf array` at
+`src/BC/DatabaseConnectionOptions.php:186`, reached from
+`oauth2/authorize.php:26`. The repository Dockerfile copied a placeholder
+`config/openemr.conf.php`, so OpenEMR had neither SQL configuration nor a
+usable database connection. After that was corrected, the next proven gates
+were: the upstream launcher skipped installation when `$config` was undefined;
+then Apache could not read the installer-generated config because it was
+root-owned mode 0400; after those fixes, the standard API was disabled until
+the documented REST settings were enabled. These were all reproduced in
+isolated disposable containers; existing data volumes were not deleted.
+
+The final development provisioning is environment-backed and idempotent:
+`$config = 0` activates the supported OpenEMR auto-installer, `sqlconf.php`
+requires runtime DB variables without embedded credentials, the file starts
+apache-owned/writable for installation, and the upstream launcher finalizes
+permissions. Development-only `rest_api`, `rest_fhir_api`, and documented
+password-grant settings are enabled through Compose; production defaults remain
+unchanged. The public MySQL CA remains the only TLS material mounted into the
+OpenEMR client.
+
+Final isolated service evidence:
+
+```text
+OpenEMR schema provisioning                              PASS; 283 tables
+OAuth discovery                                         PASS; HTTP 200
+Documented synthetic client registration                 PASS
+Password-grant token issuance                            PASS; HTTP 200
+Authenticated standard OpenEMR API request               PASS; HTTP 200
+Invalid OAuth credential rejection                       PASS; HTTP 400
+Client-credentials assertion token                       PASS; HTTP 200
+Invalid client assertion rejection                       PASS; HTTP 401
+OpenEMR/Vtiger adapter connectivity                      PASS
+```
+
+The client-credentials `system` role remains restricted to FHIR routes by
+OpenEMR; the VEMS standard REST adapter uses the documented user-role OAuth
+flow and the exact required `user/patient.crus` scope. No OAuth bypass,
+TLS-verification disablement, hard-coded credential, database deletion, or
+volume deletion was used.
+
+Final repository checks: orchestration `274 discovered / 263 passed / 0 failed /
+11 skipped` serially; API gateway `128/128`; mobile unit `214/214`; mobile
+components `18 suites, 73/73`; focused OpenEMR, shell, Compose, adapter, smoke,
+Vtiger, and `git diff --check` checks passed. The emulator and adb reverse
+channels remain available, but rendered UI sign-in/navigation was not captured
+as a reliable PASS in this run. Synthetic clinical, synchronization,
+offline/reconnect, and downstream outage/recovery workflows remain open.
+
+## sqlconf.php permission security correction — 2026-09-17
+
+The OpenEMR image Dockerfile previously installed the credential-bearing
+`sites/default/sqlconf.php` as mode `0666`. The focused correction changes only
+that image-layer mode to `0600` and retains `apache:apache` ownership. Upstream
+`openemr.sh` runs `auto_configure.php` through `su-exec apache`, so owner read/write
+is the minimum required during installation and Apache/PHP runtime. After setup,
+the upstream finalizer executes `chmod 400 sites/default/sqlconf.php`; the
+disposable runtime therefore reports `apache:apache 0400`.
+
+The regression test now requires `0600` or `0660`, explicitly rejects a non-zero
+world-write bit and the old `0666` line, and retains the no-hard-coded-password
+checks. No credentials, keys, volumes, databases, or the shared port-8083
+service were modified.
+
+Focused validation evidence:
+
+```text
+docker build -t infra-openemr:stage14-installer infra/services/openemr       PASS
+OpenEMR isolated schema initialization against retained 283-table schema       PASS
+runtime sqlconf.php owner/mode: apache:apache 0400                           PASS
+OAuth discovery                                                               PASS; HTTP 200
+synthetic password-grant token                                                PASS; HTTP 200
+authenticated OpenEMR API request                                             PASS; HTTP 200
+invalid OAuth credentials                                                     PASS; HTTP 400
+OpenEMR/Vtiger adapter connectivity                                           PASS
+sqlconf/init/TLS shell regressions and shell syntax                           PASS
+resolved development Compose configuration                                    PASS
+orchestration                                                                PASS; 274 discovered, 263 passed, 0 failed, 11 skipped
+API gateway                                                                  PASS; 128/128
+mobile unit                                                                  PASS; 39/39
+mobile components                                                            PASS; 18 suites, 73/73
+smoke acceptance                                                             PASS
+Vtiger connectivity                                                           PASS
+git diff --check                                                             PASS
+```
+
+The first restricted-runner orchestration/API attempts were not product
+failures: the runner denied loopback test-server binds and the API process was
+not reachable from that context. Serial reruns with local loopback permission
+passed without changing timeouts or assertions. Stage 14 remains incomplete;
+rendered Android UI login/navigation and the directly observable synthetic
+clinical, synchronization, offline/reconnect, and downstream outage/recovery
+workflows remain open.
