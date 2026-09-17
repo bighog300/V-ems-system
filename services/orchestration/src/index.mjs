@@ -11,7 +11,9 @@ import { IdempotencyKeyRepository } from "./repositories/idempotency-key-reposit
 import { SyncIntentRepository } from "./repositories/sync-intent-repository.mjs";
 import { VtigerPayloadMapper } from "./adapters/vtiger/vtiger-payload-mapper.mjs";
 import { OpenEmrAdapterClient } from "./adapters/openemr/openemr-adapter-client.mjs";
-import { createOpenEmrTransportFromEnv } from "./adapters/transports.mjs";
+import { createOpenEmrTransportFromEnv, createLifenetTransportFromEnv } from "./adapters/transports.mjs";
+import { LifenetAdapterClient } from "./adapters/lifenet/lifenet-adapter-client.mjs";
+import { lifenetImportMethods } from "./lifenet-import.mjs";
 import { PatientLinkRepository } from "./repositories/patient-link-repository.mjs";
 import { EncounterLinkRepository } from "./repositories/encounter-link-repository.mjs";
 import { VtigerLinkRepository } from "./repositories/vtiger-link-repository.mjs";
@@ -90,6 +92,7 @@ export class OrchestrationService {
     this.revocations = new RevocationRepository(this.db);
     this.vtigerMapper = options.vtigerMapper ?? new VtigerPayloadMapper({ sourceNamespace: options.vtigerSourceNamespace ?? process.env.VTIGER_SOURCE_NAMESPACE });
     this.openemr = options.openemr ?? new OpenEmrAdapterClient({ transport: options.openemrTransport ?? createOpenEmrTransportFromEnv() });
+    this.lifenet = options.lifenet ?? new LifenetAdapterClient({ transport: options.lifenetTransport ?? createLifenetTransportFromEnv() });
   }
 
   async createIncident(payload, meta) {
@@ -1008,3 +1011,4 @@ Object.assign(OrchestrationService.prototype, reportingMethods);
 Object.assign(OrchestrationService.prototype, retentionMethods);
 Object.assign(OrchestrationService.prototype, patientHistoryMethods);
 Object.assign(OrchestrationService.prototype, devicePairingMethods);
+Object.assign(OrchestrationService.prototype, lifenetImportMethods);
