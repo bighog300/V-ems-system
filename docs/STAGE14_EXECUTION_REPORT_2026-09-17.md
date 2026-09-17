@@ -423,6 +423,85 @@ tests, but those tests are not substituted for directly observed emulator
 acceptance. Physical-device, iOS, production signing/store, security,
 clinical-safety, DR, and vendor-device gates remain open.
 
+## Session persistence and force-stop recovery — 2026-09-17
+
+At `2026-09-17T18:04:44Z`, `emulator-5554` was online and
+`org.vems.mobilecrew` was force-stopped and relaunched. The native
+`MainActivity` returned to the foreground, but the hierarchy contained only
+the native root `FrameLayout`; no React Native `app-lock-screen`,
+`jobs-list-screen`, or `login-screen` rendered. Session readback and
+authenticated navigation are therefore not claimed from this attempt.
+
+The exact earlier reload failure was:
+
+```text
+Callback failure for call to http://10.0.2.2:8081/...
+java.net.ProtocolException: Expected leading [0-9a-fA-F] character but was 0xd
+  at okhttp3.internal.http1.Http1ExchangeCodec$ChunkedSource.readChunkSize
+  at com.facebook.react.devsupport.MultipartStreamReader.readAllParts
+  at com.facebook.react.devsupport.BundleDownloader.processMultipartResponse
+```
+
+Windows `127.0.0.1:8081/status` resolves to the stale `E:\s14b` project,
+while Windows `127.0.0.1:8082/status` resolves to the authoritative checkout.
+The existing React Native dev menu now persists the supported value
+`localhost:8081`, and the existing reverse rule remains `8081 -> 8082`.
+However, reload still produced only the native root and no React Native
+startup markers. `ReactHost` reported that its context was not ready; no fatal
+JS/native exception was observed.
+
+This is a development-client/Metro relay startup gate, not evidence of a
+session, authentication, or product-data failure. Device-level SecureStore
+readback across process restart is **BLOCKED / NOT OBSERVED**. The prior
+rendered login PASS and authenticated-screen evidence remains valid for the
+session active before force-stop. Sign-out/session removal could not be
+exercised after restart because no JS screen rendered.
+
+Automated mobile session tests remain PASS but do not replace device-level
+readback evidence. No synthetic clinical records or downstream data were
+created by this restart check; service-backed workflows requiring a rendered
+authenticated screen remain **NOT EXECUTED**.
+
+### Relay retest after Windows 8081 correction
+
+At `2026-09-17T17:23:43Z` (WSL UTC command timestamp; Android log timestamps
+are local emulator time), the application was force-stopped and relaunched
+without clearing application data. `emulator-5554` remained online and both
+reverse rules were retained:
+
+```text
+host-19 tcp:3001 tcp:13001
+host-19 tcp:8081 tcp:8082
+```
+
+Windows `127.0.0.1:8081/status` and `127.0.0.1:8082/status` both returned
+HTTP 200 with `packager-status:running` and the authoritative project root
+`/home/bighog/repos/vems/V-ems-system/apps/mobile-crew`. Both
+`AppEntry.bundle` responses returned HTTP 200 and 6,558,180 bytes.
+
+The cold relaunch entered the React Native host lifecycle (`isMetroRunning()`
+and `loadJSBundleFromMetro()`), proving the native host started, but no
+ReactNativeJS startup marker or rendered hierarchy appeared. Logcat recorded
+the precise transport failure at `2026-09-17T18:23:58.693Z`:
+
+```text
+Callback failure for call to http://10.0.2.2:8081/...
+java.net.ProtocolException: Expected leading [0-9a-fA-F] character but was 0x2d
+  at okhttp3.internal.http1.Http1ExchangeCodec$ChunkedSource.readChunkSize
+  at com.facebook.react.devsupport.MultipartStreamReader.readAllParts
+  at com.facebook.react.devsupport.BundleDownloader.processMultipartResponse
+```
+
+The dev-client field persisted `localhost:8081`, but its cold-start request
+still used `10.0.2.2:8081`. The Windows relay is therefore HTTP-reachable and
+serves the authoritative bundle to command-line clients, but its chunked/
+multipart response is not accepted by the Android dev client. No app data,
+SecureStore entries, Docker service, database, or volume was cleared or
+modified. SecureStore session readback, authenticated navigation,
+background/foreground recovery, and sign-out/relaunch removal remain
+**BLOCKED / NOT OBSERVED**. Connected clinical workflows remain **NOT
+EXECUTED** because the independent restart gate did not pass.
+
 ## Android token-authentication and API reverse-path diagnosis — 2026-09-17
 
 ### Token contract and verification
@@ -698,3 +777,179 @@ No service-backed clinical, synchronization, offline/reconnect, attachment, or
 outage/recovery workflows were started because the authenticated-screen gate
 was not met. Physical-device, iOS, production signing/store, security,
 clinical-safety, DR, and vendor-device gates remain open.
+
+## Direct authoritative Metro retest — 2026-09-17
+
+The current WSL instance owns `172.22.103.130` on `eth0`; Metro PID 76396 is
+listening on `*:8082`. From `emulator-5554`, a direct TCP probe to
+`172.22.103.130:8082` returned exit code 0. The host-side direct `/status`
+request returned HTTP 200 with `packager-status:running` and project root
+`/home/bighog/repos/vems/V-ems-system/apps/mobile-crew`.
+
+Repository `apps/mobile-crew/app.json`, available app config files, the native
+manifest, and installed `dumpsys package org.vems.mobilecrew` were inspected.
+The app defines no `scheme`; the installed package has only the launcher
+`MAIN` intent and no development-client `VIEW`/`BROWSABLE` URL filter. No Expo
+development-client scheme was guessed or used.
+
+The existing dev-menu bundle-location control was used to target the direct
+address `172.22.103.130:8082`, without changing application data or SecureStore
+and without using Windows portproxy for the bundle. After reload, the native
+activity remained foreground but the hierarchy contained only the native root
+container. No ReactNativeJS startup or bundle-completion marker and no named
+authenticated screen appeared. Direct Android HTTP tooling was unavailable,
+but the TCP route was proven; the application-level direct bundle result did
+not reach a rendered screen.
+
+The API reverse mapping remains unchanged (`3001 -> 13001 -> WSL API`). No
+session, database, Docker volume, protected environment file, or application
+data was cleared or modified. Device-level session readback, restart
+navigation, sign-out/relaunch removal, and connected clinical workflows remain
+**BLOCKED / NOT OBSERVED** pending a stable JS bundle load.
+
+## Expo development-client scheme correction — 2026-09-17
+
+Expo SDK `57.0.20` was confirmed. The project initially had no
+`expo-dev-client`; `npx expo install expo-dev-client` selected the SDK-compatible
+`57.0.19`. The narrow configuration adds the product-specific lowercase
+scheme `vems-mobilecrew` to `apps/mobile-crew/app.json` while preserving
+Android application ID `org.vems.mobilecrew`.
+
+Expo prebuild generated the Android VIEW/DEFAULT/BROWSABLE filter with both:
+
+```text
+vems-mobilecrew
+exp+mobile-crew
+```
+
+The second value is Expo’s generated development-client scheme derived from
+the slug and is the documented scheme for launching the custom client. The
+direct WSL bundle link is therefore:
+
+```text
+exp+mobile-crew://expo-development-client/?url=http%3A%2F%2F172.22.103.130%3A8082
+```
+
+The generated-manifest regression passes and proves both schemes, VIEW/
+BROWSABLE registration, and `org.vems.mobilecrew` application ID. Expo config
+inspection reports `scheme=vems-mobilecrew`, `sdkVersion=57.0.0`, and the
+expected Android package. Android export also passes.
+
+Mobile TypeScript, unit (`214/214`), component (`73/73`), and config regression
+checks pass. Expo Doctor reports one existing dependency-drift check failure
+(Expo patch/minor drift and Jest major-version drift); no scheme/config error
+was reported.
+
+The synchronized Windows workspace contains only the required app config,
+package metadata, lockfile, and validation script changes. Exact SHA-256
+parity was proven for each changed file; no `.git`, secret, protected
+environment, certificate, or runtime file was copied.
+
+The Windows-native debug APK was not produced. JDK 25 builds failed in native
+CMake with a restricted-method error; the available Gradle-managed JDK 17 was
+then used, but the serialized build still emitted no APK artifact before
+completion. Consequently no signing-certificate comparison or `adb install -r`
+was attempted, and the installed package/data/SecureStore remain unchanged.
+The deep-link emulator acceptance and subsequent connected workflow remain
+**BLOCKED** pending a successful debug APK build and in-place upgrade.
+
+## Android APK build diagnosis and retest — 2026-09-17
+
+The complete controlled Gradle evidence is retained outside the repository in
+the Windows workspace. The JDK 25 serialized logs are the Gradle daemon logs
+`E:\EvidessaDev\android\gradle\daemon\9.3.1\daemon-25456.out.log`
+(`arm64-v8a`) and `daemon-14948.out.log` (`x86_64`). Their first causal
+failure was the Java 25 restricted-method warning during native CMake
+configuration, in `:react-native-screens:configureCMakeDebug[arm64-v8a]`
+and, for x86_64, `:expo-modules-core:configureCMakeDebug[x86_64]` and
+`:react-native-screens:configureCMakeDebug[x86_64]`. The failed native command
+was the toolchain CMake/Ninja configuration path; no application source or
+JavaScript assertion caused these failures. JDK 25 was therefore not used for
+acceptance.
+
+The earlier JDK 17 retry did not fail or disappear: daemon
+`E:\EvidessaDev\android\gradle\daemon\9.3.1\daemon-18560.out.log` records
+`BUILD SUCCESSFUL in 7m 31s`. The later controlled JDK 17 build log is
+`E:\s14b\stage14-jdk17-splash-build.log` and records
+`BUILD SUCCESSFUL in 6m 44s`, with exit code 0. The successful build used
+JDK `17.0.20.1` from
+`E:\EvidessaDev\android\gradle\jdks\eclipse_adoptium-17-amd64-windows.2`,
+Gradle `9.3.1`, Windows 11 amd64, working directory
+`E:\s14b\apps\mobile-crew\android`, explicit
+`-PreactNativeArchitectures=x86_64`, Android SDK
+`E:\EvidessaDev\android\sdk`, CMake `3.22.1`, Ninja from that CMake
+installation, and NDK `27.1.12297006`. React Native supplies AGP `8.12.0`,
+Kotlin `2.1.20`, compile/target SDK `36`, and build tools `36.0.0`.
+The project versions are Expo `57.0.20`, expo-dev-client `57.0.19`, and React
+Native `0.86.3`. Gradle `--version` showed both launcher and daemon on JDK 17.
+
+The native runtime failure after the first APK was built was deterministic:
+the generated `MainApplication` loaded Expo dev-launcher, whose Android debug
+implementation reflectively requires
+`expo.modules.splashscreen.SplashScreenManager`. The app declared
+`expo-dev-client` but not `expo-splash-screen`, so the class was absent from
+the APK and logcat reported `ClassNotFoundException` at
+`MainApplication.onCreate`. The narrow correction adds the SDK-compatible
+`expo-splash-screen` dependency (`~57.0.8`, lockfile resolution 57.0.9).
+No authentication, TLS, signing, or production configuration was weakened.
+
+The corrected build produced:
+
+| Field | Evidence |
+|---|---|
+| APK | `E:\s14b\apps\mobile-crew\android\app\build\outputs\apk\debug\app-debug.apk` |
+| SHA-256 | `4538CE2D724B93A371728785F17958367074A7A27150995AF9A2B12030754A1F` |
+| Application ID | `org.vems.mobilecrew` |
+| Version | `1.0.0` / version code `1` |
+| Signing certificate | Android debug certificate, SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c` |
+| Schemes | `vems-mobilecrew`, `exp+mobile-crew` |
+
+The installed APK certificate matched the rebuilt APK exactly. `adb install -r`
+returned `Success`; no uninstall, downgrade, package-data clear, or volume
+operation was performed. `dumpsys package` continued to report data directory
+`/data/user/0/org.vems.mobilecrew`, version `1.0.0`, and both schemes.
+
+At `2026-09-17T19:31:47Z`, the exact documented deep link with
+`CATEGORY_BROWSABLE` reached the app but Expo dev-launcher showed its error
+activity with a deterministic upstream NPE at
+`expo.modules.devlauncher.DevLauncherController.createAppIntent` line 448:
+`Set.addAll(Collection)` was invoked on a null category set. This is launcher
+intent handling, not an app authentication or bundle failure. Retrying the
+same URI without adding an extra Android category allowed the app to reach
+Metro: logcat records `isMetroRunning(): Async result = true`,
+`loadJSBundleFromMetro()`, and `ReactNativeJS: Running "main"`. No
+`ClassNotFoundException`, fatal native error, or JavaScript exception followed.
+The dev-client then displayed its server/home UI and the app hierarchy showed
+`bootstrap-loading` with a progress indicator; no named authenticated VEMS
+screen was visibly rendered. The current UI gate is therefore **BLOCKED**:
+native build and JS load pass, but authenticated session readback/navigation
+after the deep-link launch is not directly observed. The app data and
+SecureStore were preserved. No service-backed clinical, synchronization,
+offline, attachment, or outage workflows were executed after this retest.
+
+The earlier Expo Doctor dependency-drift result remains unchanged and was not
+silently normalized: the repository has several Expo patch-level drifts and
+Jest 30 versus the checker’s Jest 29 expectation. `npm ci --ignore-scripts`
+completed successfully from the single root lockfile; the dependency
+correction itself is the only additional package change.
+
+Final automated evidence for this correction: mobile TypeScript PASS; mobile
+unit PASS (39/39); mobile component PASS (73/73); config/manifest regression
+PASS; orchestration PASS (263/263, 11 intentional skips); API gateway PASS
+(128/128); smoke PASS; OpenEMR/Vtiger adapter connectivity PASS; Compose
+configuration PASS; shell syntax PASS; and `git diff --check` PASS. The
+authenticated Android UI and downstream clinical/offline/outage matrix remain
+**BLOCKED / NOT EXECUTED** because the deep-link retest did not reach a named
+authenticated screen.
+
+## Post-bundle Android rendering diagnosis — 2026-09-17
+
+The post-bundle capture was taken at `C:\\Users\\Public\\stage14-postbundle-current.png`; the complete hierarchy was pulled to `C:\\Users\\Public\\stage14-complete-ui.xml`. The visible surface was the VEMS React root in `org.vems.mobilecrew/.MainActivity`, not Expo Dev Launcher. The hierarchy contained the VEMS resource IDs `incident-workspace-screen`, `jobs-list-screen`, `sign-out`, `sync-now`, `jobs-error`, and `jobs-retry`, with visible synthetic-session text including `Assigned jobs`, `STAFF-001 (field_crew)`, `Sign out`, `Sync now`, and `Token expired`. The task contained only `MainActivity`; no DevLauncher activity was foreground.
+
+The clean force-stop/deep-link launch began at `2026-09-17T18:44:49.3902559Z`. `adb shell am start -W` resolved the exact `exp+mobile-crew` VIEW intent to `.MainActivity`, returned `Status: ok`, `LaunchState: COLD`, and completed in 12.383 seconds. `.MainActivity` remained foreground at the 5-, 15-, and 30-second checks. Logcat was cleared before launch. This particular launch produced no new `Running main` or Metro bundle markers because the authoritative WSL Metro process had terminated and `http://172.22.103.130:8082/status` was unavailable; port 8082 was still occupied by the Windows relay (`svchost.exe`, PID 4204). The absence of a per-launch JavaScript marker is therefore a Metro-availability blocker, not evidence of an entry-registration failure.
+
+An earlier direct launch while Metro was available recorded `isMetroRunning(): Async result = true`, `loadJSBundleFromMetro()`, and `ReactNativeJS: Running "main"`; subsequent hierarchy capture showed the VEMS React root described above. The app entry is consistent: `apps/mobile-crew/package.json` declares `main: index.ts`, `index.ts` calls Expo `registerRootComponent(App)`, Android `MainActivity` requests component `main`, and the root `App.tsx` returns `SafeAreaProvider` plus `RootNavigator`. No application splash-screen hold (`preventAutoHideAsync`, `hideAsync`, or unresolved splash promise) is present. Session restoration enters the authenticated branch; the preserved synthetic session was expired, which explains `Token expired` and is not a fresh-login result. SecureStore contents were not displayed or modified.
+
+The `CATEGORY_BROWSABLE` deep-link NPE remains an upstream Expo dev-launcher defect at `DevLauncherController.createAppIntent` line 448 (`categories.addAll(...)` on a null category set). No generated manifest or upstream dependency was manually patched. No application code defect was proven, so no application fix or additional regression test was added in this diagnosis. A supported clean JavaScript reload with authoritative Metro active could not be completed while that process was unavailable.
+
+Result: React root rendering is **PASS when Metro is available**; clean cold relaunch with timestamp-correlated bundle completion is **BLOCKED by Metro availability/relay port ownership**; fresh authenticated UI session persistence and named-screen acceptance are **NOT EXECUTED**. Connected clinical, synchronization, offline, attachment, and outage-recovery workflows remain **NOT EXECUTED**.
