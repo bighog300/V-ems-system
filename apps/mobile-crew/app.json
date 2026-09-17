@@ -2,6 +2,7 @@
   "expo": {
     "name": "mobile-crew",
     "slug": "mobile-crew",
+    "scheme": "vems-mobilecrew",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/icon.png",
