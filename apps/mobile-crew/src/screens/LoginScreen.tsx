@@ -53,7 +53,7 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
   }
 
   return (
-    <ScrollView style={styles.container} testID="login-screen">
+    <ScrollView style={styles.container} contentContainerStyle={styles.containerContent} testID="login-screen">
       <Text style={styles.title} accessibilityRole="header">
         V-EMS Crew
       </Text>
@@ -124,12 +124,15 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
     padding: 24,
     backgroundColor: "#fff",
     width: "100%",
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: "center"
+  },
+  containerContent: {
+    flexGrow: 1,
+    justifyContent: "center"
   },
   title: {
     fontSize: 28,

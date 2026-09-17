@@ -24,6 +24,14 @@ describe("LoginScreen", () => {
     expect(getByTestId("submit-sign-in").props.accessibilityState?.disabled).toBe(false);
   });
 
+  it("applies vertical alignment to the scroll content container", async () => {
+    const { getByTestId } = await render(<LoginScreen onSignedIn={jest.fn()} />);
+
+    expect(getByTestId("login-screen").props.contentContainerStyle).toEqual(
+      expect.objectContaining({ flexGrow: 1, justifyContent: "center" })
+    );
+  });
+
   it("calls onSignedIn with a trimmed session once the token verifies", async () => {
     global.fetch = jest.fn(async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 })) as unknown as typeof fetch;
     const onSignedIn = jest.fn();
