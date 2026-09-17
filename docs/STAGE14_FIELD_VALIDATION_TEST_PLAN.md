@@ -55,6 +55,7 @@ API gateway, OpenEMR and Vtiger in a real deployment topology.
 | Network | Wi-Fi, cellular (LTE/5G), airplane mode, and a simulated poor-cellular profile (high latency + packet loss, not just "off") |
 | Power | Normal, low-battery power-saving mode active (OS may throttle background sync) |
 | Locale/timezone | At minimum the deployment's home timezone and one DST-transition date; `apps/web-control/test/crew-timezones.test.mjs` and its fixture already cover the *display-layer* timezone-conversion logic under test — Stage 14 confirms real-device clocks agree with server time under the same rules |
+| Bluetooth (device integration, Stage 15) | At least one physical unit of each named-vendor vitals monitor the deployment actually carries (Stage 15 milestone 15g's drivers), covering a forced range-loss disconnect and a low-battery/dropped-connection condition per model — see Scenario 10 |
 
 Every scenario below runs at minimum once against a physical Android device and once
 against a physical iOS device unless marked platform-specific.
@@ -196,6 +197,71 @@ This is the one scenario in this catalog whose "pass" bar is a documented go/no-
 judgment call by the clinical/operations sponsor, not a binary technical check — record
 the judgment and its rationale in the execution log (see below).
 
+### 10. Device pairing and vitals-monitor integration drill
+
+Stage 15 milestone 15h: not a new framework, folded into this catalog per that
+milestone's own scoping — device-pairing reliability, reconnect-on-signal-loss, and
+low-battery/dropped-connection behavior are the same physical-device-required,
+real-crew validation this document already exists to cover, exercised against the
+driver framework, generic IEEE 11073 driver, and device-pairing/provenance registry
+Stage 15 milestones 15e/15f already built and automated-tested (fake-transport and
+fake-connection tests only — this drill is what proves the same guarantees hold
+against a real Bluetooth radio, a real monitor, and a real crew, exactly as Scenario 3
+does for offline/reconnect behavior more broadly).
+
+**Blocked until**: Stage 15 milestone 15g (first named-vendor driver, written against
+a real monitor's actual GATT profile or SDK) exists and at least one physical unit of
+that make/model is available. The generic IEEE 11073 driver's own correctness (GATT
+parsing, SFLOAT decoding, registry matching) is already proven by
+`apps/mobile-crew/test/devices/*.test.ts` against fake transports — this drill is
+about real Bluetooth radio behavior a fake transport cannot exercise: real range loss,
+real reconnection timing, a real device's real battery draining. Do not attempt to
+satisfy this scenario's pass criteria against a fake/simulated transport.
+
+**Preconditions**: a named-vendor driver (15g) registered in the app; a real physical
+vitals monitor of that vendor/model; a vehicle already paired to it
+(`POST /api/vehicles/{id}/device-pairings`, per 15f); an active patient case with an
+open encounter.
+
+**Steps**:
+1. Pair the physical monitor to the vehicle and confirm the resulting
+   `device_pairings` row has the correct `serial_number`/`vendor`/`model`
+   (`GET /api/vehicles/{id}/device-pairings`).
+2. Link the pairing to the active patient case
+   (`PATCH /api/device-pairings/{id}/patient-case`), begin streaming, and confirm at
+   least one BLE-sourced vital appears in
+   `GET /api/patient-cases/{id}/observations` with `device_pairing_id` set to this
+   pairing.
+3. Walk the monitor out of Bluetooth range mid-stream. Confirm the app detects and
+   surfaces the disconnect to the crew — never silently stops receiving readings
+   without the crew knowing charting has degraded to manual entry — then walk back
+   into range and confirm reconnection, whether automatic or via a clear
+   manual-retry path.
+4. Drain or simulate the monitor's battery to critically low/dead while paired and
+   mid-transport. Confirm the app distinguishes a low-battery/dead-device state from
+   an ordinary range-loss disconnect, and that the crew can fall back to manual vitals
+   entry on the same encounter without losing anything already charted.
+5. Unpair the unit, then re-pair the same physical unit (same serial number) to a
+   different patient case within the same shift. Confirm the original pairing's
+   history and `patient_case_id` are untouched and the new pairing is a distinct
+   `device_pairings` row — the same traceability `services/orchestration/test/device-pairings.test.mjs`
+   already proves at the API level, now confirmed end-to-end from a real re-pair.
+6. Chart one vital manually on the same encounter (a value the monitor doesn't
+   support, or during the manual-fallback window from step 4) and confirm its
+   observation has `device_pairing_id: null` — provenance must correctly distinguish
+   device-sourced from manually-entered readings within the same encounter, not just
+   across separate sessions.
+
+**Pass criteria**: every disconnect (range loss or battery) is detected and surfaced
+to the crew within a clinically reasonable time (record the actual time, same
+usability-signal pattern as Scenario 5); no BLE reading is ever attributed to the
+wrong patient case or wrong physical unit (cross-check every `device_pairing_id` in
+the drill's observations against the actual pairing history); a crew member can
+always fall back to manual entry without data loss; unpair/re-pair behavior matches
+the automated suite's guarantees (idempotent unpair, rejected linking of an
+already-unpaired pairing) when triggered by a real dropped connection, not just a
+direct API call.
+
 ## Non-functional reviews
 
 These are qualified-reviewer activities, not device drills, but are Stage 14 exit-gate
@@ -247,6 +313,9 @@ Per issue #71, restated as checkable conditions:
 
 - [ ] Every scenario in this catalog has at least one passing execution-log row on both
       Android and iOS.
+- [ ] Scenario 10 (device pairing and vitals-monitor integration) has at least one
+      passing execution-log row per named-vendor driver Stage 15 milestone 15g ships —
+      not just once overall, since each vendor's real GATT behavior is distinct.
 - [ ] The security/privacy penetration review and clinical-safety/hazard review are both
       complete with sign-off, and every critical/high finding from either is resolved
       (not merely triaged) before release.
@@ -257,5 +326,6 @@ Per issue #71, restated as checkable conditions:
 - [ ] No unresolved critical/high safety or security finding remains open anywhere in
       the execution log.
 
-Stage 14, and with it the full V-EMS build-out (Stages 6–14), is complete only when
-every box above is checked.
+Stage 14, and with it the full V-EMS build-out (Stages 6–14) plus Stage 15's
+device-integration path folded into it via Scenario 10, is complete only when every
+box above is checked.
