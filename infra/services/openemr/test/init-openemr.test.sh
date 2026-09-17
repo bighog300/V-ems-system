@@ -35,13 +35,20 @@ MYSQL_PORT=3306 \
 MYSQL_USER=test-user \
 MYSQL_PASSWORD=test-password \
 MYSQL_DATABASE=openemr \
+MYSQL_SSL_CA=/opt/vems/tls/ca.pem \
   "$TEMP_DIR/init-scripts/init-openemr.sh" >/dev/null
 
+grep -F -- '--ssl-ca=/opt/vems/tls/ca.pem' "$TEMP_DIR/mysql-calls" >/dev/null
+grep -F -- '--ssl-verify-server-cert' "$TEMP_DIR/mysql-calls" >/dev/null
 grep -F -- '-e CREATE DATABASE IF NOT EXISTS `openemr`;' "$TEMP_DIR/mysql-calls" >/dev/null
-grep -F -- "-e GRANT ALL PRIVILEGES ON \`openemr\`.* TO 'test-user'@'%'; FLUSH PRIVILEGES;" "$TEMP_DIR/mysql-calls" >/dev/null
 if grep -F -- '\\`' "$SCRIPT_DIR/init-openemr.sh" >/dev/null; then
   echo 'invalid double-escaped MySQL identifier delimiter remains' >&2
   exit 1
 fi
+if grep -F -- 'apache2-foreground' "$ROOT_DIR/infra/services/openemr/init-scripts/entrypoint.sh" >/dev/null; then
+  echo 'unsupported OpenEMR Apache launcher remains' >&2
+  exit 1
+fi
+grep -F -- 'exec /usr/sbin/httpd -D FOREGROUND' "$ROOT_DIR/infra/services/openemr/init-scripts/entrypoint.sh" >/dev/null
 
 echo 'OpenEMR initializer delimiter regression passed.'

@@ -7,6 +7,9 @@ services:
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
+      - --ssl-ca=/run/vems-tls/ca.pem
+      - --ssl-cert=/run/vems-tls/server-cert.pem
+      - --ssl-key=/run/vems-tls/server-key.pem
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     environment:
@@ -14,6 +17,7 @@ services:
     volumes:
       - mysql_data_dev:/var/lib/mysql
       - ./services/mysql/init-scripts:/docker-entrypoint-initdb.d:ro
+      - ./.tls/mysql:/run/vems-tls:ro
     networks:
       - vems-network
     healthcheck:
@@ -102,12 +106,14 @@ services:
       MYSQL_USER: ${OPENEMR_DB_USER:-openemr}
       MYSQL_PASSWORD: ${OPENEMR_DB_PASSWORD:?OPENEMR_DB_PASSWORD is required}
       MYSQL_DATABASE: ${OPENEMR_DB_NAME:-openemr}
+      MYSQL_SSL_CA: /opt/vems/tls/ca.pem
       OPENEMR_ADMIN_USER: ${OPENEMR_ADMIN_USER:-admin}
       OPENEMR_ADMIN_PASSWORD: ${OPENEMR_ADMIN_PASSWORD:?OPENEMR_ADMIN_PASSWORD is required}
       REDIS_HOST: ${REDIS_HOST:-redis}
       RBAC_ENFORCE: ${OPENEMR_RBAC_ENFORCE:-false}
     volumes:
       - openemr_data_dev:/var/www/localhost/htdocs/openemr
+      - ./.tls/mysql/ca.pem:/opt/vems/tls/ca.pem:ro
     networks:
       - vems-network
     healthcheck:

@@ -5,6 +5,9 @@ node_modules/
 .pids/
 env/*.local.env
 
+# Development-only generated TLS material (private keys are never committed)
+infra/.tls/
+
 # Docker volumes and data
 infra/.env
 mysql_data_dev/

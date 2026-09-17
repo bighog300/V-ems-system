@@ -2,4 +2,4 @@
 set -euo pipefail
 
 /opt/vems/init-scripts/init-openemr.sh
-exec apache2-foreground
+exec /usr/sbin/httpd -D FOREGROUND
