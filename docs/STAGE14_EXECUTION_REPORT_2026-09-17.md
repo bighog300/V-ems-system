@@ -953,3 +953,148 @@ An earlier direct launch while Metro was available recorded `isMetroRunning(): A
 The `CATEGORY_BROWSABLE` deep-link NPE remains an upstream Expo dev-launcher defect at `DevLauncherController.createAppIntent` line 448 (`categories.addAll(...)` on a null category set). No generated manifest or upstream dependency was manually patched. No application code defect was proven, so no application fix or additional regression test was added in this diagnosis. A supported clean JavaScript reload with authoritative Metro active could not be completed while that process was unavailable.
 
 Result: React root rendering is **PASS when Metro is available**; clean cold relaunch with timestamp-correlated bundle completion is **BLOCKED by Metro availability/relay port ownership**; fresh authenticated UI session persistence and named-screen acceptance are **NOT EXECUTED**. Connected clinical, synchronization, offline, attachment, and outage-recovery workflows remain **NOT EXECUTED**.
+
+## Stage 14 post-reboot recovery — 2026-09-18
+
+The recovery audit confirmed WSL `172.22.103.130`, the expected Stage 14
+branch/HEAD, an online `emulator-5554`, and the existing Windows relays. The
+protected `infra/.env.development` and `infra/.env.development.bak` files were
+not modified or printed. No Docker volume, shared OpenEMR service/data on
+8083, installed package, application data, or SecureStore contents were
+cleared or recreated.
+
+The retained topology was started without replacement containers or obsolete
+retry/final/host experiments: `vems-mysql-stage14-openemr-test2` followed by
+`vems-openemr-stage14-installer` on isolated network `vems-stage14-openemr-net`,
+`vems-mysql-dev` followed by `vems-vtiger-ghcr-stage14` on `infra_vems-network`,
+and the already-running `vems-redis-dev`. The retained MySQL data volumes were
+attached unchanged. MySQL socket health passed for both databases; Redis
+returned `PONG`; isolated OpenEMR HTTP returned `302`, OAuth discovery returned
+`200`, OAuth password-grant issuance returned `200`, and an authenticated
+standard API request returned `200`. Vtiger returned `301`, and the isolated
+OpenEMR/Vtiger adapter connectivity check passed.
+
+The temporary VEMS API ran on port `3001` with an isolated OpenEMR override and
+returned `/health` `200`. Windows relay probes returned `200` for
+`127.0.0.1:13001/health`, `127.0.0.1:8081/status`, and
+`127.0.0.1:8082/status`. The 2222 SSH relay was not altered. Authoritative
+Metro ran from `/home/bighog/repos/vems/V-ems-system/apps/mobile-crew` on
+`0.0.0.0:8082` with a cleared cache; its status was `packager-status:running`
+and `X-React-Native-Project-Root` identified that checkout. The non-fatal
+React Native DevTools `libnspr4.so` warning did not prevent Metro startup.
+
+ADB reverse mappings were recreated and emulator TCP probes passed:
+
+```text
+host-26 tcp:3001 tcp:13001
+host-26 tcp:8081 tcp:8082
+```
+
+The exact development-client deep link cold-launched `.MainActivity` with
+`Status: ok`, `LaunchState: COLD`, and Metro logcat evidence of
+`isMetroRunning(): true`, `loadJSBundleFromMetro()`, and `Running "main"`.
+The preserved session first rendered the authenticated jobs surface; an
+explicit in-app sign-out returned to LoginScreen without clearing data. A new
+five-minute synthetic `STAFF-001`/`field_crew` token was verified directly
+against the API with HTTP `200`, copied to the Windows clipboard without
+display, and removed after the UI attempt. The clipboard was then cleared.
+
+The immediate Android UI submission remained **BLOCKED**: sanitized logcat
+reported `sign_in_failed` with `invalid_credentials`, LoginScreen remained
+visible, and no matching request reached the current API process. The direct
+API and relay token checks passed, so this run does not claim authenticated UI
+navigation, SecureStore readback, force-stop session persistence, sign-out
+relaunch removal, or connected clinical/offline/outage acceptance. Temporary
+API/Metro processes remain available for follow-up diagnosis; no token or
+signing-secret file remains.
+
+## Focused LoginScreen invalid_credentials diagnosis — 2026-09-18
+
+The exact authentication path is `LoginScreen.handleSignIn` →
+`verifySession` → `requestJson` → `buildRequestHeaders` →
+`GET {trim(apiBaseUrl).replace(/\/$/, "")}/api/support/readiness` with the
+header `Authorization: Bearer {trimmed authToken}`. `invalid_credentials` is
+selected for any `UnauthorizedError`, including the pre-fetch
+`buildRequestHeaders` branch that rejects an empty/whitespace-only token, and
+for an HTTP 401 returned by `fetch`. `network_error` is selected for an
+`ApiError` with `REQUEST_ABORTED` or for any non-`ApiError` exception. Other
+HTTP failures become `unknown`.
+
+The pre-submission Android hierarchy contained the exact API URL
+`http://127.0.0.1:3001`. The token field was present, editable, secure
+(`password=true`), and its content was never displayed. Metro status returned
+`200` with `X-React-Native-Project-Root: /home/bighog/repos/vems/V-ems-system/apps/mobile-crew`.
+The current bundle contained the committed LoginScreen and verifySession
+markers, including the readiness path and authentication error strings. The
+sole WSL listener for API port 3001 was the active API process; Windows PID
+4288 remained the sole listener for relay port 13001.
+
+The first controlled Android entry used `adb input text` and produced a
+228-character secure-field value from the verified 232-character token. This
+lossy input explains the prior `sign_in_failed: invalid_credentials`; it was
+a client automation/input-path defect, not a VEMS API verifier failure.
+
+For the one authorized retry, a five-minute token was directly verified with
+HTTP `200`, stored temporarily with mode `0600`, copied to the Windows
+clipboard, and length/hash metadata matched. Clipboard paste into the Android
+secure field produced all 232 characters. At `2026-09-18T07:57:37Z`, the
+submission emitted `sign_in_succeeded`; the API logged correlated
+authenticated `GET /api/support/readiness` and `GET /api/assignments/mine`
+requests at `07:57:38Z`/`07:57:39Z`, and the UI hierarchy showed
+`jobs-list-screen`, `Assigned jobs`, and `Sign out`. No token, authorization
+header, signing secret, or password was recorded. Temporary diagnostics,
+token files, signing-secret files, and clipboard contents were removed.
+
+No application correction was warranted. The temporary diagnostic logging was
+removed completely. Mobile tests passed `214/214`, API gateway tests passed
+`128/128`, and `git diff --check` passed. Session persistence/readback,
+force-stop relaunch, sign-out relaunch, and the connected clinical matrix are
+now unblocked for the next focused acceptance run.
+
+## Session persistence and restart recovery — 2026-09-18
+
+The preserved SecureStore session was checked without displaying its token.
+After the prior token expired, the app still restored the authenticated shell
+from SecureStore and rendered `jobs-list-screen`, `Assigned jobs`, and
+`Sign out`; the correlated assignments request safely rendered `Token expired`.
+This confirms expiry handling at the data-fetch boundary without changing
+production token validation. The supported repository synthetic-token lifetime
+is five minutes (`300` seconds).
+
+A single fresh `STAFF-001`/`field_crew` token was generated after that expiry,
+verified directly against `/api/support/readiness` with HTTP `200`, and copied
+only through the Windows clipboard. The temporary file and clipboard had a
+matching length of `232` bytes; the token content was never displayed. The
+Android secure field was pasted from the clipboard, and the resulting
+authenticated UI showed `jobs-list-screen`, `Assigned jobs`, and `Sign out`.
+
+At `2026-09-18T08:12:24Z`, background/foreground returned to the same named
+authenticated screen. The API correlated `GET /api/assignments/mine` at
+`08:12:28Z` with actor `STAFF-001`/`field_crew`, `allowed: true`, and a
+completed request. No token re-entry occurred.
+
+The first valid force-stop/relaunch began at `2026-09-18T08:13:29Z` using the
+authoritative development-client URI. The unscoped VIEW form resolved cold to
+`org.vems.mobilecrew/.MainActivity`; Metro logged `isMetroRunning(): true`,
+`loadJSBundleFromMetro()`, and React Native logged `Running "main"`. The
+post-relaunch hierarchy showed `jobs-list-screen`, `Assigned jobs`, and
+`Sign out`, with no LoginScreen. This is the SecureStore readback and direct
+authenticated-navigation acceptance. A second same-token force-stop was not
+claimed because the five-minute test lifetime had elapsed; no additional token
+was generated.
+
+Sign out returned immediately to `login-screen` with `Sign in` visible. A
+force-stop followed by another authoritative deep-link cold launch, without
+clearing package data, again completed the Metro bundle and `Running "main"`,
+then showed `login-screen` with no jobs-list, `Assigned jobs`, or `Sign out`.
+This verifies persisted-session removal and relaunch behavior.
+
+No source changes or temporary diagnostics were retained. The connected
+synthetic clinical matrix was not started: the repository-supported five-minute
+token lifetime is not suitable for the longer workflow after the restart and
+sign-out gates, and authentication policy was not weakened. Temporary token and
+JWT-secret files were removed and the Windows clipboard was verified at zero
+bytes. Protected environment files, Docker volumes, shared OpenEMR on 8083,
+application data, and SecureStore were preserved. Remaining gates are the
+connected clinical/offline/attachment/outage matrix under a supported longer
+test credential, if one is provided by the development/test environment.
