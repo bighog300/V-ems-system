@@ -69,6 +69,7 @@ export default function JobsListScreen({ session, onSignedOut, onSelectJob, onOp
           <Text style={styles.meta}>
             {session.actorId} ({session.actorRole})
           </Text>
+          {session.syntheticTestSession ? <Text style={styles.syntheticMeta} testID="synthetic-test-session">Synthetic test session</Text> : null}
         </View>
         <Pressable onPress={handleSignOut} accessibilityRole="button" accessibilityLabel="Sign out" style={styles.signOut} testID="sign-out">
           <Text style={styles.signOutText}>Sign out</Text>
@@ -178,6 +179,11 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 14,
     color: "#555",
+    marginTop: 2
+  },
+  syntheticMeta: {
+    fontSize: 12,
+    color: "#8a5a00",
     marginTop: 2
   },
   cachedBanner: {

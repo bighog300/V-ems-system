@@ -83,12 +83,18 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
               };
       const searchResult = await searchPatients({ ...config, criteria });
       setResult(searchResult);
-      setShowCreateForm(searchResult.match_status === "no_match");
+      // Keep the non-mutating choice explicit: the create form is revealed by
+      // the rendered "None of these" action, not implicitly by search.
+      setShowCreateForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Patient search failed.");
     } finally {
       setSearching(false);
     }
+  }
+
+  function handleShowCreateForm() {
+    setShowCreateForm(true);
   }
 
   async function handleLinkCandidate(candidate: PatientCandidate) {
@@ -310,11 +316,12 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
             ))
           )}
           <Pressable
-            onPress={() => setShowCreateForm(true)}
+            onPress={handleShowCreateForm}
             accessibilityRole="button"
             accessibilityLabel="None of these — create a new patient"
+            accessibilityState={{ disabled: false }}
             style={styles.linkButton}
-            testID="show-create-form"
+            testID="patient-create-new-option"
           >
             <Text style={styles.linkText}>None of these — create a new patient</Text>
           </Pressable>
@@ -322,7 +329,7 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
       ) : null}
 
       {showCreateForm ? (
-        <View style={styles.card}>
+        <View style={styles.card} testID="patient-create-form">
           <Text style={styles.cardTitle}>Create new patient</Text>
           <TextInput style={styles.input} placeholder="Sex" accessibilityLabel="Sex" value={sex} onChangeText={setSex} testID="create-sex" />
           <Pressable

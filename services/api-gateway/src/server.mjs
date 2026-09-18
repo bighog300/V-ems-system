@@ -2,10 +2,11 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
 import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCIDENT_STATUSES, createLogger, isInsecureSecret, isProductionEnv } from "@vems/shared";
-import { authenticateRequest } from "./auth.mjs";
+import { authenticateRequest, issueHs256Token } from "./auth.mjs";
 import { RBAC_POLICIES } from "./authorization-policy.mjs";
 import { checkDependencies } from "./dependency-health.mjs";
 import { createRateLimiter } from "./rate-limiter.mjs";
+import { DEVELOPMENT_TEST_ACTOR, developmentTestSessionClaims, isSuitableTestCrew, validateDevelopmentTestAuthConfig } from "./development-test-auth.mjs";
 
 const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
@@ -618,6 +619,7 @@ function validateCreateHandover(payload) {
 
 export function createApp(orchestration = new OrchestrationService()) {
   const appEnv = process.env.APP_ENV ?? "development";
+  const developmentTestAuth = validateDevelopmentTestAuthConfig(process.env);
   // Stage 12 milestone 12i: RBAC_ENFORCE is opt-in everywhere except
   // production, where enforcement is non-optional -- an explicit
   // RBAC_ENFORCE=false is overridden (fail-safe, not fail-open) rather
@@ -655,6 +657,7 @@ export function createApp(orchestration = new OrchestrationService()) {
   const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60000);
   const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS ?? 120);
   const rateLimiter = createRateLimiter({ windowMs: rateLimitWindowMs, maxRequests: rateLimitMaxRequests });
+  const developmentTestSessionLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 5 });
 
   const diagnostics = {
     appEnv,
@@ -708,6 +711,59 @@ export function createApp(orchestration = new OrchestrationService()) {
     if (method === "GET" && url.pathname === "/health") {
       const context = buildRequestContext(req, { role: "system", actorId: "health-check" });
       return okJson(res, 200, { status: "ok" }, context);
+    }
+
+    if (url.pathname === "/api/development/test-session") {
+      if (!developmentTestAuth.enabled || method !== "POST") {
+        return okJson(res, 404, { error: { code: "NOT_FOUND", message: "Route not found", retryable: false } }, buildRequestContext(req));
+      }
+
+      const context = buildRequestContext(req, { actorId: DEVELOPMENT_TEST_ACTOR.actorId, role: DEVELOPMENT_TEST_ACTOR.role });
+      const personnel = await orchestration.personnel?.findById?.(DEVELOPMENT_TEST_ACTOR.actorId);
+      if (!isSuitableTestCrew(personnel)) {
+        await orchestration.audit?.("authentication", DEVELOPMENT_TEST_ACTOR.actorId, "development_test_session", {
+          correlationId: context.correlationId,
+          actorId: DEVELOPMENT_TEST_ACTOR.actorId
+        }, undefined, { authentication_method: "development_test_session", synthetic_test_session: true, purpose: DEVELOPMENT_TEST_ACTOR.purpose, outcome: "fixture_unavailable" });
+        return okJson(res, 503, errorEnvelope("TEST_FIXTURE_UNAVAILABLE", "The synthetic Stage 14 test crew is unavailable.", false, context), context);
+      }
+
+      const limit = developmentTestSessionLimiter.check(req.socket.remoteAddress ?? "unknown");
+      if (!limit.allowed) {
+        await orchestration.audit?.("authentication", DEVELOPMENT_TEST_ACTOR.actorId, "development_test_session", {
+          correlationId: context.correlationId,
+          actorId: DEVELOPMENT_TEST_ACTOR.actorId
+        }, undefined, { authentication_method: "development_test_session", synthetic_test_session: true, purpose: DEVELOPMENT_TEST_ACTOR.purpose, outcome: "rate_limited" });
+        return okJson(res, 429, errorEnvelope("RATE_LIMITED", "Too many development test sessions; retry shortly.", true, context), context, {
+          "retry-after": "60"
+        });
+      }
+
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const expiresAt = issuedAt + developmentTestAuth.ttlSeconds;
+      const claims = developmentTestSessionClaims({ issuedAt, expiresAt });
+      const token = issueHs256Token(claims, authConfig.jwtSecret, { issuer: authConfig.issuer, audience: authConfig.audience });
+      await orchestration.audit?.("authentication", DEVELOPMENT_TEST_ACTOR.actorId, "development_test_session", {
+        correlationId: context.correlationId,
+        actorId: DEVELOPMENT_TEST_ACTOR.actorId
+      }, undefined, { authentication_method: "development_test_session", synthetic_test_session: true, purpose: DEVELOPMENT_TEST_ACTOR.purpose, issued_at: new Date(issuedAt * 1000).toISOString(), expires_at: new Date(expiresAt * 1000).toISOString(), outcome: "issued" });
+      logger.info("development_test_session_issued", {
+        correlation_id: context.correlationId,
+        actor_id: DEVELOPMENT_TEST_ACTOR.actorId,
+        actor_role: DEVELOPMENT_TEST_ACTOR.role,
+        authentication_method: "development_test_session",
+        synthetic_test_session: true,
+        purpose: DEVELOPMENT_TEST_ACTOR.purpose,
+        expires_at: new Date(expiresAt * 1000).toISOString()
+      });
+      return okJson(res, 200, {
+        token,
+        token_type: "Bearer",
+        expires_at: new Date(expiresAt * 1000).toISOString(),
+        actor_id: DEVELOPMENT_TEST_ACTOR.actorId,
+        role: DEVELOPMENT_TEST_ACTOR.role,
+        synthetic_test_session: true
+      }, context);
     }
 
     let actor;

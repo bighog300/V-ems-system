@@ -9,6 +9,7 @@ export interface Session {
   // loads: the deep-link/push registration path falls back to
   // getOrCreateDeviceId() when this is missing.
   deviceId?: string;
+  syntheticTestSession?: boolean;
 }
 
 export interface SecureStoreLike {

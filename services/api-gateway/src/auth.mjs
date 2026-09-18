@@ -8,6 +8,21 @@ function base64UrlDecode(value) {
   return Buffer.from(padded, "base64");
 }
 
+function base64UrlEncode(value) {
+  return Buffer.from(value).toString("base64url");
+}
+
+export function issueHs256Token(payload, secret, { issuer, audience } = {}) {
+  if (!secret) throw new Error("JWT secret is required");
+  const claims = { ...payload };
+  if (issuer) claims.iss = issuer;
+  if (audience) claims.aud = audience;
+  const header = base64UrlEncode(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const body = base64UrlEncode(JSON.stringify(claims));
+  const signature = createHmac("sha256", secret).update(`${header}.${body}`).digest("base64url");
+  return `${header}.${body}.${signature}`;
+}
+
 function parseToken(token) {
   const [headerPart, payloadPart, signaturePart] = token.split(".");
   if (!headerPart || !payloadPart || !signaturePart) throw new Error("Malformed JWT");

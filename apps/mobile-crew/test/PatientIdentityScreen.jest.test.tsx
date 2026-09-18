@@ -124,4 +124,40 @@ describe("PatientIdentityScreen search modes", () => {
 
     expect(getByTestId("search-hospital-card-number").props.value).toBe("fake-scanned-code");
   });
+
+  it("reveals the create form from the actionable parent without creating a patient", async () => {
+    let createCalls = 0;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith("/api/patients/search")) {
+        return new Response(JSON.stringify({ match_status: "no_match", match_confidence: 0, patient_id: null, candidates: [] }), { status: 200 });
+      }
+      createCalls += 1;
+      return new Response(JSON.stringify({ patient_id: "unexpected" }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const { getByTestId, queryByTestId } = await render(<PatientIdentityScreen patientCase={unlinkedCase} session={session} onBack={jest.fn()} onLinked={jest.fn()} />);
+    await fireEvent.changeText(getByTestId("search-first-name"), "Stage");
+    await fireEvent.changeText(getByTestId("search-last-name"), "Alpha");
+    await fireEvent.changeText(getByTestId("search-dob"), "2000-01-02");
+    await fireEvent.press(getByTestId("search-submit"));
+    await waitFor(() => expect(getByTestId("patient-create-new-option")).toBeTruthy());
+
+    const option = getByTestId("patient-create-new-option");
+    expect(option.props.accessibilityRole).toBe("button");
+    expect(option.props.accessibilityState.disabled).toBe(false);
+    expect(queryByTestId("patient-create-form")).toBeNull();
+    await fireEvent.press(option);
+
+    expect(getByTestId("patient-create-form")).toBeTruthy();
+    expect(createCalls).toBe(0);
+    await fireEvent.changeText(getByTestId("create-sex"), "X");
+    expect(getByTestId("search-first-name").props.value).toBe("Stage");
+    expect(getByTestId("search-last-name").props.value).toBe("Alpha");
+    expect(getByTestId("search-dob").props.value).toBe("2000-01-02");
+    expect(getByTestId("create-sex").props.value).toBe("X");
+    expect(getByTestId("create-and-link").props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(option);
+    expect(getByTestId("patient-create-form")).toBeTruthy();
+    expect(createCalls).toBe(0);
+  });
 });

@@ -1527,3 +1527,927 @@ Changed implementation files remain `services/orchestration/src/patient-cases.mj
 `services/api-gateway/src/authorization-policy.mjs`,
 `services/api-gateway/test/patient-cases.test.mjs`, and `docs/PATIENT_CASES.md`;
 the report is the documentation change. No commit was created.
+
+## Section C1 attempt — 2026-09-18
+
+C1 was started only. A fresh clipboard-only STAFF-001/field_crew session
+authenticated successfully and visibly reopened `ASN-000001`, `INC-000001`,
+and `PCR-000001 / Stage_Alpha`. The PCR-000001 detail screen exposed the
+supported identity and encounter controls, but PCR-000001 has no OpenEMR
+patient link in the recovered database, so the UI correctly displayed
+`Identify the patient (verified or unidentified) before starting an encounter`
+and did not expose `Start encounter`.
+
+The rendered identity search was exercised with the existing synthetic
+`Stage_Alpha` values. The request reached VEMS as `POST /api/patients/search`,
+but the temporary API's isolated OpenEMR OAuth client was rejected with HTTP
+401 `invalid_client`. No patient create, patient link, encounter, assessment,
+or other clinical write was submitted. Independent re-registration of the
+supported isolated test client reproduced the same OAuth client rejection, so
+this is an isolated OAuth fixture/runtime blocker requiring repair before C1
+can continue. No shared OpenEMR port-8083 data, Docker volume, SQLite row,
+Android application data, or SecureStore data was modified.
+
+Section C1 status: **BLOCKED before encounter creation**. No observations,
+medications, procedures, disposition, handover, signature, or finalization
+work was started. The temporary token and credential files were removed and
+the Windows clipboard was verified empty. No JWT was entered with adb input
+text. This report is the only additional file changed in this attempt; no
+commit was created.
+
+## Section C1 OAuth repair and identity retry — 2026-09-18
+
+The isolated OpenEMR OAuth client was reprovisioned through the supported
+`openemr-dev:register-api-test-client --site=default` CLI, running as the
+OpenEMR `apache` user. The active client registry match was enabled in site
+`default`, client ID length 43, with safe fingerprint prefix `9733abf45bba`.
+Credentials were held only in mode-0600 temporary files/process environment and
+were removed after API startup; no credential value was recorded.
+
+The required password-grant parameters were confirmed as `grant_type=password`
+and `user_role=users`. The repaired API process uses the explicit retained
+database path `/home/bighog/repos/vems/V-ems-system/services/api-gateway/.data/platform.sqlite`,
+`OPENEMR_API_STYLE=standard`, isolated OpenEMR
+`http://127.0.0.1:8085`, token endpoint
+`/oauth2/default/token`, site `default`, and port 3001. One listener owns port
+3001. The initial post-repair OAuth request without the OpenEMR username/password
+surfaced `invalid_grant`; restarting with the complete password-grant runtime
+configuration resolved the adapter failure.
+
+Readiness evidence: OpenEMR discovery HTTP 200; direct token issuance HTTP 200;
+intentional synthetic invalid-client rejection HTTP 401 with `invalid_client`;
+standard patient route unauthenticated HTTP 401; adapter connectivity PASS;
+VEMS authenticated patient search HTTP 200 with zero exact synthetic matches.
+PCR-000001 remained `Patient Identification Pending` with no VEMS or isolated
+OpenEMR patient link. PCR-000002 retained its separate provisional link
+`a2c6406b-c7a5-4b61-b99c-99141a3d0f11`. Read-only isolated OpenEMR lookup found
+zero exact `Stage_Alpha` patients before creation.
+
+A fresh clipboard-pasted STAFF-001/field_crew session rendered the retained
+assignment, incident workspace, and PCR-000001 identity controls. The emulator
+then moved to Android Settings during explicit non-token identity-form input;
+the form submission could not be completed reliably. No patient create/link,
+encounter, assessment, or other clinical write was issued. Isolated OpenEMR
+exact synthetic patient count remained zero. The API, database, Docker
+volumes, shared OpenEMR 8083, Android application data, SecureStore, and
+protected environment files were preserved.
+
+Section C1 status: **BLOCKED at rendered identity submission after OAuth repair**.
+Encounter and assessment persistence remain unexecuted; C2 observations,
+medications, procedures, disposition, handover, signatures, and finalization
+remain unstarted. The retained Vtiger custom-module deployment blocker remains
+separate and unchanged. No commit was created.
+
+### C1 repair validation
+
+- Focused API patient-case/identity tests: **PASS**, 10/10.
+- Focused orchestration patient-case tests: **PASS**, 16/16.
+- Full API gateway suite: **PASS**, 129/129.
+- Full orchestration suite: **PASS**, 265 passing, 0 failing (276 discovered).
+- Mobile TypeScript: **PASS**.
+- Mobile unit suite: **PASS**.
+- Mobile component suite: **PASS**, 73/73.
+- `git diff --check`: **PASS**.
+- No authenticated smoke mutation was run against the retained authoritative
+  fixture database; adapter/OAuth readiness was directly verified instead.
+
+## C1 manual Create and link correlation — 2026-09-18
+
+The single manual tap was observed after the five-minute STAFF-001 session had
+expired. The Android hierarchy showed `identity-error: Token expired`; the
+identity screen remained rendered with the synthetic Stage/Alpha search values,
+the no-match result, and the Create and link control. No patient identity or
+link success marker was rendered.
+
+The active VEMS API process remained the sole listener on port 3001
+(`node src/server.mjs`, PID 51815). Its last correlated identity request was
+the earlier `POST /api/patients/search` at 2026-09-18T10:26:13Z, completed
+successfully after the isolated OpenEMR search at 10:26:14Z. No patient-create,
+patient-link, or subsequent identity request was logged for the manual tap.
+
+The isolated OpenEMR container likewise showed no request in the manual-tap
+window. Its only matching recent activity was the earlier OAuth token HTTP 200
+and standard patient search HTTP 200 for the zero-match check. Isolated MySQL
+reported no matching error activity. Therefore the expired-session rejection
+occurred client-side before fetch; no VEMS or OpenEMR mutation occurred, no
+Stage_Alpha patient was created, and PCR-000001 remains unlinked.
+
+Section C1 status remains **BLOCKED before rendered identity submission**.
+Encounter and assessment persistence remain unexecuted. No source code or
+protected environment file changed; this correlation and the prior recovery
+entries are documentation only. No commit was created.
+
+## C1 fresh-token manual submission retry — 2026-09-18
+
+The API, isolated OpenEMR OAuth discovery, authoritative Metro, emulator, and
+Windows relay listeners were healthy before the retry. A fresh supported
+STAFF-001/field_crew JWT was directly verified with HTTP 200 and transferred
+through the Windows clipboard with an exact length match of 232 characters;
+the token content was not recorded.
+
+The rendered identity form showed the synthetic Stage/Alpha/2000-01-02/X
+values and `No matching patients found`. Android logcat was cleared at
+2026-09-18T10:44:16Z. The single user tap was observed at approximately
+2026-09-18T10:45:19Z; the UI displayed `Token expired` before submission.
+
+API correlation showed no patient-create or patient-link POST after the
+cutoff. The only later API traffic was read-only PCR-000001 state inspection:
+the patient link remained HTTP 404 and PCR-000001 remained
+`verification_status=unknown`. Isolated OpenEMR and MySQL logs showed no
+patient request or write in the correlation window. No Stage_Alpha patient was
+created and no PCR-000001 link exists.
+
+The temporary token file was removed and the Windows clipboard was cleared.
+Section C1 remains **BLOCKED before rendered identity submission**; encounter,
+assessment, and all later clinical sections remain unexecuted. No source code,
+protected environment file, SQLite row, Docker volume, Android application
+data, SecureStore data, or shared OpenEMR data was modified. No commit was
+created.
+
+## C1 uninterrupted-window retry — 2026-09-18
+
+Prerequisite health checks passed for the VEMS API, isolated OpenEMR OAuth
+discovery, authoritative Metro, Windows relay listeners, and emulator. A
+continuous sanitized capture was started for Android logcat, VEMS API output,
+isolated OpenEMR, and isolated MySQL before token issuance. The emulator was
+already positioned on the PCR-000001 identity form with the synthetic
+Stage/Alpha/2000-01-02/X values.
+
+A fresh supported token was issued as the final preparation step, directly
+verified HTTP 200, copied through the Windows clipboard with exact length 232,
+and configured to expire at 2026-09-18T10:53:23Z. After the user completed the
+sequence and tapped Create and link once, the rendered UI showed
+`identity-error: Token expired` and remained on the identity form. The
+captured Android evidence contains no patient-create or patient-link request;
+the API and isolated OpenEMR/MySQL captures contain no write activity.
+
+Authenticated readback after the tap confirmed PCR-000001 HTTP 200 with
+`verification_status=unknown`, patient-link HTTP 404, and unchanged synthetic
+Stage/Alpha demographics. No Stage_Alpha OpenEMR patient was created. The
+prepared token was therefore not demonstrably active in the app at submission
+time, despite the fresh-token preparation; no automatic retry was performed.
+
+The temporary token file and Windows clipboard were cleared, and only the
+temporary capture processes were stopped. Section C1 remains **BLOCKED before
+rendered identity submission**. Encounter and assessment persistence remain
+unexecuted. No source, protected environment file, SQLite row, Docker volume,
+Android application data, SecureStore data, or shared OpenEMR data was
+modified. No commit was created.
+
+## C1 token-expiry diagnosis — 2026-09-18
+
+No further token was issued. Simultaneous clock evidence showed Windows and
+emulator epoch `1789728733` at the capture point, with WSL epoch `1789728736`
+three seconds later. The API is a WSL host process (PID 51815), not a separate
+time-skewed container, and therefore shares the WSL clock. Windows timezone was
+`GMT Standard Time`; WSL reported `BST`; the emulator reported
+`Europe/London`. These timezone labels do not affect epoch comparisons. The
+emulator boot time was `2026-09-17 20:52:24`; automatic time and automatic
+timezone were both enabled (`1`). No manual time change was made.
+
+Source tracing proves the message is not generated by a client-side expiry
+check. `LoginScreen` calls `verifySession`, then stores only the API URL, raw
+auth token, actor ID, actor role, and device ID. `Session` has no `expires_at`
+field; `loadSession` performs no JWT decode or expiry comparison. The identity
+screen calls `createPatient`, which calls `requestJson`, which performs
+`fetch` before any error is constructed. HTTP 401 responses are converted to
+`UnauthorizedError` using the server response message, so the displayed
+`Token expired` text is the VEMS auth error propagated by the client.
+
+The API validates `exp` using `Math.floor(Date.now() / 1000)` and rejects the
+request before its routed `request_received` logging. This explains why an
+expired bearer can produce no `/api/patients` route entry while still being
+rejected at the VEMS listener. It is not evidence that the client skipped
+fetch. The exact source path is `services/api-gateway/src/auth.mjs` claim
+validation, followed by `apps/mobile-crew/src/api/httpClient.ts` 401
+normalization and `apps/mobile-crew/src/screens/PatientIdentityScreen.tsx`
+error rendering.
+
+SecureStore remains present and untouched (`SecureStore.xml`, 1,727 bytes,
+mode `0660`, safe hash prefix/full hash retained only in local evidence). Its
+encrypted contents were not read or printed. No plaintext token, decoded
+`iat`/`exp`, or stored `expires_at` could be safely recovered from the app
+without exposing protected session material; the source inspection establishes
+that no separate expiry metadata exists. The evidence therefore classifies the
+issue as **server-side bearer rejection: the active app session was not proven
+to contain the freshly issued token at create time, or the token had genuinely
+expired before validation**, not clock skew or a seconds/milliseconds client
+conversion defect.
+
+No correction is justified by the evidence. Token lifetime and validation were
+not changed; app data, SecureStore, Docker volumes, protected files, and shared
+OpenEMR were preserved. C1 remains **BLOCKED pending a fresh sign-in whose
+active session token can be correlated at the create request**. No commit was
+created.
+
+## C1 temporary ADB/UIAutomator harness attempt — 2026-09-18
+
+Repository tooling audit found no supported Maestro, Detox, Appium, Espresso, or
+UIAutomator driver. A temporary Node/ADB harness was built outside the
+repository and passed its unauthenticated dry run: hierarchy parsing, resource
+ID lookup, calculated-bounds tapping, safe non-secret text replacement,
+screenshot/evidence capture, and disabled-submit verification all passed. The
+harness was removed after the attempt.
+
+The pre-token health gate passed for VEMS `/health` HTTP 200, isolated OpenEMR
+OAuth discovery HTTP 200, authoritative Metro `/status` HTTP 200, Windows
+relay listeners 13001 and 8081, retained containers, and emulator-5554. The
+sanitized Android, OpenEMR, and MySQL captures were started before token
+issuance. A supported 232-character STAFF-001/field_crew token was directly
+verified against the running API with HTTP 200 and copied to the Windows
+clipboard with matching length and safe SHA-256 prefix. No token content was
+recorded.
+
+The single automated run stopped at the Sign in state assertion. The harness
+checked the immediate hierarchy after tapping Sign in instead of waiting for
+the asynchronous authenticated transition; the recorded hierarchy was still
+`login-screen`. The token's recorded `iat` was 2026-09-18T11:32:57Z and its
+five-minute expiry was 2026-09-18T11:37:57Z, while the captured sign-in
+interaction began at approximately 11:42Z. This attempt is therefore
+classified as **BLOCKED by genuine token expiry before authenticated UI
+transition**, with a secondary harness timing defect. The harness never
+invoked Create and link. No patient-create, patient-link, OpenEMR patient, or
+PCR-000001 mutation occurred.
+
+The temporary authentication diagnostics recorded only one accepted direct
+readiness request for the safe fingerprint prefix `afe55f3da7c8`, length 232,
+with 291 seconds remaining at 11:33:06Z; no patient submission request was
+recorded. Temporary diagnostics, token/credential files, and clipboard content
+were removed. The temporary API process was stopped. Protected environment
+files, authoritative SQLite, Docker volumes, Android data, SecureStore, and
+shared OpenEMR 8083 were preserved.
+
+Section C1 remains **BLOCKED before rendered identity submission**. No source
+behavior correction was retained. Exact repository files changed in this run:
+`docs/STAGE14_EXECUTION_REPORT_2026-09-17.md` only; the existing protected
+`infra/.env.development` modification and untracked
+`infra/.env.development.bak` were preserved unchanged. No commit was created.
+
+## C1 deterministic asynchronous harness attempt — 2026-09-18
+
+A temporary Python standard-library ADB/UIAutomator driver was built and
+removed outside the repository. It implemented fresh hierarchy and foreground
+polling, bounded waits, timeout evidence, calculated-bounds taps, verified
+non-secret text replacement, clipboard/KEYCODE_PASTE support for secrets,
+single-tap mutation protection, and timestamped screenshots/hierarchies.
+
+The no-token dry run passed in **79.0 seconds**. It verified LoginScreen
+control discovery and safe non-secret entry. The estimated complete path was
+within the 240-second budget, so one bounded authenticated attempt was
+authorized.
+
+The pre-token gate passed: authoritative SQLite path was pinned, API health was
+HTTP 200, isolated OpenEMR OAuth discovery was HTTP 200, Metro status was HTTP
+200, Windows relays were listening, emulator-5554 was online, captures were
+active, LoginScreen was present, and no stale token file or clipboard content
+remained. A temporary isolated OAuth client was provisioned through the
+supported OpenEMR CLI; credentials were captured only in mode-0600 temporary
+files and removed afterward. The temporary API used the absolute retained
+database path, `OPENEMR_API_STYLE=standard`, isolated OpenEMR port 8085, and
+port 3001.
+
+The single fresh supported token was directly verified HTTP 200, with length
+232 and safe fingerprint prefix `16ab483d3ae8`, and copied to Windows with an
+exact length/hash match. The harness stopped before token paste: after the
+deep-link wait reported `login-screen`, the next fresh hierarchy was the Expo
+DevLauncher `Tools` overlay and no API URL field was present. The timeout
+evidence is retained under `/tmp/stage14-android-evidence-v2`. The harness
+therefore classified the attempt as **BLOCKED before authentication** and did
+not invoke Create and link. API capture contained only the direct readiness
+request; no assignments, patient search, patient-create, patient-link, or
+OpenEMR/MySQL write activity occurred.
+
+The token file, signer secret, OAuth credentials, temporary harness, and
+clipboard content were removed. API and service captures were stopped. No
+repository source behavior changed; no Patient Case, OpenEMR record, Docker
+volume, Android application data, SecureStore data, or shared OpenEMR 8083
+data changed. The harness is not proposed for repository retention until the
+DevLauncher overlay stabilization is repaired. Section C1 remains **BLOCKED**.
+
+## C1 reusable Expo DevLauncher-resilient driver — 2026-09-18
+
+The observed `Tools` marker was reproduced and captured at
+`/tmp/stage14-overlay.xml` and `/tmp/stage14-overlay.png`. The foreground
+activity remained `org.vems.mobilecrew/.MainActivity`. The screenshot showed a
+floating DevLauncher tools button over the VEMS LoginScreen, not a modal
+overlay; therefore pressing Back in that state exits to the Android launcher.
+The prior apparent overlay race also produced a Tools-only hierarchy, which is
+handled separately.
+
+Added repository files:
+
+- `scripts/stage14/android-ui-driver.py`
+- `scripts/stage14/test_android_ui_driver.py`
+
+The driver classifies VEMS screens, true Tools-only and launcher states,
+Android Settings, and unknown states using explicit hierarchy markers. It
+recovers true Tools-only state with exactly one Back, recovers launcher state
+through the documented deep link, and never treats the floating Tools button as
+an overlay when a VEMS screen marker is present. A watchdog runs before every
+UI action. The stable-login gate requires ten continuous seconds of VEMS
+LoginScreen markers, MainActivity foreground, required controls, and Metro
+status before authentication preparation. JWTs use clipboard/KEYCODE_PASTE
+only; the single Create and link mutation is guarded against repeat taps and
+requires at least 60 seconds of token lifetime.
+
+Validation:
+
+- Focused Python harness tests: **PASS**, 6/6.
+- Repository harness dry run with launcher recovery, floating-Tools
+  classification, stable-login gate, hierarchy-derived controls, and safe
+  non-secret fields: **PASS**.
+- `git diff --check`: **PASS**.
+
+No token was generated or pasted during this driver-repair run. No patient,
+OpenEMR, SQLite, Docker-volume, Android-data, SecureStore, or shared OpenEMR
+8083 mutation occurred. No commit was created.
+
+## C1 autonomous authenticated harness attempt — 2026-09-18
+
+Preflight passed for the explicit authoritative database path,
+`OPENEMR_API_STYLE=standard`, one temporary API listener on port 3001, Metro,
+emulator-5554, Windows relays, existing ADB reverse rules, retained fixture
+state, harness tests 6/6, and the repository dry run. The isolated OAuth
+client was provisioned through the supported CLI using mode-0600 temporary
+storage. After correcting temporary CLI-output parsing, isolated OAuth issued
+HTTP 200 and the standard patient route returned HTTP 200 for the synthetic
+Stage/Alpha no-match search using the required `api:oemr user/patient.rs`
+scope. No protected environment file was edited.
+
+The one supported STAFF-001/field_crew token was issued at
+`2026-09-18T13:01:11Z`, with five-minute expiry at `13:06:11Z`, length 232 and
+safe SHA-256 prefix `0adf3810ecf9`. Direct VEMS readiness verification was
+HTTP 200 and Windows clipboard length/hash verification passed. The harness
+reached stable LoginScreen, pasted through KEYCODE_PASTE, and attempted the
+single Sign in tap. The secure paste left the Android IME visible over the
+lower form; although `submit-sign-in` was present in the hierarchy, the tap
+did not produce the expected transition or any API request. The bounded wait
+expired with the final evidence hierarchy still on `login-screen`; the token
+had approximately 203 seconds remaining at abort. No automatic retry occurred.
+
+Harness transition summary: stable LoginScreen PASS; secure paste PASS;
+Sign in action attempted once; jobs-list-screen NOT REACHED; assignment,
+incident, PCR-000001, identity search, Create and link, patient-create, and
+patient-link NOT EXECUTED. VEMS API capture contained only the direct
+readiness request. Isolated OpenEMR and MySQL captures contained no patient or
+write activity. Patient count and PCR-000001 link count remained unchanged;
+PCR-000002 was not touched.
+
+The token, signer, OAuth credential files, clipboard, API process, and capture
+processes were removed/stopped. A narrow harness correction was retained:
+`dismiss_keyboard()` now sends one Back after secure paste and waits for the
+Sign in control before tapping. No authenticated retry was performed. Focused
+harness tests remain 6/6 PASS and `git diff --check` passes.
+
+C1 result: **BLOCKED before authentication**. Exact files changed in this
+run: `scripts/stage14/android-ui-driver.py` and this report; the existing
+protected `infra/.env.development` modification and untracked backup were
+preserved. No commit was created.
+
+## C1 keyboard hardening and bounded rehearsal — 2026-09-18
+
+`dismiss_keyboard()` was hardened to distinguish a rendered IME window from
+Android's stale `mInputShown=true` state. A visible IME now requires an
+on-screen, non-zero surface; the observed `surface=[0,0][0,0]` state is treated
+as hidden. The method preserves the focused value, refuses application-state
+navigation, refreshes the hierarchy, and verifies an enabled Sign in control.
+The no-token rehearsal also requests the supported IME show action before
+testing dismissal.
+
+Focused harness tests: **PASS**, 9/9, including stale zero-surface rejection
+and rendered-surface acceptance. The rehearsal reached the preserved VEMS
+LoginScreen and entered only harmless temporary API text. The emulator did not
+present a rendered software IME within the five-second bound, even after the
+supported `ime show` request; the rehearsal stopped before authentication and
+before any mutation. No JWT was generated, no API request was made, and no
+patient/OpenEMR/database/Android-data mutation occurred.
+
+The current run is **BLOCKED before token generation** by the emulator IME
+presentation state. The ADB transport was intermittently unavailable while
+collecting post-failure evidence; no application data or system settings were
+reset. `git diff --check` passed. Changed files in this run are
+`scripts/stage14/android-ui-driver.py`,
+`scripts/stage14/test_android_ui_driver.py`, and this report. No commit was
+created.
+
+## C1 keyboard-mode-agnostic harness and ADB gate — 2026-09-18
+
+The driver now treats the software IME as optional. A rendered non-zero IME is
+dismissed through the IME service; an absent or stale zero-sized IME is a
+no-op. Submit visibility is checked independently through fresh hierarchy
+queries, bounded scrolling, enabled-state verification, and obstruction
+checks. Read-only ADB operations have two bounded transient retries; tap,
+swipe, and keyevent operations are never retried.
+
+Focused harness tests: **PASS**, 13/13. The ADB server was restarted and the
+emulator reported `device` with `sys.boot_completed=1`; three individual
+hierarchy dumps succeeded and reverse mappings were recreated for emulator
+3001→Windows 13001 and emulator 8081→Windows 8082. The required 60-second
+stability gate then failed because repeated shell probes returned
+`WSL UtilBindVsockAnyPort: socket failed`. The no-token rehearsal was not
+started after that failed gate, and no JWT, authentication, API request, or
+clinical mutation occurred.
+
+Section C1 remains **BLOCKED before token generation** pending a stable Windows
+ADB/WSL transport. No emulator reboot or wipe was performed. Changed files are
+`scripts/stage14/android-ui-driver.py`,
+`scripts/stage14/test_android_ui_driver.py`, and this report. No commit was
+created.
+
+## C1 native Windows harness handoff — 2026-09-18
+
+The native Windows ADB executable at
+`E:\EvidessaDev\android\sdk\platform-tools\adb.exe` was started directly
+from Windows PowerShell. `emulator-5554` reported `device` and
+`sys.boot_completed=1`. The 60-second native gate passed with ten consecutive
+shell commands, ten hierarchy dumps, foreground checks, and screenshots. The
+native reverse mappings were recreated and verified for emulator 3001 to
+Windows 13001 and emulator 8081 to Windows 8082. No WSL ADB invocation was
+used during that gate.
+
+The driver now accepts `--adb`, `--device`, `--evidence-dir`, `--api-url`, and
+`--development-client-url`; subprocesses remain argument-array based and the
+Linux/WSL defaults remain available. Local focused tests and `git diff --check`
+pass. Windows discovery found no `py.exe`; `python.exe` is only the Microsoft
+Store execution alias and cannot run Python. Per the execution constraint, no
+Python installation was attempted, the Windows mirror was not run, and the
+native no-token dry run could not be started. No token, authentication, API
+request, or clinical mutation occurred.
+
+Section C1 remains **BLOCKED before token generation** pending review and
+provision of an approved native Windows Python runtime. No emulator reboot or
+wipe was performed. No commit was created.
+
+## C1 native Windows Node driver — 2026-09-18
+
+Native Windows Node was found at `C:\Program Files\nodejs\node.exe`, version
+24.19.0, with npm 11.17.0. Added dependency-free repository files
+`scripts/stage14/android-ui-driver.mjs` and
+`scripts/stage14/android-ui-driver.test.mjs`. The Node driver accepts explicit
+ADB/device/evidence/API/development-client arguments, uses clipboard-only JWT
+input with protected length/expiry metadata, preserves the no-retry mutation
+guard, and keeps token content out of arguments and logs. The Python driver was
+retained.
+
+The Windows mirror at `E:\s14b\stage14-harness` matched both repository files
+by SHA-256. Native Windows Node tests passed **13/13**. The native no-token dry
+run passed, including launcher recovery, stable LoginScreen, API URL
+restoration, keyboard-agnostic handling, and Sign in visibility. No token was
+generated during the dry run.
+
+One bounded authenticated run was then performed. A fresh supported synthetic
+token was directly verified HTTP 200 and copied to the Windows clipboard at
+exact length 232. The native driver pasted the expected-length value and tapped
+Sign in exactly once. The UI remained on LoginScreen; no readiness, assignment,
+patient-search, patient-create, or patient-link request reached the active API.
+No clinical or OpenEMR mutation occurred. The failure is classified as
+**BLOCKED before authentication**, pending investigation of native clipboard
+paste/sign-in behavior; it was not retried. Windows clipboard, token,
+metadata, temporary signing secret, OAuth client files, and runtime processes
+were cleaned up. No Docker volumes or application data were changed.
+
+Repository Node tests and `git diff --check` pass. No commit was created.
+
+## C1 native Sign-in activation diagnosis — 2026-09-18
+
+The failed native run was classified as **keyboard obstruction with stale IME
+state**, not a raw ADB dispatch failure. The preserved pre-sign-in hierarchy
+showed `submit-sign-in` enabled and clickable at
+`[608,1109][1952,1221]`, giving the exact derived tap `(1280,1165)`. The
+foreground remained `org.vems.mobilecrew/.MainActivity`; no launcher, Settings,
+or DevLauncher interception was present. The screenshot showed the software
+keyboard covering the lower form and the Sign in control. The secure field had
+the expected-length paste and remained focused; no VEMS request followed the
+single tap.
+
+The Node driver was corrected to use non-zero visible `ImeInsetsSourceProvider`
+state, treat stale `mInputShown`/zero surfaces as absent, and scroll the
+LoginScreen above a real IME inset without unsafe Back navigation. A benign
+nonzero `ime hide` result is tolerated. Focused Node tests now pass **14/14**;
+native Windows Node tests pass **14/14** and the native no-token dry run passes.
+
+Appium/UiAutomator2 was **not installed**: raw ADB click dispatch was not
+proven to be the cause, and the obstruction was corrected at the harness layer.
+No JWT was generated, no Sign-in request or clinical mutation occurred in this
+diagnostic run. Exact repository changes are
+`scripts/stage14/android-ui-driver.mjs`,
+`scripts/stage14/android-ui-driver.test.mjs`, and this report. No commit was
+created.
+
+## C1 autonomous native Node run — 2026-09-18
+
+Preflight passed: retained isolated containers were up; OpenEMR discovery was
+HTTP 200; the standard OAuth password grant with `user_role=users` was HTTP 200;
+the exact synthetic Stage/Alpha search was HTTP 200 with zero matches; the
+native Windows ADB 60-second gate passed with reverse mappings; native Node
+tests passed **14/14**; and the native no-token dry run passed.
+
+One supported 300-second synthetic STAFF-001/field_crew token was directly
+verified HTTP 200 and copied to the Windows clipboard at exact length 232 with
+matching safe SHA-256 prefix. The native Windows Node harness pasted the
+expected-length value and preserved LoginScreen. It detected the authoritative
+IME as obstructing Sign in, attempted the bounded IME hide path, and captured
+the obstruction/scroll evidence. The sign-in control was never tapped because
+it remained obscured; no readiness, assignment, patient-search, patient-create,
+or patient-link request reached the API. No mutation occurred.
+
+C1 result: **BLOCKED before authentication**. The run was not retried. The
+remaining issue is that this emulator's IME remains rendered after the hide
+request and the LoginScreen scroll container did not move Sign in above the
+reported obstruction. Appium was not installed or used. Token, clipboard,
+metadata, signing secret, OAuth files, API/Metro sessions, and temporary log
+captures were cleaned up. Docker volumes, Android application data, SecureStore,
+and shared OpenEMR data were preserved. No commit was created.
+## C1 guarded real-IME dismissal — 2026-09-18
+
+The native Node harness was hardened with guarded real-IME dismissal. A Back
+event is sent exactly once only when the authoritative non-zero
+`ImeInsetsSourceProvider` state, VEMS `MainActivity`, `vems_login`, and focused
+field preconditions all hold. Absent or stale/zero-sized IME state sends no key
+event. Postconditions require the IME to be absent, the same VEMS LoginScreen
+and focused field to remain present, the safe field length to remain unchanged,
+and enabled Sign in to be visible.
+
+The Node suite passes 24/24 locally and natively on Windows. The native
+no-token rehearsal reached the real IME path, sent the one guarded Back, and
+then observed the foreground change to the Android launcher. The harness
+aborted before Sign in; it did not retry Back, did not authenticate, and did
+not mutate VEMS or OpenEMR. Therefore the final authenticated C1 run was not
+issued a token and remains BLOCKED at the pre-auth IME-dismissal gate.
+
+The persistent VEMS Tools accessibility icon was also distinguished from the
+actual DevLauncher Tools overlay; the classifier regression is covered by the
+suite. The Windows 8082 relay remained healthy and identified the authoritative
+WSL checkout. No protected environment file, app data, SecureStore, Docker
+volume, or database was modified.
+## C1 Escape-only IME attempt — 2026-09-18
+
+The native Windows Node harness now provides `dismissRealImeWithEscape()`.
+It requires the VEMS MainActivity/LoginScreen, focused session-token field,
+authoritative non-zero IME inset, no sign-in tap, and no armed mutation. It
+sends Android `KEYCODE_ESCAPE` (`111`) exactly once, with no Back fallback and
+no key-event retry. Postconditions require the same VEMS activity and
+LoginScreen, preserved token length, absent IME, and visible/enabled Sign in.
+
+Validation passed: native Node behavioral suite 30/30, Python compatibility
+suite 13/13, Windows mirror SHA-256 parity, native Windows Node suite 30/30,
+and `git diff --check`.
+
+The no-token rehearsal passed completely. A harmless clipboard value was
+entered, the real IME was dismissed with one Escape, LoginScreen remained
+foreground, Sign in became visible/enabled, and all harmless values were
+cleared. No JWT or Sign-in request was used during rehearsal.
+
+Final authenticated preflight passed: retained isolated services, one API
+listener on port 3001, absolute retained database
+`services/api-gateway/.data/platform.sqlite`, standard isolated OpenEMR OAuth,
+zero Stage_Alpha matches, Metro `/status`, Windows relays, emulator, and ADB
+reverse mappings. One supported 300-second JWT was directly verified and
+transferred through the Windows clipboard with safe length/fingerprint checks.
+
+The single actual native authenticated attempt reached the Escape path but
+timed out because the authoritative IME remained visible after Escape. The
+harness stopped before Sign-in; no assignment, patient search, patient-create,
+patient-link, or OpenEMR write request followed. The only API request observed
+for this attempt was the direct readiness verification. No mutation retry was
+performed. Token, OAuth credential, access-token response, clipboard, and
+transient sensitive captures were cleaned. C1 identity linking remains
+**BLOCKED at IME dismissal**; no claim of Stage 14 completion is made.
+
+Changed repository files in this attempt:
+
+- `scripts/stage14/android-ui-driver.mjs`
+- `scripts/stage14/android-ui-driver.test.mjs`
+- this report
+## C1 static-header IME focus-transfer attempt — 2026-09-18
+
+The harness was changed to use one guarded tap on the current non-interactive
+`V-EMS Crew` header node. Preconditions require VEMS MainActivity/LoginScreen,
+the exact API URL, present token and enabled Sign in, a non-zero authoritative
+IME rectangle, a non-editable/non-clickable/non-focusable header wholly outside
+that rectangle, and no armed mutation. The tap is derived from the header
+bounds and is non-retryable. No Escape, Back, Home, activity restart, or
+keyboard-chrome tap is used by this path.
+
+No-token rehearsal: **PASS**. One static-header tap dismissed the real IME,
+retained LoginScreen, exposed enabled Sign in, and harmless fields were
+cleared. No JWT or Sign-in request was used.
+
+Validation: local Node 20/20, native Windows Node 20/20, Python compatibility
+13/13, and `git diff --check` PASS. Windows mirror SHA parity passed.
+
+Authenticated preflight passed, including the retained absolute database,
+isolated standard OpenEMR OAuth and zero Stage_Alpha matches, API/Metro,
+relays, emulator, and reverse mappings. One fresh 300-second JWT was directly
+verified and copied to the Windows clipboard. The first authenticated harness
+start stopped before ADB because the orchestrator removed metadata too early;
+the corrected launch then stopped before Sign-in because the static-header
+precondition correctly rejected a disabled Sign-in button. Evidence showed the
+token and header were present, but required STAFF-001/field_crew actor fields
+had been cleared by the rehearsal. The harness was corrected to restore those
+non-secret fields and to clear retained secure-field bullets before clipboard
+paste, but the token had fallen below the requested 180-second pre-sign-in
+window. No replacement token was generated.
+
+No authenticated Sign-in, patient search, patient-create, patient-link,
+OpenEMR write, or clinical mutation occurred. The only API request correlated
+to the attempt was direct readiness verification. Temporary JWT, signing
+secret, OAuth credentials, access-token responses, captures, and clipboard
+contents were cleaned. C1 remains **BLOCKED before authentication** pending a
+future run with the corrected preparation path.
+
+Changed repository files in this attempt:
+
+- `scripts/stage14/android-ui-driver.mjs`
+- `scripts/stage14/android-ui-driver.test.mjs`
+- this report
+## C1 just-in-time authentication attempt — 2026-09-18
+
+The native Windows Node harness was extended with a pre-token `--arm-login`
+checkpoint. It requires the authoritative MainActivity/LoginScreen, exact API
+URL `http://127.0.0.1:3001`, `STAFF-001`, `field_crew`, an empty secure field,
+disabled Sign-in, absent IME, visible unobscured Sign-in, and a valid static
+`V-EMS Crew` focus-transfer header. The authenticated path continues to use
+that static-header tap only; no Escape, Back, Home, activity restart, or
+keyboard-chrome fallback was used.
+
+The retained topology passed preflight: authoritative database
+`/home/bighog/repos/vems/V-ems-system/services/api-gateway/.data/platform.sqlite`,
+SQLite integrity `ok`, retained `INC-000001`/`ASN-000001`, PCR-000001 with zero
+patient links, PCR-000002 with its completed provisional link, isolated
+OpenEMR standard OAuth HTTP 200, and standard patient search HTTP 200 with zero
+exact Stage/Alpha matches. API health was HTTP 200 with one listener on 3001;
+Metro status was `packager-status:running` with the authoritative checkout;
+native Windows ADB and existing reverse rules remained available.
+
+The arm checkpoint passed natively (`LOGIN_ARMED`). Exactly one synthetic
+300-second STAFF-001/field_crew JWT was then issued at Unix `1789747801`, with
+safe metadata length 232, SHA-256 prefix `bd64bf2935b3`, expiry Unix
+`1789748101`; direct VEMS readiness verification returned HTTP 200. Clipboard
+transfer was performed without displaying the token and was length/hash checked.
+
+The authenticated harness pasted the token successfully, but stopped before
+Sign-in because its required 240-second pre-submit gate measured 231 seconds
+remaining. This was a bounded timing failure; no Sign-in tap, readiness or
+assignment request from the mobile session, patient search, patient-create,
+patient-link, or clinical mutation occurred. The API log contained only the
+direct readiness verification. PCR-000001 remains unlinked and no Stage/Alpha
+OpenEMR patient was created.
+
+Temporary JWT, metadata, signing secret, OAuth files, authenticated token-field
+evidence, logcat capture, and clipboard contents were removed. The clipboard
+was verified at length zero. Protected environment files, Android data and
+SecureStore, Docker volumes, shared OpenEMR 8083, and retained fixture records
+were preserved. C1 remains **BLOCKED before rendered Sign-in**; no replacement
+token was issued and no mutation was retried.
+
+Changed files in this continuation:
+
+- `scripts/stage14/android-ui-driver.mjs`
+- `scripts/stage14/android-ui-driver.test.mjs`
+- this report
+
+## Development-only Stage 14 test-session implementation — 2026-09-18
+
+Manual five-minute JWT entry is no longer required for general debug-emulator
+acceptance. The new `POST /api/development/test-session` facility is fail-closed:
+it requires exact development profile guards and the exact
+`VEMS_ENABLE_DEVELOPMENT_TEST_AUTH=true` flag, uses the existing HS256 issuer,
+audience and authentication middleware, fixes the identity to synthetic
+`STAFF-001`/`field_crew`, adds explicit synthetic-session claims, defaults to a
+3600-second development-only TTL bounded to 900–7200 seconds, audits issuance
+without bearer material, and applies a five-per-minute issuance limit. Enabled
+staging/production or secure-startup configurations fail startup.
+
+The mobile control is rendered only when `__DEV__` and the exact inline public
+flag `EXPO_PUBLIC_ENABLE_DEVELOPMENT_TEST_AUTH=true` are both present. It uses
+the existing verification, session construction, SecureStore persistence and
+`onSignedIn` path; normal token login remains unchanged. Jobs display a
+`Synthetic test session` marker. Configuration validation confirms the default
+and release-negative states, and the inline setup is documented in
+`apps/mobile-crew/BUILD.md`.
+
+Validation passed: mobile TypeScript; mobile unit `218/218`; mobile component
+`18/18` suites, `76/76`; mobile configuration validator; local Node harness
+`23/23`; focused API development-auth tests `5/5` (combined Node run `28/28`);
+`git diff --check`. The native Windows mirror matched the repository harness by
+SHA and its prior native test run passed `23/23`.
+
+Native development login reached authenticated jobs with Assigned jobs and
+Sign out, and a retained synthetic session was visibly indicated. The first
+C1 continuation was blocked by an invalid retained session and was safely
+signed out. Subsequent autonomous runs reached ASN-000001, INC-000001,
+PCR-000001 and the rendered identity form. They stopped before Search and
+before arming or tapping Create and link when native Windows ADB failed during
+non-secret last-name entry. No patient-create, patient-link, OpenEMR write,
+SQLite mutation, or PCR-000003 occurred; PCR-000001 remains unlinked and
+PCR-000002 remains unchanged. C1 is **BLOCKED before identity submission**.
+
+Release-negative evidence: default Expo config omits the feature, explicit
+production/release config disables it, and server tests cover absent/false
+route 404 plus staging/production fail-closed startup. No secret or token was
+added to source, config, lockfiles, or generated resources. The endpoint label
+and development button are development-bundle strings guarded by executable
+configuration; release behavior is controlled by the server route absence and
+release configuration checks.
+
+Files changed for this implementation/continuation:
+
+- `services/api-gateway/src/development-test-auth.mjs`
+- `services/api-gateway/src/auth.mjs`
+- `services/api-gateway/src/server.mjs`
+- `services/api-gateway/test/development-test-auth.test.mjs`
+- `apps/mobile-crew/app.config.js`
+- `apps/mobile-crew/src/auth/developmentTestSession.ts`
+- `apps/mobile-crew/src/auth/session.ts`
+- `apps/mobile-crew/src/screens/LoginScreen.tsx`
+- `apps/mobile-crew/src/screens/JobsListScreen.tsx`
+- `apps/mobile-crew/test/developmentTestSession.test.ts`
+- `apps/mobile-crew/test/LoginScreen.jest.test.tsx`
+- `apps/mobile-crew/scripts/validate-mobile-config.sh`
+- `apps/mobile-crew/BUILD.md`
+- `scripts/stage14/android-ui-driver.mjs`
+- `scripts/stage14/android-ui-driver.test.mjs`
+- this report
+
+No commit, push, merge, tag or publish was performed. Remaining gates are
+native ADB/UI text-entry reliability before C1 identity submission, the
+retained Vtiger custom-module deployment blocker, and all later connected
+clinical sections.
+
+`npx expo-doctor` was also run and reported the repository's existing Expo SDK
+dependency drift (16 package version mismatches, including Jest major-version
+drift); no dependency upgrade was performed and no lockfile was changed.
+
+## C1 non-secret field-entry continuation — 2026-09-18
+
+The native Windows Node harness now provides `setNonsecretTextField()`. It
+targets the current hierarchy bounds, clears and replaces values through the
+Windows clipboard plus Android paste, verifies the fresh hierarchy value, and
+clears the clipboard after each field. A transport ambiguity is accepted only
+when the exact expected value is already rendered; empty or divergent values
+have one bounded replacement opportunity, with no uncontrolled retry loop and
+no `adb input text` use. The C1 path uses it for Stage, Alpha, and
+2000-01-02; Sex remains an explicit rendered control entry.
+
+Local Node harness tests passed `29/29`, native Windows Node harness tests
+passed `29/29`, Python compatibility tests passed `13/13`, focused patient
+identity tests passed `8/8`, and focused orchestration patient-case tests passed
+`16/16`. `git diff --check` passed. The retained SQLite database passed a
+read-only integrity check (`ok`).
+
+The one autonomous development-session run reached ASN-000001, INC-000001,
+PCR-000001, and the rendered identity form. All three non-secret fields were
+entered and verified. Search was tapped exactly once; the UI rendered
+`RESULTS (NOT_FOUND)` and `No matching patients found.`. The harness assertion
+was corrected to accept the rendered terminal punctuation without repeating
+Search.
+
+The non-mutating “None of these — create a new patient” transition then failed
+to render the create form after the bounded harness tap and one permitted
+fresh-bounds navigation retry. No `create-sex` or Create-and-link control was
+rendered, so the mutation was not attempted. API correlation shows one
+successful authenticated `POST /api/patients/search`; there were no patient
+create or patient-link requests. Read-only retained-database checks show
+`PCR-000001` has no link, `PCR-000002` retains its single provisional link to
+`a2c6406b-c7a5-4b61-b99c-99141a3d0f11`, and `PCR-000003` count is zero.
+
+C1 remains **BLOCKED before patient creation**. The remaining issue is a
+rendered UI navigation/control-dispatch problem for the non-mutating create-form
+button, not field entry or authentication. No patient, OpenEMR, SQLite,
+assignment, incident, or Docker data was changed by this continuation.
+
+Changed files in this continuation:
+
+- `scripts/stage14/android-ui-driver.mjs`
+- `scripts/stage14/android-ui-driver.test.mjs`
+- this report
+
+No commit, push, merge, tag, or publish was performed. Temporary API,
+credential, token, clipboard, and sensitive capture material was cleaned; the
+Windows clipboard was verified at length zero. Protected environment files,
+Android application data/SecureStore, Docker volumes, shared OpenEMR 8083, and
+retained synthetic records were preserved.
+
+## C1 rendered create-new control correction — 2026-09-18
+
+Source diagnosis confirmed that the identity screen rendered the create form
+implicitly as soon as a no-match search completed (`setShowCreateForm(true)`).
+The form was therefore below the visible ScrollView viewport while the visible
+“None of these — create a new patient” Pressable remained present; waiting for
+the form immediately after pressing that already-active control was not a
+reliable state transition. The action itself was not a patient mutation.
+
+The smallest correction was to keep the form closed after search and reveal it
+only through the explicit rendered action. That Pressable now owns the named
+handler, has `testID="patient-create-new-option"`, button semantics, an explicit
+enabled accessibility state, and the form container has
+`testID="patient-create-form"`. Create and link remains the only patient
+mutation. Component coverage proves a no-match search, one or repeated
+non-mutating option presses, retained Stage/Alpha/DOB/Sex values, and zero
+create calls while opening the form.
+
+Validation after the correction: mobile TypeScript passed; mobile component
+tests passed `18/18` suites and `77/77`; local Node harness tests passed `30/30`;
+native Windows Node harness tests passed `30/30`; Python compatibility tests
+passed `13/13`; `git diff --check` passed.
+
+The emulator continuation was not claimed. The existing retained identity UI
+was not retried after the source correction because its bundle had not yet been
+reloaded with the new source, and the retained isolated OpenEMR host port was
+reachable from Windows but not from the current WSL process. No development
+session was issued, no Search was repeated, and no Create-and-link action was
+performed. Read-only SQLite evidence remains: PCR-000001 has no link,
+PCR-000002 retains its single provisional link, and PCR-000003 count is zero.
+C1 remains **BLOCKED pending authoritative Metro reload plus restored isolated
+OpenEMR/API reachability**.
+
+Changed files in this correction:
+
+- `apps/mobile-crew/src/screens/PatientIdentityScreen.tsx`
+- `apps/mobile-crew/test/PatientIdentityScreen.jest.test.tsx`
+- `scripts/stage14/android-ui-driver.mjs`
+- `scripts/stage14/android-ui-driver.test.mjs`
+- this report
+
+No commit, push, merge, tag, or publish was performed.
+
+## C1 WSL-to-isolated-OpenEMR topology diagnosis — 2026-09-18
+
+The retained topology was inspected without recreating containers or touching
+protected environment files. `vems-openemr-stage14-installer` is running with
+host port `8085 -> 80` on Docker network `vems-stage14-openemr-net`, container
+address `172.27.0.3`; its retained MySQL dependency is
+`vems-mysql-stage14-openemr-test2` at `172.27.0.2` on the same network.
+Vtiger remains on retained host port 8080 and Redis remains healthy on retained
+port 6380. The WSL address is `172.22.103.130` with default gateway
+`172.22.96.1`.
+
+Windows-side checks passed: `http://127.0.0.1:8085/` returned HTTP 200 and
+isolated OAuth discovery returned HTTP 200. WSL-side bounded probes failed for
+all available candidates: `host.docker.internal` (resolved by `getent` to
+`192.168.88.34` but not reachable on 8085), `192.168.88.34:8085`, the WSL
+gateway `172.22.96.1:8085`, and the retained container address
+`172.27.0.3:80`. OpenEMR itself remains healthy when checked locally inside the
+retained container. No shared OpenEMR port 8083 was accessed or changed.
+
+This establishes a host-boundary networking failure: Windows loopback port 8085
+is not exposed on a WSL-reachable host/gateway interface, while Docker’s
+container network is not reachable from the current WSL process. No Windows
+portproxy or firewall/network change was made because the requested rule is to
+stop and report before modifying Windows networking when all supported routes
+fail. The temporary API was not started, no development session was issued,
+and Android Search/Create-and-link was not retried. No patient, OpenEMR, SQLite,
+Docker-volume, Android-data, or SecureStore mutation occurred.
+
+Validation remains green for the correction: mobile component tests `18/18`
+suites and `77/77`, local/native harness tests `30/30`, Python compatibility
+tests `13/13`, and `git diff --check`. C1 remains **BLOCKED pending an approved
+WSL-to-Windows 8085 route**. The next safe action is to review and authorize a
+specific Windows networking route (or expose the existing 8085 binding on a
+WSL-reachable interface); no such change was made in this run.
+
+## C1 approved relay continuation — 2026-09-18
+
+The approved WSL-to-Windows relay was used without modification:
+`http://172.22.96.1:18085` to Windows `http://127.0.0.1:8085`. OpenEMR root
+redirect/readiness, OAuth discovery, OAuth token issuance, invalid-client
+rejection, authenticated patient search, VEMS health/readiness, assignments,
+Vtiger readiness, and the absolute authoritative database path all passed.
+SQLite integrity was `ok`; PCR-000001 had zero links, PCR-000002 retained one
+provisional link, PCR-000003 was absent, and the isolated OpenEMR search for
+Stage/Alpha returned zero matches.
+
+The first continuation stopped before mutation because the restarted API used a
+new process-only JWT signing secret while Android still held an older persisted
+development session. The rendered error was `JWT signature validation failed`;
+no patient request followed. The stale session was removed through the rendered
+Sign out control, and the development test login then issued a fresh session.
+
+After an authoritative Metro cache-clear/reload, the current bundle exposed
+`patient-create-new-option` and `patient-create-form`. The native Windows driver
+completed authentication, assignment/incident/PCR navigation, identity entry,
+zero-match Search, and create-form navigation. The Sex field was below the
+visible ScrollView viewport, so one bounds-derived scroll revealed it; `X` was
+verified. The single guarded Create-and-link tap was then dispatched exactly
+once, but the UI did not reach its expected post-success state within 30
+seconds. Read-only reconciliation found no patient-create request, no
+PCR-000001 link, no new OpenEMR patient, and no new patient-link audit event.
+The pre-existing audit action was only the PCR-000002 provisional link.
+
+Post-attempt evidence: isolated OpenEMR Stage/Alpha search remained
+`not_found` with zero candidates; PCR-000001 remained unlinked; PCR-000002's
+one provisional link to `a2c6406b-c7a5-4b61-b99c-99141a3d0f11` was unchanged;
+PCR-000003 count was zero; SQLite integrity remained `ok`. C1 is therefore
+**BLOCKED before patient creation/linkage**. The mutation tap was not retried.
+
+The remaining issue is a deterministic UI/backend handoff failure after the
+single rendered mutation tap, requiring a future read-only request correlation
+and application error diagnosis before another mutation attempt. No Docker
+volume, shared OpenEMR 8083 data, Android application data, SecureStore,
+protected environment file, relay, or firewall rule was changed. Temporary API,
+OAuth, token, credential, and clipboard material was cleaned; Windows clipboard
+length was verified as zero.
+
+Continuation changes: this report only. Temporary harness helper files were
+removed. No commit, push, merge, tag, or publish was performed.
