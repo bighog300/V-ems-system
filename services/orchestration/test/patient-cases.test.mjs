@@ -205,3 +205,43 @@ test('unidentified native creation requires no invented user demographics and re
   assert.equal(calls.length, 1); assert.equal(calls[0].provisional_identity, true);
   assert.equal(calls[0].last_name, c.patient_case_id);
 });
+
+test('provisional OpenEMR 404 is retryable without creating a second case', async t => {
+  const { service: s, incident: i } = await fixture(t);
+  const c = await s.createPatientCase(i.incident_id, { temporary_label: 'Unknown' }, meta);
+  let attempts = 0;
+  s.openemr.createPatient = async () => {
+    attempts++;
+    const error = new Error('openemr.createPatient failed with HTTP 404');
+    error.status = 404;
+    error.code = 'DOWNSTREAM_HTTP_ERROR';
+    error.classification = 'DOWNSTREAM_HTTP_ERROR';
+    throw error;
+  };
+
+  await assert.rejects(() => s.createProvisionalPatientForCase(c.patient_case_id, meta), /HTTP 404/);
+  const reservation = await s.db.queryOne(`SELECT patient_case_id,status FROM patient_case_provisional_requests WHERE patient_case_id='${c.patient_case_id}'`);
+  assert.equal(reservation.patient_case_id, c.patient_case_id);
+  assert.equal(reservation.status, 'failed');
+  assert.equal((await s.getPatientCase(c.patient_case_id)).openemr_patient_id, null);
+  s.openemr.createPatient = async () => ({ patient_id: 'native-retried' });
+  const retried = await s.createProvisionalPatientForCase(c.patient_case_id, meta);
+  assert.equal(retried.patient_case_id, c.patient_case_id);
+  assert.equal(retried.openemr_patient_id, 'native-retried');
+  assert.equal(retried.verification_status, 'provisional');
+  assert.equal(attempts, 1);
+  assert.equal((await s.listPatientCases(i.incident_id)).length, 1);
+});
+
+test('provisional reconciliation marks the existing pending reservation retryable', async t => {
+  const { service: s, incident: i } = await fixture(t);
+  const c = await s.createPatientCase(i.incident_id, { temporary_label: 'Unknown' }, meta);
+  await s.db.execute(`INSERT INTO patient_case_provisional_requests VALUES ('${c.patient_case_id}','pending','2026-09-18T08:43:39.704Z');`);
+  const result = await s.reconcileProvisionalPatientFailure(c.patient_case_id, {
+    outcome: 'downstream_not_created', downstream_status: 404
+  }, { ...meta, actorRole: 'supervisor' });
+  assert.deepEqual(result, { patient_case_id: c.patient_case_id, reservation_status: 'failed', retryable: true });
+  assert.equal((await s.db.queryOne(`SELECT status FROM patient_case_provisional_requests WHERE patient_case_id='${c.patient_case_id}'`)).status, 'failed');
+  assert.equal((await s.listPatientCases(i.incident_id)).length, 1);
+  await assert.rejects(() => s.reconcileProvisionalPatientFailure(c.patient_case_id, { outcome: 'unknown', downstream_status: 404 }, meta), /proven downstream_not_created/);
+});

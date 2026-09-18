@@ -989,7 +989,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history|lifenet-import)(?:\/([^/]+))?)?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|provisional-patient-reconciliation|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history|lifenet-import)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -1010,6 +1010,7 @@ export function createApp(orchestration = new OrchestrationService()) {
           return okJson(res, 200, await orchestration.linkPatientToPatientCase(id, payload, meta), context);
         }
         if (method === 'POST' && action === 'provisional-patient') return okJson(res, 201, await orchestration.createProvisionalPatientForCase(id, meta), context);
+        if (method === 'POST' && action === 'provisional-patient-reconciliation') return okJson(res, 200, await orchestration.reconcileProvisionalPatientFailure(id, await parseJson(req), meta), context);
         if (method === 'POST' && action === 'encounters') return okJson(res, 201, await orchestration.createEncounterForPatientCase(id, await parseJson(req), meta), context);
         if (method === 'PATCH' && action === 'assignment') return okJson(res, 200, await orchestration.changePatientCaseAssignment(id, await parseJson(req), meta), context);
         if (method === 'PATCH' && action === 'status') return okJson(res, 200, await orchestration.setPatientCaseStatus(id, (await parseJson(req)).status, meta), context);

@@ -11,6 +11,7 @@ An incident has zero or more cases, each identified by a permanent `PCR-000001`-
 - `GET /api/patient-cases/{patientCaseId}`: case, current links, verification, encounter status, closure readiness and identity reconciliation history.
 - `PATCH /api/patient-cases/{patientCaseId}/assignment`: select an active assignment belonging to the same incident; optional lead clinician. Updates current responsibility and audits before/after; clinical links and authorship remain unchanged.
 - `POST /api/patient-cases/{patientCaseId}/provisional-patient`: create and link a marked native unidentified patient without demographic input; case-scoped durable reservation and replay.
+- `POST /api/patient-cases/{patientCaseId}/provisional-patient-reconciliation`: privileged recovery of a durable pending reservation after independently proven downstream HTTP 404; requires `{"outcome":"downstream_not_created","downstream_status":404}` and marks only the existing reservation retryable.
 - `POST|GET /api/patient-cases/{patientCaseId}/patient-link`: patient identification/linkage. Verified links require `openemr_patient_id`. Provisional links can exist without an ID until a native provisional patient is created.
 - `POST /api/patient-cases/{patientCaseId}/encounters`: supply `care_started_at` and `presenting_complaint`. Patient, assignment, vehicle and crew derive from the case. `GET .../encounter` returns the persisted link.
 - `PATCH /api/patient-cases/{patientCaseId}/status`: guarded lifecycle transition.

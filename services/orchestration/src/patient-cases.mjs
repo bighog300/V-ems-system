@@ -171,18 +171,50 @@ export const patientCaseMethods = {
       if (c.verification_status !== 'provisional') conflict('Patient case already has an identified patient');
       return c;
     }
+    const reservation = await this.db.queryOne(`SELECT patient_case_id,status FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`);
+    if (reservation && reservation.status !== 'failed') conflict('Provisional patient creation is pending or outcome unknown; reconciliation required');
     await this.db.withTransaction(async () => {
-      if (await this.db.queryOne(`SELECT patient_case_id FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`)) conflict('Provisional patient creation is pending or outcome unknown; reconciliation required');
-      await this.db.execute(`INSERT INTO patient_case_provisional_requests VALUES (${sqlValue(id)},'pending',${sqlValue(new Date().toISOString())});`);
+      if (reservation) await this.db.execute(`UPDATE patient_case_provisional_requests SET status='pending',created_at=${sqlValue(new Date().toISOString())} WHERE patient_case_id=${sqlValue(id)};`);
+      else await this.db.execute(`INSERT INTO patient_case_provisional_requests VALUES (${sqlValue(id)},'pending',${sqlValue(new Date().toISOString())});`);
     });
     // Native validation requires DOB. This explicitly marked technical date is
     // never treated as a known birth date by the Patient Case aggregate.
-    const patient = await this.openemr.createPatient({ first_name: 'Unidentified', last_name: id,
-      dob: PROVISIONAL_DOB_SENTINEL, sex: 'Unknown', provisional_identity: true });
+    let patient;
+    try {
+      patient = await this.openemr.createPatient({ first_name: 'Unidentified', last_name: id,
+        dob: PROVISIONAL_DOB_SENTINEL, sex: 'Unknown', provisional_identity: true });
+    } catch (error) {
+      // A 404 from the configured patient-create route proves that no native
+      // create handler accepted the request. Mark only that deterministic
+      // pre-resource failure retryable; unknown outcomes remain pending and
+      // require reconciliation rather than a blind replay.
+      if (error?.status === 404 || error?.cause?.status === 404) {
+        await this.db.execute(`UPDATE patient_case_provisional_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
+      }
+      throw error;
+    }
     if (!patient.patient_id) conflict('OpenEMR returned no patient ID; reconciliation required');
     await this.linkPatientToPatientCase(id, { verification_status: 'provisional', openemr_patient_id: patient.patient_id }, { ...meta, provisionalResult: true });
     await this.db.execute(`UPDATE patient_case_provisional_requests SET status='completed' WHERE patient_case_id=${sqlValue(id)};`);
     return this.getPatientCase(id);
+  },
+  async reconcileProvisionalPatientFailure(id, payload, meta) {
+    objectPayload(payload);
+    if (payload.outcome !== 'downstream_not_created' || payload.downstream_status !== 404) {
+      invalid('Reconciliation requires proven downstream_not_created with HTTP 404');
+    }
+    const c = await this.getPatientCase(id);
+    if (c.openemr_patient_id) return c;
+    const reservation = await this.db.queryOne(`SELECT patient_case_id,status FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`);
+    if (!reservation) conflict('No provisional patient reservation exists for this case');
+    if (reservation.status === 'completed') return c;
+    if (!['pending', 'failed'].includes(reservation.status)) conflict('Provisional patient reservation is not recoverable');
+    if (reservation.status === 'failed') return { patient_case_id: id, reservation_status: 'failed', retryable: true };
+    await this.db.execute(`UPDATE patient_case_provisional_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
+    await this.audit('patient_case', id, 'reconcile_provisional_failure', meta,
+      { patient_case_id: id, incident_id: c.incident_id, reservation_status: reservation.status },
+      { patient_case_id: id, incident_id: c.incident_id, reservation_status: 'failed', downstream_status: 404 });
+    return { patient_case_id: id, reservation_status: 'failed', retryable: true };
   },
   async getPatientCasePatientLink(id) {
     await this.getPatientCase(id);
