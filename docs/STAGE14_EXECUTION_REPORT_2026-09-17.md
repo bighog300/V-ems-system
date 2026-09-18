@@ -1098,3 +1098,432 @@ bytes. Protected environment files, Docker volumes, shared OpenEMR on 8083,
 application data, and SecureStore were preserved. Remaining gates are the
 connected clinical/offline/attachment/outage matrix under a supported longer
 test credential, if one is provided by the development/test environment.
+
+## Connected synthetic clinical workflow — Section A — 2026-09-18
+
+Section A authentication was executed with one fresh five-minute synthetic
+`STAFF-001`/`field_crew` token. The token was directly verified with HTTP 200,
+copied through the Windows clipboard with matching `232`-byte file/clipboard
+lengths, pasted into the secure Android field, and never printed. The temporary
+token and JWT secret files were removed immediately afterward and the clipboard
+was verified empty.
+
+The rendered Android UI showed `jobs-list-screen`, `Assigned jobs`, and
+`Sign out`. The API correlated the UI submission at `2026-09-18T08:19:29Z`
+with authenticated `GET /api/support/readiness`, followed by
+`GET /api/assignments/mine` at `08:19:30Z` for `STAFF-001`/`field_crew`; RBAC
+evaluation allowed the request and both requests completed successfully.
+
+The assignment surface then visibly showed `No active assignments right now`.
+No assignment card, incident identifier, or incident detail was rendered, so
+opening a synthetic assignment and proving `incident-workspace-screen` access
+was **NOT EXECUTED / BLOCKED** by the absence of retained synthetic assignment
+data. No real patient data was displayed. API-only evidence was not promoted
+to a UI PASS, and Section B was not started.
+
+The remaining connected sections (multi-patient cases, clinical record,
+disposition/handover, finalization safeguards, and downstream OpenEMR/Vtiger
+record correlation) remain **NOT EXECUTED** pending a retained or explicitly
+provisioned isolated synthetic assignment. Offline and outage-recovery gates
+also remain open. No application source, environment file, Docker volume,
+shared OpenEMR data, or installed application data was modified.
+
+## Synthetic assignment fixture and Section A repeat — 2026-09-18
+
+The repository-supported fixture path was used exclusively: authenticated
+public API mutations with `Idempotency-Key` headers, followed by the existing
+orchestration sync-worker path. No direct database writes were used. The
+isolated topology was verified as the retained `vems-vtiger-ghcr-stage14`
+container on host port `8080`, the isolated OpenEMR on host port `8085`, and
+the API process database at the retained `services/api-gateway/.data` path.
+Shared OpenEMR port `8083` was not accessed or modified.
+
+The unique synthetic fixture key was `STAGE14-20260918-SECTION-A`. Public API
+provisioning created exactly these synthetic records:
+
+- vehicle `AMB-914`, callsign `STAGE14-A`, synthetic station/type metadata;
+- personnel `STAFF-001`, display name `SYNTHETIC STAFF-001`, role `field_crew`;
+- incident `INC-000001`, low-priority medical-emergency category, synthetic
+  location `STAGE14-SYNTHETIC-LOCATION`, patient count `0`;
+- assignment `ASN-000001`, vehicle `AMB-914`, crew `STAFF-001`.
+
+The assignment was transitioned through the supported
+`confirm_assignment` API action to `Assigned`. Exact idempotent replay returned
+the same incident ID, and public API counts showed exactly one matching vehicle,
+personnel record, incident, and assignment. No duplicate was created. The
+fixture is intentionally retained for later Sections B–E. No destructive
+cleanup was performed; reconciliation is by the recorded fixture key and the
+same public API idempotency/replay paths after downstream readiness is restored.
+
+The isolated Vtiger webservice authenticated successfully for `HelpDesk`, but
+the retained Vtiger image does not expose the required `VEMSAssignments`,
+`VEMSVehicles`, or `VEMSPersonnel` custom modules. The sync worker consequently
+dead-lettered the incident, vehicle, and personnel mirror intents with
+`VTIGER_PROTOCOL_ERROR`/non-JSON responses; the assignment mirror remained
+blocked by its missing incident linkage. This is a retained-image/schema gate,
+not a credential or API-fixture duplication issue. No Vtiger schema or image was
+modified.
+
+Section A was repeated with one fresh five-minute synthetic
+`STAFF-001`/`field_crew` token. Direct readiness verification returned HTTP
+`200`; the 232-byte token was transferred only through the Windows clipboard,
+then the temporary token file and clipboard were cleared immediately after
+sign-in. The Android hierarchy visibly showed `job-ASN-000001`, incident
+`INC-000001`, and status `Assigned`. Opening that card visibly rendered
+`incident-workspace-screen`, with `INC-000001` and `ASN-000001` both present.
+The API correlated `/api/assignments/mine` with exactly one matching active
+assignment and correlated the workspace’s
+`GET /api/incidents/INC-000001/patient-cases` request for `STAFF-001`.
+
+Section A UI/API assignment access is **PASS**. Full Section A downstream
+Vtiger correlation is **BLOCKED** by the missing custom modules. Sections B–E
+remain **NOT EXECUTED** until the isolated Vtiger image is provisioned with
+the repository-required modules or an approved equivalent retained fixture
+environment is supplied. No real patient data was displayed.
+
+## Connected synthetic clinical workflow — Section B — 2026-09-18
+
+Section B used the retained synthetic fixture `INC-000001` / `ASN-000001` and
+one fresh five-minute `STAFF-001`/`field_crew` session. Authentication used a
+directly verified token transferred only through the Windows clipboard; the
+token file was removed and the clipboard cleared immediately after sign-in.
+No JWT, credential, or authorization header was recorded.
+
+The Android UI visibly listed `job-ASN-000001` and opened
+`incident-workspace-screen` for `INC-000001` / `ASN-000001`. The Patient cases
+card initially showed no cases. The rendered `New patient case` control then
+created two distinct records under the same incident:
+
+- `PCR-000001`, synthetic known-case label `Stage_Alpha`; the rendered
+  Patient Case detail and Patient Identity screens were reached, and the
+  synthetic demographics were saved with the visible `demographics-saved`
+  marker. API evidence recorded successful `POST /api/incidents/INC-000001/
+  patient-cases` and `PUT /api/patient-cases/PCR-000001/demographics`.
+- `PCR-000002`, synthetic provisional-case label `Unknown_Beta`; the rendered
+  Patient Identity screen exposed the documented `Mark as unidentified`
+  control. Its request reached `POST /api/patient-cases/PCR-000002/
+  provisional-patient`, but the isolated OpenEMR adapter returned HTTP 404
+  while creating the downstream patient. The UI retained the identity error
+  state and did not report a successful provisional link.
+
+The rendered incident list visibly showed both `PCR-000001` and `PCR-000002`,
+proving distinct Patient Case identifiers and no immediate overwrite. The
+known case demographics save and the provisional action were correlated to
+the active VEMS API process. No OpenEMR patient/encounter linkage was claimed:
+the known case did not complete the OpenEMR identity-link step, and the
+provisional path failed at the isolated adapter’s HTTP 404 endpoint. The
+retained Vtiger image blocker remains unchanged: `VEMSAssignments`,
+`VEMSVehicles`, and `VEMSPersonnel` are absent and the image/schema was not
+modified.
+
+Section B is **BLOCKED / PARTIAL**. Patient Case creation and distinct-case
+rendering passed; complete known-patient OpenEMR linkage, provisional/unknown
+linkage, multi-case switching with a distinguishing clinical entry,
+downstream duplication/idempotency proof, and all Sections C–E were not
+executed. The workflow stopped before observations, medications, or
+procedures. The isolated OpenEMR adapter’s HTTP 404 must be corrected in the
+retained test environment before resuming; no API-only substitution or
+destructive cleanup was performed. Protected environment files, Docker
+volumes, shared OpenEMR port `8083`, and Android application data were
+preserved.
+
+## Section B blocker diagnosis — 2026-09-18
+
+The retained database was inspected read-only. Both cases remain attached to
+`INC-000001` and `ASN-000001`, with status `Patient Identification Pending`:
+
+- `PCR-000001` / `Stage_Alpha`: demographics are present (`Stage`, `Alpha`,
+  synthetic DOB `2000-01-02`, sex `X`), with no patient link or encounter.
+- `PCR-000002` / `Unknown_Beta`: no demographics, no patient link, no
+  encounter, and one durable `patient_case_provisional_requests` reservation
+  with status `pending`, created at `2026-09-18T08:43:39.704Z`.
+
+The provisional UI request was received by VEMS at
+`2026-09-18T08:43:39.701Z` and used `POST
+/api/patient-cases/PCR-000002/provisional-patient`. The sanitized downstream
+request was `POST http://127.0.0.1:8085/api/v1/patients`; VEMS classified the
+response as downstream HTTP 404 and returned an unhandled downstream failure.
+The retained OpenEMR access log independently recorded the same request at
+`08:43:39 UTC` with HTTP 404 and no credential material. A non-authenticated
+route comparison confirmed `POST /api/v1/patients -> 404`, while the retained
+standard route `POST /apis/default/api/patient -> 401` (authentication gate),
+proving the request reached OpenEMR and that the failure was not TCP
+connectivity, TLS, or an absent patient resource.
+
+Root cause: the temporary Stage 14 API process was started with
+`OPENEMR_BASE_URL=http://127.0.0.1:8085` but without
+`OPENEMR_API_STYLE=standard`, so the transport selected its legacy
+`/api/v1/*` routes. The repository’s supported standard transport constructs
+`/apis/default/api/patient` and preserves OAuth authentication and TLS
+verification. No OpenEMR core file, image, schema, protected environment file,
+volume, or shared port-8083 service was changed.
+
+The original provisional idempotency header value was not persisted in the
+sanitized log, and the provisional operation currently uses its durable
+case-scoped reservation rather than replaying that header. Blind retry of the
+retained `pending` reservation is therefore intentionally rejected as
+“pending or outcome unknown”; the retained PCR-000002 was not retried or
+altered. A narrow correction now treats only a proven downstream HTTP 404 from
+the patient-create operation as a retryable `failed` reservation. It leaves
+unknown outcomes `pending`, permits a later case-scoped retry after the
+standard route is restored, and never creates another Patient Case. Regression
+coverage proves the retry links the same case and produces exactly one case.
+
+The API harness diagnosis was independent. The initial 0/22 result was caused
+by the restricted runner denying test servers’ loopback bind with
+`listen EPERM: operation not permitted 127.0.0.1`; it was not port 3001
+occupation, inherited Stage 14 overrides, fixture/bootstrap failure, or an
+assertion defect. Running serially with loopback permission passed the patient
+case file, and the complete suites passed `128/128` API tests and `264/264`
+executed orchestration tests (275 discovered, 11 non-test/skipped entries).
+
+The repository smoke command was also attempted. It reached the API health
+endpoint but stopped at the first protected master-data request with HTTP 401
+because no UI/backend token was generated during diagnosis. This is recorded
+as **NOT EXECUTED**, not treated as a product failure.
+
+## Section B recovery continuation — 2026-09-18
+
+The retained isolated OpenEMR services remained running and the temporary VEMS
+API was restarted on host port `3001` with process-only overrides:
+
+```text
+OPENEMR_BASE_URL=http://127.0.0.1:8085
+OPENEMR_TOKEN_URL=http://127.0.0.1:8085/oauth2/default/token
+OPENEMR_API_STYLE=standard
+OPENEMR_SITE=default
+OPENEMR_GRANT_TYPE=password
+```
+
+Protected environment files were not edited. The retained OpenEMR OAuth client
+table did not contain the repository placeholder `local-dev-client`; its
+password-grant request therefore correctly returned `401 invalid_client`. The
+supported OpenEMR `openemr-dev:register-api-test-client --site=default` command
+registered one synthetic isolated test client. Generated credentials were kept
+only in a mode-0600 temporary file, used in process memory, and removed. This
+changed isolated OAuth test configuration only; no schema, patient record,
+volume, shared OpenEMR service, or application data was changed.
+
+Backend adapter gates after that registration:
+
+```text
+OAuth password grant, isolated OpenEMR                         PASS; HTTP 200
+Standard patient route /apis/default/api/patient              PASS; HTTP 200
+Invalid OAuth credential rejection                             PASS; HTTP 401
+Repository standard OpenEMR transport patient search          PASS; synthetic no-match
+VEMS/Vtiger/OpenEMR adapter connectivity                        PASS
+Synthetic VEMS smoke                                           PASS
+```
+
+The repository had no supported reconciliation action for an already-pending
+provisional reservation. A narrow privileged API action was added:
+`POST /api/patient-cases/{id}/provisional-patient-reconciliation`, requiring
+the explicit proven outcome `downstream_not_created` and `downstream_status`
+`404`. It marks only the existing reservation `failed`, audits the transition,
+and never creates a Patient Case or native OpenEMR resource. The existing
+provisional create path then retries the same case and remains idempotent.
+Focused orchestration coverage passes `16/16`.
+
+The recovery action was not invoked against the retained fixture because the
+restarted API's documented `VEMS_DB_PATH=.data/platform.development.sqlite`
+contains no `PCR-000001` or `PCR-000002`; authenticated API queries returned
+an empty case list for `INC-000001` and `404` for both case IDs. A read-only
+scan of retained SQLite files found no durable provisional reservation for
+`PCR-000002`. Recreating a case or manually mutating a row was not attempted.
+Consequently no OpenEMR patient/encounter link was created, no duplicate check
+could be claimed, and no Android token/session was generated or used in this
+continuation.
+
+Validation:
+
+```text
+API gateway                                                   PASS; 128/128
+Orchestration                                                 PASS; 265/265
+Focused provisional reconciliation                            PASS; 16/16
+Mobile unit                                                   PASS; 214/214
+Mobile components                                             PASS; 18 suites, 73/73
+Authenticated smoke                                           PASS
+git diff --check                                              PASS
+```
+
+Changed files in this continuation are `services/orchestration/src/patient-cases.mjs`,
+`services/orchestration/test/patient-cases.test.mjs`,
+`services/api-gateway/src/server.mjs`,
+`services/api-gateway/src/authorization-policy.mjs`,
+`docs/PATIENT_CASES.md`, and this report. Protected environment files remain
+preserved and were not intentionally edited during this continuation.
+
+Section B remains **BLOCKED** at retained VEMS database handoff. The required
+next gate is to restore or point the temporary API at the existing retained
+Stage 14 VEMS database containing `INC-000001`, `PCR-000001`, `PCR-000002`,
+and its pending reservation, without creating a replacement case. The missing
+Vtiger custom modules remain a separate downstream deployment blocker. No
+Section C work was performed.
+
+Changed files in this diagnosis:
+
+- `services/orchestration/src/patient-cases.mjs` — narrow 404 reservation
+  classification and safe same-case retry.
+- `services/orchestration/test/patient-cases.test.mjs` — exact provisional
+  404 and retry regression.
+- this report.
+
+PCR-000002 remains **BLOCKED pending supported API restart with
+`OPENEMR_API_STYLE=standard` and a controlled UI retry**. No UI token was
+generated. Section B remains paused before clinical record entry; no
+observations, medications, procedures, or destructive reconciliation were
+performed.
+
+## Retained VEMS database handoff investigation — 2026-09-18
+
+`SqliteClient` resolves `VEMS_DB_PATH` with `path.resolve()` relative to the
+Node process cwd. The supported `scripts/start-api.sh` changes to the
+repository root and runs `npm run start -w @vems/api-gateway`; npm runs that
+workspace script with `services/api-gateway` as its package cwd. With no
+explicit database path, the original API therefore used:
+
+```text
+/home/bighog/repos/vems/V-ems-system/services/api-gateway/.data/platform.sqlite
+```
+
+The restarted process was launched directly from the repository root after
+sourcing `env/development.env`, resolving `.data/platform.development.sqlite`
+to:
+
+```text
+/home/bighog/repos/vems/V-ems-system/.data/platform.development.sqlite
+```
+
+That root development database is valid but does not contain the Stage 14
+fixture. No migration or replacement data was run against it.
+
+Read-only inventory of relevant repository candidates:
+
+```text
+path                                                        size   mode  mtime                  sha256 prefix   exact synthetic identifiers
+.data/platform.development.sqlite                           409600 0644  2026-09-06 13:59:27  7d519acc4e5a  INC 1, ASN 1; no PCRs
+.data/platform.sqlite                                       319488 0644  2026-09-06 10:15:04  e6a7b167b81d  none
+services/api-gateway/.data/platform.development.sqlite      266240 0644  2026-09-06 08:43:42  c07520452dff  INC 1, ASN 1; no PCRs
+services/api-gateway/.data/platform.sqlite                   708608 0644  2026-09-18 09:35:03  2f066e86a352  full coherent fixture
+services/orchestration/.data/platform.development.sqlite    319488 0644  2026-09-06 09:12:31  efeab38e257c  none
+services/orchestration/.data/platform.sqlite                4096   0644  2026-09-18 08:25:06  f1c1d714b195  none
+.aider.tags.cache.v4/cache.db                               356352 0644  2026-09-06 07:18:43  5e1cf620e930  none
+```
+
+All candidates had WAL/SHM companions and read-only `PRAGMA integrity_check`
+returned `ok`. No SQLite candidates were found under `/tmp` paths named
+`vems-stage14*` or under `/mnt/e/s14b`. Application candidates contained the
+expected migration/table families; the authoritative candidate has 22 applied
+migrations through `022_clinical_observations_device_pairing`. The cache DB
+contains only `Cache` and `Settings`.
+
+The authoritative candidate contains the coherent retained fixture:
+
+```text
+INC-000001                         New
+ASN-000001 / AMB-914               Assigned
+PCR-000001 / Stage_Alpha           Patient Identification Pending
+PCR-000002 / Unknown_Beta          Patient Identification Pending
+PCR-000002 reservation             pending, exactly one row
+patient links/encounters           none
+```
+
+The base database SHA-256 and mtime were unchanged across API startup:
+`2f066e86a3523940a0eac2520de4a233a21ee1c44e8b0679f539712fe81be87f` and
+`2026-09-18 09:35:03.268814313 +0100`. Integrity remained `ok`, the migration
+count remained 22, and no separate Node writer was present before handoff. The
+API process currently holds the retained database and WAL/SHM descriptors; no
+authenticated mutating request was sent.
+
+The temporary API was restarted with the explicit absolute retained path and
+standard isolated OpenEMR overrides. `/health` returned HTTP 200. An
+unauthenticated incident request returned HTTP 401 as expected; the synthetic
+incident/case list was verified through the read-only database queries above.
+No Android launch or token issuance occurred.
+
+### Reconciliation endpoint security audit
+
+The recovery action is authorized only for `supervisor` and `sys_admin`;
+`field_crew` and `dispatcher` receive HTTP 403. It is case-scoped through the
+requested PCR ID and first loads that exact case and its durable reservation.
+No tenant abstraction exists in the current schema, so cross-tenant behavior
+is not applicable; no arbitrary row/table operation is exposed. It accepts only
+the explicit proven outcome `downstream_not_created` with downstream HTTP 404.
+Other or unknown outcomes remain pending. Proven failure transitions the
+existing reservation to `failed`; the existing provisional create action then
+reuses the same Patient Case and cannot allocate PCR-000003. Repeated
+reconciliation is state-idempotent and produces one audit event. Focused
+authorization, audit, idempotency and retry tests pass `18/18`.
+
+Changed files in this handoff investigation:
+`services/orchestration/src/patient-cases.mjs`,
+`services/orchestration/test/patient-cases.test.mjs`,
+`services/api-gateway/src/server.mjs`,
+`services/api-gateway/src/authorization-policy.mjs`,
+`services/api-gateway/test/patient-cases.test.mjs`,
+`docs/PATIENT_CASES.md`, and this report. No SQLite file, Docker volume,
+protected environment file, Android application data, or shared OpenEMR data
+was modified.
+
+## Section B recovery resumed — 2026-09-18
+
+The recovered API runtime used the explicit absolute database path
+`/home/bighog/repos/vems/V-ems-system/services/api-gateway/.data/platform.sqlite`
+with `OPENEMR_API_STYLE=standard`, isolated OpenEMR on port 8085, and API port
+3001. The retained database integrity check remained `ok`; the fixture counts
+were one each for `INC-000001`, `ASN-000001`, `PCR-000001`, and `PCR-000002`,
+with zero `PCR-000003` rows. The retained database was not edited directly.
+
+The original PCR-000002 reservation was reconciled once through the privileged,
+case-scoped endpoint, then retried once through the supported existing-case
+provisional link action. The response referenced `PCR-000002`; the reservation
+transitioned to `completed`; and the same case received one provisional
+OpenEMR patient link, `a2c6406b-c7a5-4b61-b99c-99141a3d0f11`. No encounter link
+was created, which is expected before the later encounter/clinical workflow.
+Read-only duplicate checks found one VEMS patient link, one matching isolated
+OpenEMR patient, zero encounter links at this milestone, and zero PCR-000003
+rows. Audit evidence contains exactly one `reconcile_provisional_failure` and
+one `link_patient` event for PCR-000002. PCR-000001 remained `Stage_Alpha`,
+unchanged, and both cases remained linked to `INC-000001`.
+
+Android Section B evidence: a fresh clipboard-pasted STAFF-001/field_crew
+session successfully rendered `Assigned jobs`, `ASN-000001`, `INC-000001`, and
+the incident workspace. The workspace visibly rendered both
+`PCR-000001 / Stage_Alpha / Patient Identification Pending` and
+`PCR-000002 / Unknown_Beta / Patient Linked`. The PCR-000002 detail visibly
+showed the provisional OpenEMR link above; switching back visibly rendered the
+independent PCR-000001 identity state. The token file was removed immediately
+after sign-in and the Windows clipboard was verified empty. No JWT was entered
+with adb input text.
+
+The current Section B UI provides identity and read-only patient-history cards,
+but no supported harmless note/history editor. Per the test rule, cross-case
+entry isolation is **NOT EXECUTED** rather than being substituted with an
+API-only write. No clinical observations, medications, procedures, encounter,
+or handover records were created; execution stops before Section C.
+
+### Revalidation
+
+- API gateway: **PASS**, 129/129 tests (the added reconciliation security test
+  makes the current total 129 rather than the earlier 128).
+- Orchestration: **PASS**, 265 passing, 0 failing (276 discovered including
+  skipped/non-pass entries).
+- Mobile unit: **PASS**, 214/214.
+- Mobile component: **PASS**, 73/73.
+- OpenEMR/Vtiger adapter connectivity: **PASS** for the retained isolated
+  endpoints.
+- Retained database integrity: **PASS**, `PRAGMA integrity_check=ok`.
+- `git diff --check`: **PASS**.
+- Authenticated smoke was not rerun because the retained authoritative database
+  must not receive a new incident/assignment/patient-case fixture during this
+  recovery; prior authenticated smoke evidence remains recorded separately.
+
+Section B recovery status: **PASS for reconciliation, downstream linkage,
+case rendering, and case switching; NOT EXECUTED for UI entry-isolation proof**.
+The separate retained Vtiger custom-module deployment blocker remains open.
+Changed implementation files remain `services/orchestration/src/patient-cases.mjs`,
+`services/orchestration/test/patient-cases.test.mjs`,
+`services/api-gateway/src/server.mjs`,
+`services/api-gateway/src/authorization-policy.mjs`,
+`services/api-gateway/test/patient-cases.test.mjs`, and `docs/PATIENT_CASES.md`;
+the report is the documentation change. No commit was created.
