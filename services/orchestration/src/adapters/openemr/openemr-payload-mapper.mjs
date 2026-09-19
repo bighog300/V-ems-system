@@ -1,4 +1,7 @@
 export class OpenEmrPayloadMapper {
+  mapSex(sex) {
+    return typeof sex === "string" && sex.trim().toUpperCase() === "X" ? "Other" : sex;
+  }
   // Three ways a crew actually identifies someone in the field: an
   // identity number, a hospital's own card number, or -- lacking either
   // -- name, date of birth and a known address to break ties between
@@ -25,7 +28,7 @@ export class OpenEmrPayloadMapper {
       first_name: patient.first_name,
       last_name: patient.last_name,
       dob: patient.dob,
-      sex: patient.sex,
+      sex: this.mapSex(patient.sex),
       ...(patient.provisional_identity ? { provisional_identity: true } : {}),
       phone: patient.phone
     };

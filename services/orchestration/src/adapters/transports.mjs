@@ -122,7 +122,7 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
         return { match_status: candidates.length === 1 ? "matched" : candidates.length > 1 ? "ambiguous" : "not_found", match_confidence: candidates.length === 1 ? 1 : 0, patient_id: candidates.length === 1 ? patientId(candidates[0]) : null, candidates };
       }
       if (method === "createPatient") {
-        const response = await call(method, "/patient", { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex, phone_contact: payload.phone, ...(payload.provisional_identity ? { genericname1: PROVISIONAL_IDENTITY_LABEL, genericval1: PROVISIONAL_IDENTITY_NOTE } : {}) });
+        const response = await call(method, "/patient", { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex === "X" ? "Other" : payload.sex, phone_contact: payload.phone, ...(payload.provisional_identity ? { genericname1: PROVISIONAL_IDENTITY_LABEL, genericval1: PROVISIONAL_IDENTITY_NOTE } : {}) });
         const data = standardData(response); return { patient_id: patientId(data), display_name: [data?.fname, data?.lname].filter(Boolean).join(" ") };
       }
       if (method === "createEncounter") {

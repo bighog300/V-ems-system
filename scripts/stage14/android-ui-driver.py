@@ -560,13 +560,13 @@ class AndroidUIDriver:
         self.tap_once({"resource_id": "show-create-form"}, lambda x, _: has_element(x, {"resource_id": "create-sex"}), 5, "show-create")
         self.replace_text({"resource_id": "create-sex"}, "X", "sex")
         before = self.observe("before-create-and-link", screenshot=True)[0]
-        button = find_element(before, {"resource_id": "create-and-link"})
+        button = find_element(before, {"resource_id": "patient-create-and-link"})
         if button.attrs.get("enabled", "true") == "false":
             raise DriverError("Create and link is disabled")
         remaining = exp - int(time.time())
         if remaining < 60:
             raise DriverError(f"aborting before mutation with only {remaining}s remaining")
-        self.tap_once({"resource_id": "create-and-link"}, lambda x, _: "patient-case-detail-screen" in {n.attrs.get("resource-id") for n in parse_nodes(x)}, 30, "create-and-link", mutating=True)
+        self.tap_once({"resource_id": "patient-create-and-link"}, lambda x, _: "patient-case-detail-screen" in {n.attrs.get("resource-id") for n in parse_nodes(x)}, 30, "create-and-link", mutating=True)
 
 
 def _token_exp(token_file: Path) -> int:

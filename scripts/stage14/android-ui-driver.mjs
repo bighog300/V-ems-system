@@ -115,6 +115,24 @@ export function nonSecretFieldEntryDecision(observed, expected, normalize) {
   return 'retry-replace';
 }
 
+export function nodeFullyVisibleInScrollView(node, scrollView, imeBounds = [0, 0, 0, 0]) {
+  if (!node || !scrollView || !rectIsNonZero(node.bounds) || !rectIsNonZero(scrollView.bounds)) return false;
+  const [left, top, right, bottom] = node.bounds;
+  const [scrollLeft, scrollTop, scrollRight, scrollBottom] = scrollView.bounds;
+  return left >= scrollLeft && top >= scrollTop && right <= scrollRight && bottom <= scrollBottom &&
+    (!rectIsNonZero(imeBounds) || !rectsIntersect(node.bounds, imeBounds));
+}
+
+export function boundedScrollSwipe(scrollView) {
+  if (!scrollView || !rectIsNonZero(scrollView.bounds)) throw new DriverError('missing or invalid ScrollView bounds');
+  const [left, top, right, bottom] = scrollView.bounds;
+  const x = Math.floor((left + right) / 2);
+  const startY = Math.floor(bottom - Math.max(1, (bottom - top) * 0.2));
+  const endY = Math.floor(top + Math.max(1, (bottom - top) * 0.2));
+  if (startY <= endY) throw new DriverError('ScrollView is too small for a bounded visibility swipe');
+  return [x, startY, x, endY, 300];
+}
+
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export class AndroidUiDriver {
@@ -165,13 +183,16 @@ export class AndroidUiDriver {
     const results = await this.observe('verified-search-results', true);
     if (!parseNodes(results.xml).some(n => (n.attrs.text ?? '').trim().replace(/[.!?]+$/, '') === 'No matching patients found')) throw new DriverError('search did not render zero-match text');
     await this.tapOnce({'resource_id':'patient-create-new-option'}, x => hasElement(x, {'resource_id':'patient-create-form'}), 5, 'show-create');
+    await this.ensureNodeVisible({'resource_id':'create-sex'}, {label:'create-sex', requireEnabled:true});
     await this.setNonsecretTextField({'resource_id':'create-sex'}, 'X', {label:'sex'});
+    await this.ensureNodeVisible({'resource_id':'patient-create-and-link'}, {label:'patient-create-and-link', requireEnabled:true});
     const before = await this.observe('before-development-create-and-link', true);
-    const button = findElement(before.xml, {'resource_id':'create-and-link'});
+    const button = findElement(before.xml, {'resource_id':'patient-create-and-link'});
     if (button.attrs.enabled === 'false') throw new DriverError('Create and link disabled');
     const remaining = expiresAt - Math.floor(Date.now() / 1000);
     if (remaining < 90) throw new DriverError(`aborting before mutation with only ${remaining}s remaining`);
-    await this.tapOnce({'resource_id':'create-and-link'}, x => hasElement(x, {'resource_id':'patient-case-detail-screen'}), 30, 'create-and-link', true);
+    await this.tapOnce({'resource_id':'patient-create-and-link'}, x => hasElement(x, {'resource_id':'patient-create-submit-pending'}), 5, 'create-and-link', true);
+    await this.waitFor(x => hasElement(x, {'resource_id':'patient-case-detail-screen'}) || hasElement(x, {'resource_id':'patient-create-submit-error'}), 30, 'create-and-link-result');
     console.log('DEVELOPMENT_C1_PASS remaining_at_mutation>=90');
   }
   async developmentC1AfterSearch(expiresAt) {
@@ -180,13 +201,16 @@ export class AndroidUiDriver {
     if (classifyHierarchy(current.xml, current.fg) !== 'vems_identity' || !hasElement(current.xml, {'resource_id':'search-results'})) throw new DriverError('resume requires rendered identity search results');
     if (!parseNodes(current.xml).some(n => (n.attrs.text ?? '').trim().replace(/[.!?]+$/, '') === 'No matching patients found')) throw new DriverError('resume requires rendered zero-match text');
     await this.tapOnce({'resource_id':'patient-create-new-option'}, x => hasElement(x, {'resource_id':'patient-create-form'}), 5, 'show-create-resume');
+    await this.ensureNodeVisible({'resource_id':'create-sex'}, {label:'create-sex-resume', requireEnabled:true});
     await this.setNonsecretTextField({'resource_id':'create-sex'}, 'X', {label:'sex'});
+    await this.ensureNodeVisible({'resource_id':'patient-create-and-link'}, {label:'patient-create-and-link-resume', requireEnabled:true});
     const before = await this.observe('before-development-create-and-link-resume', true);
-    const button = findElement(before.xml, {'resource_id':'create-and-link'});
+    const button = findElement(before.xml, {'resource_id':'patient-create-and-link'});
     if (button.attrs.enabled === 'false') throw new DriverError('Create and link disabled');
     const remaining = expiresAt - Math.floor(Date.now() / 1000);
     if (remaining < 90) throw new DriverError(`aborting before mutation with only ${remaining}s remaining`);
-    await this.tapOnce({'resource_id':'create-and-link'}, x => hasElement(x, {'resource_id':'patient-case-detail-screen'}), 30, 'create-and-link-resume', true);
+    await this.tapOnce({'resource_id':'patient-create-and-link'}, x => hasElement(x, {'resource_id':'patient-create-submit-pending'}), 5, 'create-and-link-resume', true);
+    await this.waitFor(x => hasElement(x, {'resource_id':'patient-case-detail-screen'}) || hasElement(x, {'resource_id':'patient-create-submit-error'}), 30, 'create-and-link-resume-result');
     console.log(`DEVELOPMENT_C1_RESUME_PASS remaining_at_mutation>=90`);
   }
   async adb(...args) {
@@ -219,6 +243,29 @@ export class AndroidUiDriver {
   async waitFor(predicate, timeout, label) { const end=Date.now()+timeout*1000; while(Date.now()<end){ const {xml,fg}=await this.observe(`poll-${label}`); const state=classifyHierarchy(xml,fg); if(['expo_tools_overlay','expo_launcher_home','android_settings'].includes(state)){await this.recoverToVems(); continue;} if(await predicate(xml,fg)){await this.screenshot(`ready-${label}`); return {xml,fg};} await sleep(500);} await this.observe(`timeout-${label}`,true); throw new DriverError(`timeout waiting for ${label}`); }
   async stableLogin(seconds=10) { let start=Date.now(); while(Date.now()-start<seconds*1000){const {xml,fg}=await this.observe('stable-login-poll'); const good=classifyHierarchy(xml,fg)==='vems_login' && ['input-api-base-url','input-auth-token','submit-sign-in'].every(id=>hasElement(xml,{'resource_id':id})) && fg.includes('MainActivity'); if(!good){await this.recoverToVems(); start=Date.now(); continue;} await sleep(500);} }
   async tapOnce(selector, expected, timeout, label, mutating=false) { await this.watchdog(); const {xml}=await this.observe(`before-${label}`,true); const target=findElement(xml,selector); if(mutating){claimSingleMutation(this.mutationUsed); this.mutationUsed=true;} await this.adb('shell','input','tap',...target.center); if(label==='sign-in') this.signInTapped=true; return this.waitFor(expected,timeout,`after-${label}`); }
+  async ensureNodeVisible(selector, {label='target', expectedState='vems_identity', requireEnabled=false, maxSwipes=3} = {}) {
+    if (this.mutationUsed) throw new DriverError('visibility discovery is forbidden after mutation is armed');
+    if (maxSwipes < 0 || maxSwipes > 3) throw new DriverError('visibility swipe limit must be between zero and three');
+    for (let swipe = 0; swipe <= maxSwipes; swipe++) {
+      if (this.mutationUsed) throw new DriverError('visibility discovery is forbidden after mutation is armed');
+      const observed = await this.observe(`ensure-visible-${label}-${swipe}`, true);
+      const state = classifyHierarchy(observed.xml, observed.fg);
+      if (state !== expectedState || !observed.fg.includes(PACKAGE) || !observed.fg.includes(ACTIVITY)) throw new DriverError(`visibility discovery lost expected VEMS screen: ${state}`);
+      if (this.currentCaseId && !parseNodes(observed.xml).some(n => (n.attrs.text ?? '').includes(this.currentCaseId))) throw new DriverError(`visibility discovery lost ${this.currentCaseId}`);
+      if (!hasElement(observed.xml, {'resource_id':'patient-create-form'})) throw new DriverError('visibility discovery lost patient create form');
+      if (await this.imeVisible()) throw new DriverError('visibility discovery rejected visible IME obstruction');
+      const target = findElement(observed.xml, selector);
+      const scrollView = parseNodes(observed.xml).find(n => (n.attrs.class ?? '').includes('ScrollView') && n.attrs.scrollable !== 'false');
+      if (!scrollView) throw new DriverError('visibility discovery requires the rendered ScrollView');
+      if (nodeFullyVisibleInScrollView(target, scrollView)) {
+        if (requireEnabled && target.attrs.enabled === 'false') throw new DriverError(`${label} disabled`);
+        return observed.xml;
+      }
+      if (swipe === maxSwipes) throw new DriverError(`${label} remained off-screen after ${maxSwipes} bounded swipes`);
+      await this.adb('shell', 'input', 'swipe', ...boundedScrollSwipe(scrollView));
+    }
+    throw new DriverError(`unable to reveal ${label}`);
+  }
   async replaceText(selector,value,label) { const inputState=selector.resource_id?.startsWith('search-')||selector.resource_id==='create-sex'?'vems_identity':'vems_login'; await this.watchdog(inputState); const {xml}=await this.observe(`before-${label}`,true); const target=findElement(xml,selector); if(selector.resource_id==='input-auth-token' && value.length===0 && tokenDisplayIsEmpty(target.attrs.text??'', findElement(xml,{'resource_id':'submit-sign-in'}).attrs.enabled!=='false')) return; await this.adb('shell','input','tap',...target.center); const clearCount=(target.attrs.text??'').length; if(clearCount>0){ if(selector.resource_id==='input-auth-token'){ await this.adb('shell','input','keyevent','123'); for(let i=0;i<Math.max(clearCount,256);i++) await this.adb('shell','input','keyevent','67'); } else { await this.adb('shell','input','keyevent',...Array(clearCount).fill('67')); } } if(value.length>0) await this.adb('shell','input','text',value); await this.waitFor(x=>{const node=findElement(x,selector); const shown=node.attrs.text??''; if(value.length===0){ if(selector.resource_id==='input-auth-token'){ const submit=findElement(x,{'resource_id':'submit-sign-in'}); return tokenDisplayIsEmpty(shown,submit.attrs.enabled!=='false'); } return shown==='' || shown===node.attrs['content-desc'] || shown.startsWith('Role (e.g.'); } return shown===value;},5,label); }
   async setNonsecretTextField(selector, expectedValue, {label=selector.resource_id ?? 'field', normalize, expectedState='vems_identity', expectedCaseId='PCR-000001'}={}) {
     if (this.mutationUsed) throw new DriverError('non-secret field entry refused after mutation arm');
@@ -295,6 +342,9 @@ export class AndroidUiDriver {
   async imeTop() { const displays=await this.adb('shell','dumpsys','window','displays'); const match=/visibleFrame=\[\d+,(\d+)\]\[\d+,\d+\] visible=true/.exec(displays); return match ? Number(match[1]) : 0; }
   async scrollSubmitAboveIme(xml) { const submit=findElement(xml,{'resource_id':'submit-sign-in'}); const top=await this.imeTop(); if(!top||submit.bounds[3]<=top) return xml; const scrollable=parseNodes(xml).find(n=>n.attrs.scrollable==='true'); if(!scrollable) throw new DriverError('Sign in is obscured and no scrollable container exists'); const x=Math.floor((scrollable.bounds[0]+scrollable.bounds[2])/2); await this.adb('shell','input','swipe',x,scrollable.bounds[3]-100,x,scrollable.bounds[1]+100,400); return (await this.observe('ime-submit-scroll',true)).xml; }
   async ensureKeyboardNotObscuring(expected='vems_login') { const before=await this.observe('keyboard-state-before',true); if(classifyHierarchy(before.xml,before.fg)!==expected) throw new DriverError('unexpected state before keyboard check'); if(!await this.imeVisible()){const after=await this.observe('keyboard-absent-noop',true); if(after.fg!==before.fg||classifyHierarchy(after.xml,after.fg)!==expected) throw new DriverError('keyboard absent check changed state'); return;} await this.adbUnchecked('shell','ime','hide'); for(let i=0;i<12;i++){const after=await this.observe('keyboard-dismiss-poll'); if(!await this.imeVisible()){if(after.fg!==before.fg||classifyHierarchy(after.xml,after.fg)!==expected) throw new DriverError('IME dismissal changed state'); return;} await sleep(250);} const afterHide=await this.observe('keyboard-after-hide',true); const moved=await this.scrollSubmitAboveIme(afterHide.xml); const submit=findElement(moved,{'resource_id':'submit-sign-in'}); const top=await this.imeTop(); if(top&&submit.bounds[3]<=top&&classifyHierarchy(moved,afterHide.fg)===expected) return; throw new DriverError('IME remained visible and obscures Sign in'); }
+  async ensureImeAbsent(expected='vems_identity') { const before=await this.observe('identity-ime-before',true); if(classifyHierarchy(before.xml,before.fg)!==expected) throw new DriverError('unexpected state before identity IME check'); if(!hasElement(before.xml,{'resource_id':'patient-create-form'})) throw new DriverError('identity IME check requires create form'); if(!await this.imeVisible()) return; await this.adbUnchecked('shell','ime','hide'); for(let i=0;i<12;i++){const after=await this.observe(`identity-ime-dismiss-${i}`); if(classifyHierarchy(after.xml,after.fg)!==expected||!hasElement(after.xml,{'resource_id':'patient-create-form'})|| (this.currentCaseId&&!parseNodes(after.xml).some(n=>(n.attrs.text??'').includes(this.currentCaseId)))) throw new DriverError('identity IME dismissal changed screen or PCR state'); if(!await this.imeVisible()) return; await sleep(250);} throw new DriverError('identity IME remained visible'); }
+  async dismissIdentityImeByStaticNode(selector={'resource_id':'patient-create-case-context'}) { const before=await this.observe('identity-ime-static-before',true); if(classifyHierarchy(before.xml,before.fg)!=='vems_identity'||!hasElement(before.xml,{'resource_id':'patient-create-form'})||this.mutationUsed) throw new DriverError('identity static IME dismissal preconditions failed'); const target=findElement(before.xml,selector); const ime=await this.imeBounds(); if(!rectIsNonZero(target.bounds)||!rectIsNonZero(ime)||rectsIntersect(target.bounds,ime)||target.attrs.clickable==='true'||target.attrs.focusable==='true'||target.attrs.editable==='true') throw new DriverError('identity static IME dismissal target is unsafe'); await this.adb('shell','input','tap',...target.center); for(let i=0;i<12;i++){const after=await this.observe(`identity-ime-static-poll-${i}`); if(classifyHierarchy(after.xml,after.fg)!=='vems_identity'||!hasElement(after.xml,{'resource_id':'patient-create-form'})||(this.currentCaseId&&!parseNodes(after.xml).some(n=>(n.attrs.text??'').includes(this.currentCaseId)))) throw new DriverError('identity static IME dismissal changed screen or PCR state'); if(!await this.imeVisible()) return true; await sleep(250);} throw new DriverError('identity static IME dismissal did not remove IME'); }
+  async dismissIdentityImeByBack() { const before=await this.observe('identity-ime-back-before',true); if(classifyHierarchy(before.xml,before.fg)!=='vems_identity'||!hasElement(before.xml,{'resource_id':'patient-create-form'})||this.mutationUsed||!await this.imeVisible()) throw new DriverError('identity Back IME dismissal preconditions failed'); await this.adb('shell','input','keyevent','4'); for(let i=0;i<12;i++){const after=await this.observe(`identity-ime-back-poll-${i}`); if(classifyHierarchy(after.xml,after.fg)!=='vems_identity'||!hasElement(after.xml,{'resource_id':'patient-create-form'})||(this.currentCaseId&&!parseNodes(after.xml).some(n=>(n.attrs.text??'').includes(this.currentCaseId)))) throw new DriverError('identity Back IME dismissal changed screen or PCR state'); if(!await this.imeVisible()) return true; await sleep(250);} throw new DriverError('identity Back IME dismissal did not remove IME'); }
   async ensureElementVisible(selector,label='element',{requireEnabled=true}={}) { let {xml}=await this.observe(`before-visible-${label}`,true); const target=findElement(xml,selector); const size=await this.adb('shell','wm','size'); const m=/(\d+)x(\d+)/.exec(size); const [,w,h]=m?[...m].map(Number):[0,2560,1600]; if(target.bounds[0]<0||target.bounds[1]<0||target.bounds[2]>w||target.bounds[3]>h) throw new DriverError(`${label} outside visible bounds; scrolling not available in current hierarchy`); if(requireEnabled&&target.attrs.enabled==='false') throw new DriverError(`${label} disabled`); if(target.bounds[3]>h*0.65&&await this.imeVisible()){await this.ensureKeyboardNotObscuring('vems_login'); xml=(await this.observe(`requery-visible-${label}`,true)).xml;} if(requireEnabled&&findElement(xml,selector).attrs.enabled==='false') throw new DriverError(`${label} disabled`); return xml; }
   async armLogin() {
     if((await this.adb('get-state'))!=='device') throw new DriverError('emulator offline');

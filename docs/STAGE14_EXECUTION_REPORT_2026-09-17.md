@@ -2451,3 +2451,189 @@ length was verified as zero.
 
 Continuation changes: this report only. Temporary harness helper files were
 removed. No commit, push, merge, tag, or publish was performed.
+
+## C1 post-reboot audit and dispatch diagnosis — 2026-09-19
+
+The authoritative checkout remained on
+`stage14/field-validation-release-readiness` at checkpoint
+`a87c55be952e35cc7d7890da00256b1c2df64708`. The protected development
+environment files were present and unstaged. WSL retained
+`172.22.103.130/20` with gateway `172.22.96.1`; the existing Windows relay
+still mapped `172.22.96.1:18085` to `127.0.0.1:8085`, and the enabled firewall
+rule still allowed `172.22.96.0/20`. SQLite integrity was `ok`; INC-000001,
+ASN-000001, unlinked PCR-000001, the single provisional PCR-000002 link, and
+absence of PCR-000003 were confirmed read-only. Emulator-5554 was online with
+`org.vems.mobilecrew`; ADB reverse rules were initially empty.
+
+Only the retained stopped isolated OpenEMR MySQL/OpenEMR and Vtiger containers
+were started. Redis and the retained Vtiger MySQL were already healthy. Root
+readiness returned HTTP 200 through both local 8085 and the WSL relay;
+Vtiger returned its expected HTTP 301; OAuth discovery returned HTTP 200.
+The temporary API reached `/health` HTTP 200 and development test-session
+issuance HTTP 200. The retained OpenEMR OAuth client then returned HTTP 401
+`invalid_client`; an intentionally invalid client returned HTTP 400. The
+authenticated adapter search consequently returned HTTP 500, so the required
+zero-match Stage/Alpha proof and downstream readiness could not be established
+after reboot.
+
+The dispatch diagnosis found two independent correctness gaps before mutation:
+the API rejected the workflow's explicit Sex `X`, and the create-and-link
+control had no lifecycle markers or one-shot synchronous guard. The smallest
+correction now accepts `X`, maps it to OpenEMR `Other`, adds the actionable
+parent testID `patient-create-and-link`, button accessibility state,
+`keyboardShouldPersistTaps="handled"`, synchronous pending/terminal lifecycle
+markers, duplicate-press suppression, and sanitized terminal errors. The local
+and native harness selectors were updated accordingly. No C1 mutation tap was
+issued in this continuation.
+
+Validation: mobile typecheck passed; mobile unit tests passed 40/40; component
+tests passed 79/79 across 18 suites; focused API/orchestration tests passed
+20/20; Android Node harness tests passed 1/1; Python compatibility tests passed
+13/13; `git diff --check` passed. C1 remains **BLOCKED** pending restoration or
+authorization of valid retained OpenEMR OAuth credentials. No patient,
+patient-case, audit, Docker-volume, Android-data, SecureStore, shared OpenEMR
+8083, relay, or firewall mutation occurred. Temporary API/session/signing
+material and generated captures were removed; no commit, push, merge, tag, or
+publish was performed.
+
+## C1 retained OAuth repair and single pre-mutation harness attempt — 2026-09-19
+
+The retained isolated OpenEMR instance was confirmed on Windows port 8085 and
+was accessed from WSL only through `http://172.22.96.1:18085`. Shared OpenEMR
+8083 remained stopped and untouched. Discovery returned HTTP 200; standard REST
+routes were present and returned HTTP 401 without authentication; the retained
+database had 283 tables and one patient row. The prior client failure was
+specifically `invalid_client`: valid-form credentials returned HTTP 401 before
+repair, while the fresh-client invalid-user probe later returned HTTP 400
+`invalid_grant`. No TLS, route, scope, or REST-disabled failure was involved.
+
+Exactly one fresh client was registered with the supported
+`openemr-dev:register-api-test-client --site=default` CLI as the Apache user.
+Safe metadata: client ID length 43, secret length 86, SHA-256 ID fingerprint
+prefix `f90c16cbdd08`; generated credentials were held only in mode-0600 files
+outside the repository and then destroyed. The CLI has no scope restriction
+option and its registry row retains the tool's default broad allowed-scope set;
+the issued token itself was constrained and verified to contain only the
+required `api:oemr`, `user/patient.crus`, and `user/encounter.crus` scopes. No
+OAuth rows were edited directly and the supported client registration was
+preserved.
+
+Independent OAuth validation passed: fresh password-grant token HTTP 200,
+required scopes present, invalid-client HTTP 401 using both Basic and form
+authentication, invalid-user HTTP 400 `invalid_grant`, standard authenticated
+patient search HTTP 200 with zero Stage/Alpha candidates, and no patient write.
+The temporary VEMS API then passed `/health` HTTP 200, authenticated Stage/Alpha
+search HTTP 200 with zero candidates, OpenEMR/Vtiger readiness HTTP 200, SQLite
+integrity, and retained PCR state checks.
+
+Android transport passed: authoritative Metro 8082/status HTTP 200, Windows
+relays 13001/health and 8081/status HTTP 200, emulator online with the package
+installed, exact ADB reverse rules restored, and cold launch reached
+`Running "main"`. The stale persisted session was removed through the rendered
+Sign out control only; app data and SecureStore were not cleared.
+
+The single guarded harness path issued one fresh development session, reached
+ASN-000001, INC-000001, PCR-000001, rendered Search `NOT_FOUND`, and tapped
+`patient-create-new-option` once. It stopped before mutation because the
+rendered create form was only partially below the ScrollView viewport and
+`create-sex` had no visible/actionable node. No `patient-create-and-link` tap,
+pending marker, VEMS patient-create request, OpenEMR patient, PCR-000001 link,
+or audit event occurred. Read-only reconciliation confirmed SQLite `ok`,
+PCR-000001 links 0, PCR-000002 links 1, PCR-000003 absent, and zero exact
+Stage/Alpha OpenEMR patients. C1 remains **BLOCKED before mutation**; no UI
+retry was made.
+
+The API, Metro, temporary OAuth files, tokens, signing material, and sensitive
+captures were removed. Windows clipboard length was verified as zero. The
+fresh supported client registration remains in isolated OpenEMR. No commit,
+push, merge, tag, publish, volume recreation, shared OpenEMR 8083 change, or
+protected environment-file change was made.
+
+## Off-screen create-form correction — 2026-09-19
+
+The off-screen root cause was layout: activating the zero-match create option
+rendered the create card below the Pixel Tablet viewport, so the `create-sex`
+node was not actionable. The application correction keeps a ref to the actual
+identity ScrollView and performs one `scrollToEnd({animated: true})` from the
+create form's first layout after each closed-to-open transition. It does not
+focus an input, open the keyboard, use fixed coordinates, or issue a backend
+request. The PCR context is exposed accessibly so visibility discovery can
+abort if the case changes.
+
+The bounded harness now provides non-mutating `ensureNodeVisible()` for
+`create-sex` and `patient-create-and-link`. It checks the VEMS foreground,
+identity/PCR/form state, fresh bounds, and IME status before each decision;
+swipes only inside the rendered ScrollView, derives coordinates from its
+bounds, inspects after every swipe, and caps discovery at three swipes. It
+refuses discovery after mutation is armed. Component coverage is 80 tests
+across 18 suites; mobile unit coverage is 40 tests; Node harness coverage is
+34 tests; Python compatibility coverage is 13 tests via `unittest`; typecheck
+and `git diff --check` pass.
+
+No fresh C1 mutation was issued in this continuation. The retained containers
+were started by exact name, but the temporary API/Metro runtime and temporary
+OAuth secret are not present after cleanup, so the guarded C1 path was not
+armed. The retained isolated OAuth registration remains preserved. Its broad
+registry allowance is a separate least-privilege follow-up; issued tokens
+remain scope-constrained. C1 remains incomplete and no Stage 14 completion is
+claimed.
+
+## Uninterrupted C1 execution after form correction — 2026-09-19
+
+The retained runtime was restored without changing shared OpenEMR 8083. The
+current WSL address was `172.22.103.130/20` with gateway `172.22.96.1`; the
+existing Windows relay and firewall rule were valid for that topology. The
+isolated OpenEMR relay returned discovery HTTP 200. Exactly one additional
+supported development client was provisioned for the isolated instance.
+Credential metadata was retained safely only as client ID length 43, secret
+length 86, ID SHA-256 prefix `151e59df18f5`; its secret was destroyed after
+the run. Password-grant validation required the supported `user_role=users`
+and `openid` scope so OpenEMR could establish its trusted-user session. The
+issued token was constrained to `openid`, `api:oemr`, `user/patient.crus`, and
+`user/encounter.crus` (with the configured standard resource scopes). Discovery
+was HTTP 200, valid token issuance HTTP 200, invalid client HTTP 401, and
+authenticated standard Stage/Alpha search HTTP 200 with zero matches. The
+broad client registry allowance remains a separate least-privilege follow-up.
+
+The API ran against the authoritative absolute SQLite path with standard
+OpenEMR transport, development test authentication, and 3600-second session
+TTL. API health/readiness passed, VEMS Stage/Alpha search returned zero
+matches, Metro 8082 and Windows relays 13001/8081 passed, exact ADB reverse
+rules were restored, and cold Android launch reached the authoritative
+development bundle. The first navigation probe stopped before Search because
+the API was initially launched with `AUTH_TRUST_HEADERS=true`, which ignored
+the bearer session. That runtime-only mistake was corrected to bearer
+verification; no mutation occurred in that probe. The actual C1 continuation
+then used the already-open identity form and did not repeat Search or create
+navigation.
+
+The application reveal performed its one layout-driven scroll. The persistent
+PCR context was added to the rendered form so bounded visibility checks remain
+safe after scrolling. The harness verified fresh bounds, form/PCR state,
+bounded visibility, retained Stage/Alpha/2000-01-02/X values, and an absent
+IME. The guarded Create/link action was tapped exactly once. The transient
+`patient-create-submit-pending` marker was not observed in the native
+hierarchy before the fast terminal transition, but API correlation proves one
+request and one downstream success:
+
+- exactly one `POST /api/patients` at `2026-09-19T10:13:58.129Z`, correlation
+  `c81488f8-40ba-43ff-939f-50f548c7f5ab`;
+- exactly one `POST /api/patient-cases/PCR-000001/patient-link` at
+  `2026-09-19T10:13:58.681Z`, correlation
+  `4bd4e7eb-dd6c-48b6-810c-4c9128ec4402`;
+- one isolated OpenEMR Stage/Alpha/2000-01-02 patient, sex mapped from X to
+  `Other`, ID `a2c853d8-4621-4b83-9450-ee5b8aa0a0c2`;
+- PCR-000001 linked with verification `verified`, one create/link/status audit
+  sequence, PCR-000002 unchanged, and no PCR-000003;
+- SQLite integrity remained `ok`, and Android rendered the linked
+  `patient-case-detail-screen`.
+
+Validation after the terminal outcome passed: mobile typecheck; 18 component
+suites/80 tests; 40 mobile unit tests; 34 Node harness tests; 13 Python
+compatibility tests via `unittest`; 134 API tests; 28 orchestration tests; and
+`git diff --check`. The native pending marker visibility remains a follow-up
+for harness observability even though backend and rendered linked-state
+evidence are complete. C1 result: **PASS** for the synthetic identity-link
+acceptance. The transient pending-marker observation is recorded only as that
+harness-observability follow-up; it does not alter the terminal PASS evidence.
+No Stage 14 completion is claimed.

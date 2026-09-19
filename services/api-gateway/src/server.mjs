@@ -8,7 +8,7 @@ import { checkDependencies } from "./dependency-health.mjs";
 import { createRateLimiter } from "./rate-limiter.mjs";
 import { DEVELOPMENT_TEST_ACTOR, developmentTestSessionClaims, isSuitableTestCrew, validateDevelopmentTestAuthConfig } from "./development-test-auth.mjs";
 
-const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
+const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown", "X"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
 const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Treatment In Progress", "Ready for Handover", "Handover Completed", "Closed", "Cancelled"];
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
