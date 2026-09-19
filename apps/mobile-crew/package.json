@@ -46,7 +46,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test:config": "bash scripts/validate-mobile-config.sh",
+    "test:config": "node scripts/validate-mobile-config.mjs",
     "test:unit": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
     "test:component": "jest",
     "test": "npm run test:unit && npm run test:component"
