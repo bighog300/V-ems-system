@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SqliteClient, hasEmbeddedSqliteRuntime } from "../src/db.mjs";
+import { SqliteClient, assertFreshDevelopmentPath, hasEmbeddedSqliteRuntime } from "../src/db.mjs";
 
 test("sqlite runtime remains operational in test environment", async () => {
   const dir = mkdtempSync(join(tmpdir(), "vems-db-runtime-"));
@@ -30,4 +30,18 @@ test("existing-database mode accepts the configured database file", () => {
   const path = join(dir, "platform.sqlite");
   writeFileSync(path, "");
   assert.doesNotThrow(() => new SqliteClient(path, { requireExisting: true }));
+});
+
+test("fresh-development mode initializes only an explicit disposable SQLite path", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vems-db-fresh-"));
+  const path = join(dir, "windows-development.sqlite");
+  assert.doesNotThrow(() => assertFreshDevelopmentPath(path));
+  assert.doesNotThrow(() => new SqliteClient(path, { initMode: "fresh-development" }));
+  assert.throws(() => assertFreshDevelopmentPath(join(dir, "platform.sqlite")), /retained or production-style/);
+  assert.throws(() => assertFreshDevelopmentPath(join(process.cwd(), "services/api-gateway/.data/windows.sqlite")), /outside the repository/);
+});
+
+test("unknown database initialization modes fail closed", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vems-db-mode-"));
+  assert.throws(() => new SqliteClient(join(dir, "windows.sqlite"), { initMode: "anything-else" }), /Unsupported VEMS_DB_INIT_MODE/);
 });

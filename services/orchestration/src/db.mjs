@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { migrationFiles } from "./migration-files.mjs";
 import { PostgresClient } from "./postgres-client.mjs";
@@ -37,7 +37,12 @@ export class SqliteClient {
 
   constructor(dbPath = process.env.VEMS_DB_PATH ?? ".data/platform.sqlite", options = {}) {
     this.dbPath = resolve(dbPath);
-    const requireExisting = options.requireExisting ?? process.env.VEMS_REQUIRE_EXISTING_DB === "true";
+    const initMode = options.initMode ?? process.env.VEMS_DB_INIT_MODE ?? "existing";
+    if (initMode !== "existing" && initMode !== "fresh-development") {
+      throw new Error(`Unsupported VEMS_DB_INIT_MODE: ${initMode}`);
+    }
+    if (initMode === "fresh-development") assertFreshDevelopmentPath(this.dbPath);
+    const requireExisting = options.requireExisting ?? (initMode === "fresh-development" ? false : process.env.VEMS_REQUIRE_EXISTING_DB === "true");
     if (requireExisting) {
       let stats;
       try {
@@ -193,6 +198,20 @@ export class SqliteClient {
   }
 }
 
+export function assertFreshDevelopmentPath(dbPath) {
+  const candidate = resolve(dbPath);
+  const normalized = candidate.replaceAll("\\", "/").toLowerCase();
+  if (!isAbsolute(candidate)) throw new Error("Fresh development SQLite path must be absolute");
+  if (normalized.endsWith("/platform.sqlite") || normalized.endsWith("/platform.development.sqlite")) {
+    throw new Error("Fresh development SQLite path must not use a retained or production-style database filename");
+  }
+  if (normalized.includes("/services/api-gateway/.data/") || normalized.includes("/services/orchestration/.data/")) {
+    throw new Error("Fresh development SQLite path must be outside the repository runtime data directories");
+  }
+  if (!normalized.endsWith(".sqlite")) throw new Error("Fresh development SQLite path must end in .sqlite");
+  return candidate;
+}
+
 export function hasEmbeddedSqliteRuntime() {
   return Boolean(DatabaseSync);
 }
@@ -211,7 +230,7 @@ export function createDbClient(options = {}) {
   const driver = options.driver ?? process.env.VEMS_DB_DRIVER ?? "sqlite";
   if (driver === "postgres") return new PostgresClient(options);
   if (driver !== "sqlite") throw new Error(`Unknown VEMS_DB_DRIVER: ${driver}`);
-  return new SqliteClient(options.dbPath, { requireExisting: options.requireExisting });
+  return new SqliteClient(options.dbPath, { requireExisting: options.requireExisting, initMode: options.initMode });
 }
 
 export { sqlValue };

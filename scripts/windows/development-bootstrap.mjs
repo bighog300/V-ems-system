@@ -1,0 +1,170 @@
+import { randomBytes } from "node:crypto";
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync, chmodSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const SECRET_KEYS = [
+  "DB_ROOT_PASSWORD", "VTIGER_DB_PASSWORD", "VTIGER_ADMIN_PASSWORD",
+  "OPENEMR_DB_PASSWORD", "OPENEMR_ADMIN_PASSWORD", "OPENEMR_PASSWORD",
+  "OPENEMR_CLIENT_ID", "OPENEMR_CLIENT_SECRET", "VTIGER_ACCESS_KEY", "JWT_HS256_SECRET"
+];
+
+const PLACEHOLDER = /(?:replace-with|change_me|change-me|your_|placeholder|example|set-me|secret-here|development-only|__set_in_local_env__)/i;
+const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/;
+
+export function parseEnvText(text, source = "environment file") {
+  const values = new Map();
+  const duplicates = [];
+  for (const [index, line] of text.split("\n").entries()) {
+    if (line.includes("\r")) throw new Error(`${source} contains a carriage return at line ${index + 1}`);
+    if (!line.trim() || line.trimStart().startsWith("#")) continue;
+    const match = line.match(ASSIGNMENT);
+    if (!match || match[2].includes("\n")) throw new Error(`${source} has a malformed assignment at line ${index + 1}`);
+    if (values.has(match[1])) duplicates.push(match[1]);
+    values.set(match[1], match[2]);
+  }
+  if (duplicates.length) throw new Error(`Duplicate environment keys: ${[...new Set(duplicates)].join(", ")}`);
+  return values;
+}
+
+export function validateEnvValues(values, requiredKeys) {
+  const missing = [];
+  const placeholders = [];
+  for (const key of requiredKeys) {
+    const value = values.get(key);
+    if (value === undefined || value === "") missing.push(key);
+    else if (PLACEHOLDER.test(value)) placeholders.push(key);
+    else if (/[\r\n]/.test(value)) throw new Error(`Invalid multiline value for ${key}`);
+  }
+  if (missing.length) throw new Error(`Missing required environment keys: ${missing.join(", ")}`);
+  if (placeholders.length) throw new Error(`Placeholder values are not permitted for: ${placeholders.join(", ")}`);
+}
+
+export function generateSecret(bytes = 32) {
+  return randomBytes(bytes).toString("base64url");
+}
+
+export function generateDevelopmentIdentity(prefix) {
+  return `${prefix}_${randomBytes(9).toString("hex")}`;
+}
+
+export function buildDevelopmentValues(templateText, overrides = {}) {
+  const values = parseEnvText(templateText, "Windows environment template");
+  for (const key of SECRET_KEYS) values.set(key, generateSecret());
+  values.set("OPENEMR_USERNAME", generateDevelopmentIdentity("vems_dev_openemr"));
+  values.set("VTIGER_USERNAME", generateDevelopmentIdentity("vems_dev_vtiger"));
+  values.set("OPENEMR_ADMIN_USER", values.get("OPENEMR_USERNAME"));
+  values.set("OPENEMR_ADMIN_PASSWORD", values.get("OPENEMR_PASSWORD"));
+  values.set("VTIGER_ADMIN_USER", values.get("VTIGER_USERNAME"));
+  values.set("VTIGER_ADMIN_PASSWORD", values.get("VTIGER_ADMIN_PASSWORD"));
+  values.set("VEMS_DB_INIT_MODE", "fresh-development");
+  values.set("VEMS_REQUIRE_EXISTING_DB", "false");
+  for (const [key, value] of Object.entries(overrides)) values.set(key, String(value));
+  return values;
+}
+
+export function serializeEnv(values) {
+  const keys = [...values.keys()];
+  if (new Set(keys).size !== keys.length) throw new Error("Duplicate environment keys cannot be serialized");
+  for (const [key, value] of values) {
+    if (!ASSIGNMENT.test(`${key}=${value}`) || /[\r\n]/.test(value)) throw new Error(`Invalid value for ${key}`);
+  }
+  return `${keys.map((key) => `${key}=${values.get(key)}`).join("\n")}\n`;
+}
+
+export function atomicWriteEnvFile(destination, values, requiredKeys) {
+  validateEnvValues(values, requiredKeys);
+  const target = resolve(destination);
+  const temporary = `${target}.tmp-${process.pid}-${randomBytes(6).toString("hex")}`;
+  try {
+    writeFileSync(temporary, serializeEnv(values), { encoding: "utf8", mode: 0o600, flag: "wx" });
+    chmodSync(temporary, 0o600);
+    renameSync(temporary, target);
+  } finally {
+    if (existsSync(temporary)) unlinkSync(temporary);
+  }
+  return target;
+}
+
+export function freshDatabasePathGuard(path) {
+  const normalized = resolve(path).replaceAll("\\", "/").toLowerCase();
+  if (!normalized.endsWith(".sqlite")) throw new Error("Fresh development database must end in .sqlite");
+  if (normalized.endsWith("/platform.sqlite") || normalized.endsWith("/platform.development.sqlite")) throw new Error("Fresh development database filename is reserved");
+  if (normalized.includes("/services/api-gateway/.data/") || normalized.includes("/services/orchestration/.data/")) throw new Error("Fresh development database must be outside the repository runtime data directories");
+  return resolve(path);
+}
+
+export function provisioningDecision(existing, rotate = false) {
+  if (existing === "working" && !rotate) return "reuse";
+  if (existing === "missing") return "provision";
+  if (rotate) return "rotate";
+  throw new Error("Existing development credential state is not proven working; refusing to guess or rotate");
+}
+
+export function redactText(text, sensitiveValues) {
+  let result = String(text);
+  for (const value of sensitiveValues) {
+    if (value) result = result.replaceAll(String(value), "[REDACTED]");
+  }
+  return result;
+}
+
+export function loadTemplate(path) {
+  return readFileSync(path, "utf8");
+}
+
+export function templateDirectory(path) {
+  return dirname(resolve(path));
+}
+
+export function mergeOAuthCapture(environmentPath, capturePath) {
+  const values = parseEnvText(readFileSync(environmentPath, "utf8"), "runtime environment");
+  const capture = readFileSync(capturePath, "utf8");
+  const id = capture.match(/(?:OPENEMR_)?CLIENT_ID\s*[:=]\s*([^\s]+)/i)?.[1];
+  const secret = capture.match(/(?:OPENEMR_)?CLIENT_SECRET\s*[:=]\s*([^\s]+)/i)?.[1];
+  if (!id || !secret || PLACEHOLDER.test(id) || PLACEHOLDER.test(secret)) throw new Error("OAuth registration output was not machine-readable");
+  values.set("OPENEMR_CLIENT_ID", id);
+  values.set("OPENEMR_CLIENT_SECRET", secret);
+  atomicWriteEnvFile(environmentPath, values, ["OPENEMR_CLIENT_ID", "OPENEMR_CLIENT_SECRET"]);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
+  const [command, ...args] = process.argv.slice(2);
+  if (command === "generate") {
+    const options = Object.fromEntries(args.reduce((result, value, index) => {
+      if (value.startsWith("--")) result.push([value.slice(2), args[index + 1]]);
+      return result;
+    }, []));
+    if (!options.template || !options.destination || !options["db-host-path"]) throw new Error("generate requires template, destination and db-host-path");
+    const values = buildDevelopmentValues(loadTemplate(options.template), {
+      VEMS_DB_HOST_PATH: options["db-host-path"],
+      VEMS_DB_PATH: "/var/lib/vems/data/windows-development.sqlite"
+    });
+    atomicWriteEnvFile(options.destination, values, ["API_PORT", "API_HOST", "VEMS_DB_PATH", "VEMS_DB_INIT_MODE", "VEMS_REQUIRE_EXISTING_DB", ...SECRET_KEYS, "OPENEMR_USERNAME", "VTIGER_USERNAME"]);
+    console.log("development runtime environment generated");
+  } else if (command === "merge-oauth") {
+    const options = Object.fromEntries(args.reduce((result, value, index) => {
+      if (value.startsWith("--")) result.push([value.slice(2), args[index + 1]]);
+      return result;
+    }, []));
+    mergeOAuthCapture(options.environment, options.capture);
+    console.log("OpenEMR OAuth credentials merged");
+  } else if (command === "validate") {
+    const options = Object.fromEntries(args.reduce((result, value, index) => {
+      if (value.startsWith("--")) result.push([value.slice(2), args[index + 1]]);
+      return result;
+    }, []));
+    const values = parseEnvText(readFileSync(options.environment, "utf8"), "runtime environment");
+    validateEnvValues(values, [
+      "API_PORT", "API_HOST", "VEMS_DB_HOST_PATH", "VEMS_DB_PATH", "VEMS_DB_INIT_MODE", "VEMS_REQUIRE_EXISTING_DB",
+      "DB_ROOT_PASSWORD", "VTIGER_DB_PASSWORD", "VTIGER_ADMIN_USER", "VTIGER_ADMIN_PASSWORD", "VTIGER_USERNAME", "VTIGER_ACCESS_KEY",
+      "OPENEMR_DB_PASSWORD", "OPENEMR_ADMIN_USER", "OPENEMR_ADMIN_PASSWORD", "OPENEMR_USERNAME", "OPENEMR_PASSWORD",
+      "REDIS_URL", "REDIS_HOST", "OPENEMR_BASE_URL", "OPENEMR_TOKEN_URL", "OPENEMR_API_STYLE", "OPENEMR_GRANT_TYPE", "OPENEMR_SCOPE", "OPENEMR_USER_ROLE",
+      "VTIGER_BASE_URL", "JWT_HS256_SECRET", "JWT_ISSUER", "JWT_AUDIENCE", "VEMS_ENABLE_DEVELOPMENT_TEST_AUTH", "VEMS_DEVELOPMENT_TEST_SESSION_TTL_SECONDS"
+    ]);
+    if (values.get("VEMS_DB_INIT_MODE") !== "fresh-development" || values.get("VEMS_REQUIRE_EXISTING_DB") !== "false") throw new Error("Windows bootstrap requires explicit fresh-development SQLite mode");
+    console.log("development runtime environment validated");
+  } else {
+    throw new Error("Usage: node development-bootstrap.mjs generate|merge-oauth|validate ...");
+  }
+}
