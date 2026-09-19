@@ -1,0 +1,115 @@
+appId: org.vems.mobilecrew
+---
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: jobs-list-screen
+    timeout: 90000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: jobs-error
+    commands:
+      - tapOn:
+          id: sign-out
+      - extendedWaitUntil:
+          visible:
+            id: login-screen
+          timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: development-test-login
+    commands:
+      - tapOn:
+          id: development-test-login
+- extendedWaitUntil:
+    visible:
+      id: jobs-list-screen
+    timeout: 90000
+- assertVisible:
+    id: jobs-list-screen
+- extendedWaitUntil:
+    visible:
+      id: job-ASN-000001
+    timeout: 30000
+- tapOn:
+    id: job-ASN-000001
+- extendedWaitUntil:
+    visible:
+      id: incident-workspace-screen
+    timeout: 30000
+- assertVisible:
+    id: incident-workspace-screen
+- assertVisible:
+    id: incident-detail-screen
+- assertVisible: INC-000001
+- scrollUntilVisible:
+    element:
+      id: patient-case-PCR-000001
+    direction: DOWN
+    timeout: 30000
+    visibilityPercentage: 100
+- assertVisible:
+    id: patient-case-PCR-000001
+- tapOn:
+    id: patient-case-PCR-000001
+- extendedWaitUntil:
+    visible:
+      id: patient-case-detail-screen
+    timeout: 30000
+- assertVisible:
+    id: patient-case-detail-screen
+- scrollUntilVisible:
+    element:
+      id: open-vitals
+    direction: DOWN
+    timeout: 30000
+    visibilityPercentage: 100
+- assertVisible:
+    id: open-vitals
+- tapOn:
+    id: open-vitals
+- extendedWaitUntil:
+    visible:
+      id: observation-form
+    timeout: 30000
+- assertVisible:
+    id: vitals-screen
+- assertVisible:
+    id: observation-form
+- tapOn:
+    id: vital-input-heart_rate_bpm
+- inputText: "80"
+- tapOn:
+    id: vital-input-respiratory_rate_bpm
+- inputText: "16"
+- tapOn:
+    id: vital-input-spo2_pct
+- inputText: "98"
+- tapOn:
+    id: vital-input-blood_pressure_systolic
+- inputText: "120"
+- tapOn:
+    id: vital-input-blood_pressure_diastolic
+- inputText: "80"
+- tapOn:
+    id: vital-input-temperature_c
+- inputText: "37.0"
+- tapOn:
+    id: vital-input-gcs_total
+- inputText: "15"
+- scrollUntilVisible:
+    element:
+      id: observation-submit
+    direction: DOWN
+    timeout: 30000
+    speed: 30
+    visibilityPercentage: 100
+    centerElement: true
+- tapOn:
+    id: observation-submit-idle
+- assertVisible:
+    id: observation-submit

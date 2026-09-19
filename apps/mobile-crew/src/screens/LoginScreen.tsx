@@ -11,14 +11,17 @@ import { recordTelemetryEvent } from "../telemetry/telemetry.ts";
 
 export interface LoginScreenProps {
   onSignedIn: (session: Session) => void;
+  initialError?: string | null;
 }
 
-export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
+export const INVALID_SESSION_MESSAGE = "Your session is no longer valid. Please sign in again.";
+
+export default function LoginScreen({ onSignedIn, initialError = null }: LoginScreenProps) {
   const [apiBaseUrl, setApiBaseUrl] = useState("");
   const [authToken, setAuthToken] = useState("");
   const [actorId, setActorId] = useState("");
   const [actorRole, setActorRole] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [submitting, setSubmitting] = useState(false);
   const [developmentSubmitting, setDevelopmentSubmitting] = useState(false);
 
@@ -122,7 +125,7 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
       />
 
       {error ? (
-        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="login-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={error === INVALID_SESSION_MESSAGE ? "session-invalid" : "login-error"}>
           {error}
         </Text>
       ) : null}

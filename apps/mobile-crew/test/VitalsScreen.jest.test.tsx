@@ -63,4 +63,19 @@ describe("VitalsScreen — repeat last vitals", () => {
     expect(getByTestId("vital-input-respiratory_rate_bpm").props.value).toBe("16");
     expect(getByTestId("vital-input-temperature_c").props.value).toBe("");
   });
+
+  it("renders a keyboard-safe observation form with a uniquely identified disabled submit", async () => {
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ observations: [] }), { status: 200 })) as unknown as typeof fetch;
+
+    const { getByTestId } = await renderScreen();
+    await waitFor(() => expect(getByTestId("observation-form")).toBeTruthy());
+
+    expect(getByTestId("vitals-screen").props.keyboardShouldPersistTaps).toBe("handled");
+    expect(getByTestId("observation-submit").props.accessibilityRole).toBe("button");
+    expect(getByTestId("observation-submit").props.accessibilityState.disabled).toBe(true);
+    expect(getByTestId("observation-submit-idle")).toBeTruthy();
+
+    await fireEvent.changeText(getByTestId("vital-input-heart_rate_bpm"), "80");
+    await waitFor(() => expect(getByTestId("observation-submit").props.accessibilityState.disabled).toBe(false));
+  });
 });

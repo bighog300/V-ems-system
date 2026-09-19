@@ -2637,3 +2637,386 @@ evidence are complete. C1 result: **PASS** for the synthetic identity-link
 acceptance. The transient pending-marker observation is recorded only as that
 harness-observability follow-up; it does not alter the terminal PASS evidence.
 No Stage 14 completion is claimed.
+
+## C2 clinical encounter and initial observations — 2026-09-19
+
+The C2 workflow was executed only through the initial clinical record gate.
+The retained linked PCR-000001 was opened through the rendered Android
+workflow. The synthetic dataset selected for this run was presenting complaint
+`Stage 14 synthetic assessment`, primary-survey findings with the same
+synthetic narrative, and the supported vital fields: heart rate 80 bpm,
+blood pressure 120/80 mmHg, respiratory rate 16/min, SpO2 98%, temperature
+37.0 °C, and GCS 15. Blood glucose was not entered because it was optional.
+
+Exactly one encounter was created through the UI and persisted as Open, with
+the existing C1 patient link retained. Exactly one primary-survey assessment
+was recorded with the synthetic narrative. The rendered vitals form retained
+the selected values and its enabled `record-vitals` control received exactly
+one tap. No second tap or API substitute was used.
+
+Read-only reconciliation after the terminal observation attempt found zero
+rows in `clinical_observations`, no observation audit or timeline event, and
+no observation sync intent. The VEMS API process was no longer reachable for
+a post-tap authenticated read, but authoritative SQLite integrity remained
+`ok`; the encounter and assessment rows were present, PCR-000002 remained
+unchanged, and PCR-000003 was absent. The evidence therefore classifies C2
+as **BLOCKED at observation dispatch**: the single rendered tap did not reach
+the VEMS observation endpoint, and the observation mutation was not created.
+The vitals mutation was not retried. No medications, procedures,
+disposition, handover, signatures, or finalization were started.
+
+Android evidence reached the linked patient-case detail, Open encounter,
+Primary survey assessment row, and populated vitals form. The next permitted
+work is a separate read-only diagnosis of the `record-vitals` dispatch path;
+no further C2 mutation is authorized from this run.
+
+### Observation continuation correction and terminal evidence
+
+The observation correction exposed `observation-form`, `observation-submit`,
+and the synchronous `observation-submit-idle` lifecycle marker. The navigation
+control remained `open-vitals` and performed only navigation. The form used a
+keyboard-safe ScrollView, finite numeric parsing, an actionable parent with an
+accurate disabled accessibility state, synchronous pending protection,
+duplicate-press guarding, and sanitized errors. The selected values were HR
+80 bpm, RR 16/min, SpO2 98%, BP 120/80 mmHg, temperature 37.0 °C, and GCS 15.
+
+Before the single permitted submit tap, PCR-000001 still had one encounter,
+one encounter link, one primary-survey assessment, and zero observations. The
+tap targeted the enabled `observation-submit` parent within fresh hierarchy
+bounds with no visible IME obstruction. No pending or terminal marker appeared,
+the API log contained no observation POST, and read-only reconciliation found
+zero observations, zero observation audit/timeline events, and SQLite
+integrity `ok`. No retry was made. C2 remains **BLOCKED at observation
+dispatch**; encounter and assessment were not recreated or edited. No later
+clinical section was started. The remaining work is a separate diagnosis of
+the native dispatch/touch path and bounded visibility behavior.
+
+### C2 Maestro transition — 2026-09-19
+
+The custom Node/Python Android drivers are now frozen for clinical mutation
+dispatch. They remain diagnostic-only for environment checks, hierarchy and
+screenshot capture, foreground checks, relay verification, and read-only
+reconciliation. No additional coordinate tap, swipe, key-event, or mutation
+retry heuristic was added.
+
+Maestro CLI 2.10.0 was installed in the WSL user account using the official
+installer. It runs with user-local Eclipse Temurin 17.0.20.1 and user-local
+Linux Android platform-tools; no sudo installation, system Java replacement,
+repository binary, Appium, or application-data reset was used. The Windows
+`adb.exe` could still see `emulator-5554` directly, but Maestro's Linux ADB
+client could not connect to that Windows ADB server: the WSL Linux daemon could
+not bind its local listener and the Windows server was not reachable through
+the WSL bridge. `maestro test --device emulator-5554` therefore stopped before
+launching the flow with “Device emulator-5554 was requested, but it is not
+connected.” No mutation flow was run.
+
+Repository-owned flows were added under `scripts/stage14/`:
+`maestro-c2-navigation-dry-run.yaml` reaches the existing encounter, opens
+the observation form, enters the synthetic values, and deliberately stops
+before submission; `maestro-c2-observation-mutation.yaml` contains one final
+`observation-submit` tap with no retry/repeat/re-entry construct. The dry-run
+was not executable until the emulator bridge is restored. C2 remains blocked
+at observation dispatch; no observation mutation, later clinical section, or
+runtime restart was performed in this transition.
+
+### Maestro-to-Windows-ADB bridge attempt — 2026-09-19
+
+The approved relay was verified read-only: WSL gateway `172.22.96.1`, WSL
+subnet `172.22.96.0/20`, and TCP `172.22.96.1:15037` were reachable. Windows
+`adb.exe` continued to report `emulator-5554` as `device`. `socat` was not
+installed, so no package installation or socket bridge was attempted. The
+documented `ADB_SERVER_SOCKET=tcp:172.22.96.1:15037` path allowed the user-local
+Linux platform-tools `adb` to list the emulator, but Maestro 2.10.0 still
+reported `emulator-5554` as not connected during read-only hierarchy
+inspection. A disposable Linux ADB server created while testing that path was
+stopped; no Windows ADB server was killed.
+
+Both repository-owned Maestro flows pass Maestro syntax validation. No
+Maestro navigation flow, screenshot, app launch, runtime recovery, or clinical
+mutation was run because the required Maestro device-visibility gate failed.
+C2 remains blocked at the observation-dispatch transition; all durable
+encounter, assessment, and zero-observation evidence remains unchanged.
+
+### Maestro bridge and dry-run continuation — 2026-09-19
+
+After `socat` approval, one loopback-only bridge was started with PID recorded
+under `/tmp/vems-stage14-maestro/socat.pid`, forwarding only
+`127.0.0.1:5037` to the approved `172.22.96.1:15037` relay. Default-socket
+Linux ADB then reported `emulator-5554` as `device`; package visibility,
+foreground `org.vems.mobilecrew`, hierarchy inspection, and PNG screenshot all
+passed. No Linux ADB server was retained, and no app data or SecureStore was
+cleared. The bridge was stopped and its temporary directory removed after the
+terminal result.
+
+The navigation-only Maestro flow was run once. It launched the existing app
+and reached the authenticated synthetic jobs UI, but failed its
+`jobs-list-screen` assertion during startup timing after the screen became
+available in subsequent read-only hierarchy inspection. It did not reach the
+PCR-000001 encounter or observation form, and the mutation flow was not run.
+Read-only reconciliation afterward remained: one encounter, one assessment,
+zero observations, zero observation audit/timeline events, and SQLite
+integrity `ok`. C2 remains blocked; no clinical mutation occurred in this
+continuation.
+
+### Maestro startup synchronization correction — 2026-09-19
+
+Both C2 flows now use `launchApp: { stopApp: false }`. The navigation flow has
+bounded `extendedWaitUntil` startup synchronization up to 90 seconds, a
+conditional development-login path, explicit final jobs assertions, and
+30-second waits for the incident workspace, PCR workspace, existing encounter
+action, and observation form. The mutation flow begins from the prepared form,
+waits up to 30 seconds for `observation-form`, verifies all values, and retains
+exactly one `observation-submit` tap with no repeat/retry/restart construct.
+Both flows pass Maestro syntax validation; the mutation file contains one
+submit tap.
+
+The corrected navigation flow was run once with the proven loopback ADB bridge.
+Startup synchronization passed: the app was foregrounded without stopping,
+the jobs-list wait completed, the authenticated jobs screen was asserted, and
+ASN-000001 was tapped once. The flow then stopped while waiting for the
+existing `patient-case-PCR-000001` target in the incident workspace; the
+observation form and mutation control were not reached. No mutation flow was
+run. Read-only reconciliation remained one encounter, one assessment, zero
+observations, zero observation audit/timeline events, and SQLite integrity
+`ok`. API, Metro, and socat were stopped and temporary captures/clipboard were
+cleaned. C2 remains blocked at Maestro navigation visibility, not observation
+dispatch.
+
+### Maestro post-assignment navigation correction — 2026-09-19
+
+Read-only hierarchy inspection after the ASN-000001 tap confirmed that the
+rendered state is `incident-workspace-screen` containing
+`incident-detail-screen`, `INC-000001`, and a scrollable patient-cases section.
+`patient-case-PCR-000001` was below the visible viewport. The navigation flow
+was corrected to use Maestro's ID-based `scrollUntilVisible` for that existing
+PCR, followed by the single PCR tap. The patient-case detail screen then
+rendered successfully; its encounter controls were also below the viewport,
+so the flow added a bounded `scrollUntilVisible` for `open-vitals`.
+
+The corrected dry-run reached the existing PCR-000001 encounter and vitals
+form, entered HR 80, RR 16, SpO2 98%, BP 120/80, temperature 37.0 °C, and GCS
+15, and performed no observation tap. Its final bounded visibility step could
+not locate `observation-submit` after keyboard dismissal, so the dry-run did
+not pass and the mutation flow was not run. Read-only reconciliation remained
+one encounter, one assessment, zero observations, zero observation audit or
+timeline events, and SQLite integrity `ok`. Runtime, bridge, captures, and
+clipboard were cleaned. C2 remains blocked at observation-form submit
+visibility; no clinical mutation occurred.
+
+### Maestro observation-submit visibility correction — 2026-09-19
+
+The final visibility diagnosis found that all supported synthetic values reached
+the React Native `VitalsScreen` state and the submit parent was rendered with
+fresh non-zero bounds and enabled state. `Number` parsing accepted HR 80, RR
+16, SpO2 98%, BP 120/80, temperature 37.0, and GCS 15. The authoritative IME
+state was shown immediately after entry; Maestro `hideKeyboard` and
+`pressKey: BACK` each navigated out of the React Native screen in this emulator,
+so neither is used by the navigation dry run.
+
+The flow now uses Maestro's supported bounded `scrollUntilVisible` with
+`speed: 30`, `visibilityPercentage: 100`, and `centerElement: true` for
+`observation-submit`. It then targets the inert `observation-submit-idle`
+lifecycle marker to dismiss the IME without coordinates or mutation, and
+asserts the enabled actionable parent. The resulting native hierarchy showed
+`mInputShown=false`, `observation-submit` enabled/clickable at fresh bounds,
+and all entered values retained. The repository-owned navigation-only flow
+passed syntax validation and completed once through the prepared form without
+an observation tap or API mutation. The mutation flow was not run.
+
+Read-only reconciliation after the passing dry run remains one PCR-000001
+encounter, one primary-survey assessment, zero observations, zero observation
+audit/timeline events, unchanged PCR-000002, absent PCR-000003, and SQLite
+integrity `ok`. C2 remains unmutated and ready for a separately authorized
+single observation-submit attempt.
+
+### C2 single Maestro mutation attempt — 2026-09-19
+
+The retained runtime was recovered with the isolated OpenEMR password-grant
+configuration, using the retained container credential in process memory only;
+the protected repository environment and OAuth registration were not changed.
+The API, Metro, Windows relays, ADB reverse mappings, and loopback socat bridge
+were verified. The pre-attempt durable baseline was one encounter, one
+primary-survey assessment, zero observations, zero observation audit/timeline
+events, unchanged PCR-000002, absent PCR-000003, and SQLite integrity `ok`.
+
+The already validated navigation dry run was run once to prepare the form and
+passed with the exact synthetic values. The mutation flow was then executed
+exactly once. It failed at its initial `observation-form` assertion after
+`launchApp: { stopApp: false }`; it therefore issued zero
+`observation-submit` taps. API logs contained no observation POST, OpenEMR
+capture contained no observation write, and read-only reconciliation remained
+zero observations and zero observation audit/timeline events. Android was on
+the jobs list afterward. This is classified as a pre-submit preparation
+blocker, not an ambiguous mutation outcome; the mutation flow was not rerun.
+
+Focused validation after the terminal blocker passed: mobile unit 40, affected
+Vitals component tests 3, API encounter/observation suite 21, orchestration
+observation suite 12, both Maestro syntax checks, SQLite integrity, and
+`git diff --check`. C2 is **BLOCKED before observation dispatch**, not PASS.
+No later clinical section was started.
+
+### C2 continuous Maestro flow refactor — 2026-09-19
+
+The validated non-mutating navigation and observation-form preparation steps
+were extracted to `scripts/stage14/maestro-c2-observation-prepare.yaml`. The
+navigation-only wrapper now calls that subflow and stops before mutation. The
+mutation wrapper calls the same preparation subflow in the same Maestro
+invocation, reasserts the prepared form, performs the bounded centered
+visibility step, and contains exactly one `observation-submit` tap followed
+only by a terminal-success wait. No clinical flow was run during this
+refactor; both wrappers and the preparation subflow pass Maestro syntax
+validation, and no application, networking, authentication, or clinical
+validation code was changed.
+
+### C2 continuous Maestro mutation attempt — 2026-09-19
+
+The continuous mutation wrapper was structurally validated and executed once
+after recovery of the retained runtime. The preparation subflow stopped at its
+bounded `job-ASN-000001` visibility assertion. Android displayed
+`jobs-list-screen` with a sanitized `JWT signature validation failed` error;
+the restored API had a different temporary JWT signing secret, so the stale
+stored Android session was not accepted. The flow issued zero
+`observation-submit` taps and never reached the mutation wrapper's submit
+command.
+
+Read-only reconciliation remained one PCR-000001 encounter, one
+primary-survey assessment, zero observations, zero observation audit/timeline
+events, unchanged PCR-000002, absent PCR-000003, and SQLite integrity `ok`.
+The API assignment endpoint itself returned the retained ASN-000001 data, and
+no observation POST or OpenEMR observation write was observed. The single
+continuous attempt was not rerun. C2 remains **BLOCKED before observation
+dispatch**; no later clinical section was started.
+
+### C2 stale-session recovery and final continuous-flow attempt — 2026-09-19
+
+The previous pre-submit blocker was traced to a temporary API restart using a
+new JWT HS256 signing secret while Android retained the prior development
+session. A reusable WSL-local signing secret was created once at
+`/home/bighog/.local/state/vems-stage14/jwt-signing-secret`; its parent is
+mode 0700 and the secret file is mode 0600. The value was never printed,
+copied to the clipboard, committed, or placed in the repository. The same
+secret was used across an API stop/restart, and a retained development session
+was accepted before and after that restart. A separate isolated check showed
+that a token signed with a different secret is rejected.
+
+Mobile session bootstrap now verifies restored sessions before entering the
+authenticated state. Invalid-signature, malformed, expired, and revoked
+session responses clear the stored session through the existing clear-session
+primitive, clear in-memory state, and return to LoginScreen with the sanitized
+message `Your session is no longer valid. Please sign in again.` Connectivity,
+HTTP 5xx, and downstream readiness failures preserve the stored session. The
+development test-login path remains available after recovery. Regression
+evidence passed: 218 mobile unit tests and 15 affected component tests,
+including invalid-session clearing, sanitized messaging, and preservation on
+server/connectivity failures. Maestro syntax checks passed for all three C2
+flows; focused encounter/observation API and orchestration tests passed (31).
+
+The protected runtime was restored with the retained containers, authoritative
+SQLite database, isolated OpenEMR relay, reusable OAuth credential, persistent
+JWT signing secret, Metro, Windows relays, ADB reverse mappings, and the
+loopback socat bridge. The pre-attempt baseline remained one PCR-000001
+encounter, one primary-survey assessment, zero observations, zero observation
+audit/timeline events, unchanged PCR-000002, absent PCR-000003, and SQLite
+integrity `ok`.
+
+The continuous Maestro mutation flow was authorized and invoked exactly once.
+Maestro reported before executing the flow: `Device pixel_6 was requested, but
+it is not connected.` Consequently the preparation subflow did not run, zero
+`observation-submit` taps occurred, and no observation request or downstream
+OpenEMR write was possible. Read-only reconciliation after the terminal
+failure confirmed zero observations, zero observation audit/timeline events,
+one encounter, one assessment, unchanged PCR-000002, absent PCR-000003, and
+SQLite integrity `ok`. The flow was not rerun. C2 remains **BLOCKED before
+observation dispatch** due to Maestro device connectivity; no later clinical
+section was started.
+
+Temporary API, Metro, socat bridge, token, captures, and clipboard contents
+were cleaned. The reusable OAuth credential, registered isolated OAuth client,
+persistent JWT signing secret, Docker volumes, Android data/SecureStore,
+approved Windows relays/firewall rules, shared OpenEMR 8083, and protected
+repository files were preserved.
+
+### C2 direct WSL ADB transport attempt — 2026-09-19
+
+The temporary socat-to-Windows-ADB-server bridge was removed. A local WSL
+ADB server was started on `127.0.0.1:5037` and connected through the approved
+relay at `172.22.96.1:15555`. After visible Android authorization,
+`172.22.96.1:15555` remained `device` across ten checks over approximately 20
+seconds, with package, foreground, hierarchy, and screenshot checks passing.
+Two separate Maestro hierarchy commands also succeeded when explicitly
+targeting `172.22.96.1:15555`; no socat process or `15037` relay was used.
+
+The continuous mutation flow was invoked exactly once with the direct-device
+selector. The local-device reverse mappings were set only for this device as
+`3001 -> 3001` and `8081 -> 8082`. Maestro launched the app, recovered the
+stale jobs-error state through normal sign-out, and tapped development test
+login, but the flow failed at the bounded jobs-list assertion. No assignment
+request reached the API, and the preparation subflow did not reach any
+clinical screen or `observation-submit` action.
+
+Read-only reconciliation remained one PCR-000001 encounter, one assessment,
+zero observations, zero observation audit/timeline events, absent PCR-000003,
+and SQLite integrity `ok`. The failure is classified as a pre-submit runtime
+endpoint blocker: the direct-device reverse target `3001 -> 3001` did not
+reach the Windows API relay used by the development client. The flow was not
+rerun. The relayed emulator was disconnected, the local WSL ADB server,
+temporary API, Metro, captures, sessions, and clipboard were cleaned. C2
+remains **BLOCKED before observation dispatch**.
+
+### C2 direct-WSL reverse-mapping correction — 2026-09-19
+
+A single WSL-local API listener on port 3001 and a single authoritative Metro
+listener on port 8082 were restored successfully. The authorized direct ADB
+transport `172.22.96.1:15555` reconnected as `device` through the local WSL
+ADB server. Its reverse rules were replaced with exactly `tcp:3001 ->
+tcp:3001` and `tcp:8081 -> tcp:8082`; former Windows-ADB target ports were not
+used.
+
+The required emulator-side HTTP probes did not reach the WSL services. Both
+toybox `nc` probes exited without HTTP output, the API log recorded no
+matching `/health` request, and the reverse list remained present. Because
+the traffic gate failed, the app was not launched for clinical navigation,
+Maestro was not run, and no observation tap or request occurred.
+
+The durable baseline remained one PCR-000001 encounter, one assessment, zero
+observations, zero observation audit/timeline events, absent PCR-000003, and
+SQLite integrity `ok`. The direct device was disconnected, reverse rules were
+removed, the local WSL ADB server and temporary API/Metro processes were
+stopped, and temporary files and clipboard contents were cleaned. C2 remains
+**BLOCKED before observation dispatch** by direct-ADB reverse reachability.
+
+### C2 Maestro selector correction and terminal attempt — 2026-09-19
+
+The stale `pixel_6` value was not present in repository files, Stage 14
+wrappers, Maestro configuration, shell environment, or flow metadata. It came
+from the prior explicit invocation selector. Maestro 2.10.0 help confirms the
+supported selector is `--device`/`--udid`; the Android model is displayed as
+`pixel_6`, while the required connected serial is `emulator-5554`.
+
+The loopback ADB bridge was restored at `127.0.0.1:5037` to the approved
+Windows relay. Windows and Linux ADB reported `emulator-5554` as `device`;
+Maestro hierarchy inspection succeeded with the explicit serial selector,
+package visibility and screenshot checks passed, and no clinical flow was
+launched during proof. A disposable Linux ADB server created by Maestro during
+inspection was stopped; the Windows ADB server and approved relays were not
+modified.
+
+The final sanitized invocation shape was:
+`maestro test --device emulator-5554 --debug-output <temporary-capture-dir>
+scripts/stage14/maestro-c2-observation-mutation.yaml`. The preparation
+subflow contains no submit tap, the wrapper contains exactly one
+`observation-submit` tap, no retry/repeat/restart construct exists, syntax and
+`git diff --check` passed, and the baseline was one encounter, one assessment,
+zero observations/audit events, absent PCR-000003, and SQLite integrity `ok`.
+
+The continuous flow was invoked exactly once with `--device emulator-5554`.
+Maestro failed before executing the flow with `Device emulator-5554 was
+requested, but it is not connected.` No preparation step or
+`observation-submit` tap occurred. Read-only reconciliation confirmed zero
+observation requests, rows, audit/timeline events, and downstream writes;
+encounter and assessment counts remained one, PCR-000003 remained absent, and
+SQLite integrity remained `ok`. The flow was not rerun. C2 remains
+**BLOCKED before observation dispatch** due to Maestro’s device-connection
+race despite successful preflight hierarchy inspection. Temporary API, Metro,
+ADB bridge, captures, token, and clipboard contents were cleaned; reusable
+OAuth/JWT credentials and retained infrastructure were preserved.

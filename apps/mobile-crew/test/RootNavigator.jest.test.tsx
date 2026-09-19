@@ -11,6 +11,7 @@ describe("RootNavigator", () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.clearAllMocks();
     jest.restoreAllMocks();
   });
 
@@ -37,6 +38,43 @@ describe("RootNavigator", () => {
     const { getByTestId } = await render(<RootNavigator />);
 
     await waitFor(() => expect(getByTestId("jobs-list-screen")).toBeTruthy());
+  });
+
+  it("clears an invalid restored session before showing the sanitized login state", async () => {
+    const session = {
+      apiBaseUrl: "https://api.example.test",
+      authToken: "stale-token",
+      actorId: "crew-1",
+      actorRole: "field_crew"
+    };
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce(JSON.stringify(session));
+    jest.mocked(SecureStore.deleteItemAsync).mockResolvedValueOnce(undefined);
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ error: { message: "JWT signature validation failed", code: "UNAUTHENTICATED" } }), { status: 401 })) as unknown as typeof fetch;
+
+    const { getByTestId, queryByText } = await render(<RootNavigator />);
+
+    await waitFor(() => expect(getByTestId("login-screen")).toBeTruthy());
+    expect(getByTestId("session-invalid")).toBeTruthy();
+    expect(getByTestId("session-invalid").props.children).toBe("Your session is no longer valid. Please sign in again.");
+    expect(queryByText(/JWT|signature validation|cryptographic/i)).toBeNull();
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("vems.mobile.session");
+  });
+
+  it("preserves a restored session when verification fails for connectivity or server reasons", async () => {
+    const session = {
+      apiBaseUrl: "https://api.example.test",
+      authToken: "still-valid",
+      actorId: "crew-1",
+      actorRole: "field_crew"
+    };
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce(JSON.stringify(session));
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ error: { message: "temporary failure" } }), { status: 503 })) as unknown as typeof fetch;
+    jest.mocked(LocalAuthentication.hasHardwareAsync).mockResolvedValueOnce(false);
+
+    const { getByTestId } = await render(<RootNavigator />);
+
+    await waitFor(() => expect(getByTestId("jobs-list-screen")).toBeTruthy());
+    expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
   });
 
   it("deep-links straight to the assignment's incident when launched by tapping a notification", async () => {
