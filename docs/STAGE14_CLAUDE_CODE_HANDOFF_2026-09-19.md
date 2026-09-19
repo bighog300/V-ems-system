@@ -142,6 +142,15 @@ observation dispatch.
 
 ## Safety rules
 
+## Windows-native topology migration
+
+The hybrid WSL bridge topology is superseded for normal Android development by
+the documented Windows-native Metro plus Docker Desktop API topology in
+`docs/ANDROID_WINDOWS_DOCKER_DEVELOPMENT.md`. Earlier Stage 14 evidence and
+Maestro flows remain valid as legacy/diagnostic evidence. This migration did
+not perform the pending C2 observation mutation: PCR-000001 remains one
+encounter, one assessment, and zero observations.
+
 Do not:
 
 - Clear Android application data or SecureStore.

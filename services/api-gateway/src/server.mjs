@@ -1276,7 +1276,8 @@ export function createApp(orchestration = new OrchestrationService()) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const server = createApp();
   const port = Number(process.env.PORT ?? 8080);
-  server.listen(port, () => {
-    console.log(`api-gateway listening on ${port}`);
+  const host = process.env.HOST ?? "0.0.0.0";
+  server.listen(port, host, () => {
+    console.log(`api-gateway listening on ${host}:${port}`);
   });
 }

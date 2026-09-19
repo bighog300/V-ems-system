@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { migrationFiles } from "./migration-files.mjs";
@@ -35,8 +35,18 @@ function runSqlite(dbPath, args, input = undefined) {
 export class SqliteClient {
   dialect = "sqlite";
 
-  constructor(dbPath = process.env.VEMS_DB_PATH ?? ".data/platform.sqlite") {
+  constructor(dbPath = process.env.VEMS_DB_PATH ?? ".data/platform.sqlite", options = {}) {
     this.dbPath = resolve(dbPath);
+    const requireExisting = options.requireExisting ?? process.env.VEMS_REQUIRE_EXISTING_DB === "true";
+    if (requireExisting) {
+      let stats;
+      try {
+        stats = statSync(this.dbPath);
+      } catch (error) {
+        throw new Error(`Configured SQLite database is missing: ${this.dbPath}`, { cause: error });
+      }
+      if (!stats.isFile()) throw new Error(`Configured SQLite database is not a regular file: ${this.dbPath}`);
+    }
     mkdirSync(dirname(this.dbPath), { recursive: true });
     this.db = DatabaseSync ? new DatabaseSync(this.dbPath, { timeout: 5000 }) : null;
     if (this.db) {
@@ -201,7 +211,7 @@ export function createDbClient(options = {}) {
   const driver = options.driver ?? process.env.VEMS_DB_DRIVER ?? "sqlite";
   if (driver === "postgres") return new PostgresClient(options);
   if (driver !== "sqlite") throw new Error(`Unknown VEMS_DB_DRIVER: ${driver}`);
-  return new SqliteClient(options.dbPath);
+  return new SqliteClient(options.dbPath, { requireExisting: options.requireExisting });
 }
 
 export { sqlValue };

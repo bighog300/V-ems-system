@@ -26,7 +26,37 @@ process.stdin.on("end", () => {
 });
 '
 
-release_config=$(EXPO_PUBLIC_ENABLE_DEVELOPMENT_TEST_AUTH=true NODE_ENV=production APP_ENV=production npx expo config --json)
+emulator_config=$(EXPO_PUBLIC_API_PROFILE=android-emulator-development NODE_ENV=development APP_ENV=development npx expo config --json)
+printf '%s' "$emulator_config" | node -e '
+let input = "";
+process.stdin.on("data", chunk => { input += chunk; });
+process.stdin.on("end", () => {
+  const config = JSON.parse(input);
+  if (config.extra?.apiProfile !== "android-emulator-development") throw new Error("emulator API profile was not exposed");
+  if (config.extra?.apiBaseUrl !== "http://10.0.2.2:3001") throw new Error("emulator API profile URL mismatch");
+});
+'
+
+release_api_config=$(EXPO_PUBLIC_API_PROFILE=android-emulator-development NODE_ENV=production APP_ENV=production npx expo config --json 2>&1 || true)
+if printf '%s' "$release_api_config" | rg -q '10\.0\.2\.2:3001'; then
+  echo 'release config exposed the emulator API URL' >&2
+  exit 1
+fi
+if EXPO_PUBLIC_API_PROFILE=explicit NODE_ENV=production APP_ENV=production npx expo config --json >/dev/null 2>&1; then
+  echo 'release configuration unexpectedly succeeded without an explicit API URL' >&2
+  exit 1
+fi
+release_explicit_config=$(EXPO_PUBLIC_API_URL=https://api.example.test NODE_ENV=production APP_ENV=production npx expo config --json)
+printf '%s' "$release_explicit_config" | node -e '
+let input = "";
+process.stdin.on("data", chunk => { input += chunk; });
+process.stdin.on("end", () => {
+  const config = JSON.parse(input);
+  if (config.extra?.apiBaseUrl !== "https://api.example.test") throw new Error("explicit release API URL mismatch");
+});
+'
+
+release_config=$(EXPO_PUBLIC_ENABLE_DEVELOPMENT_TEST_AUTH=true EXPO_PUBLIC_API_URL=https://api.example.test NODE_ENV=production APP_ENV=production npx expo config --json)
 printf '%s' "$release_config" | node -e '
 let input = "";
 process.stdin.on("data", chunk => { input += chunk; });

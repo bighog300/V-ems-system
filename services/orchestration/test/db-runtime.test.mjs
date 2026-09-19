@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteClient, hasEmbeddedSqliteRuntime } from "../src/db.mjs";
@@ -15,4 +15,19 @@ test("sqlite runtime remains operational in test environment", async () => {
 
   assert.equal(row.value, "ok");
   assert.equal(typeof hasEmbeddedSqliteRuntime(), "boolean");
+});
+
+test("existing-database mode fails visibly instead of creating a fallback database", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vems-db-missing-"));
+  assert.throws(
+    () => new SqliteClient(join(dir, "missing.sqlite"), { requireExisting: true }),
+    /Configured SQLite database is missing/
+  );
+});
+
+test("existing-database mode accepts the configured database file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vems-db-existing-"));
+  const path = join(dir, "platform.sqlite");
+  writeFileSync(path, "");
+  assert.doesNotThrow(() => new SqliteClient(path, { requireExisting: true }));
 });

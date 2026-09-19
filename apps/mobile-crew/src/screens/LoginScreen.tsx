@@ -8,6 +8,7 @@ import { getOrCreateDeviceId } from "../auth/deviceIdentity.ts";
 import { saveSession, type Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 import { recordTelemetryEvent } from "../telemetry/telemetry.ts";
+import { resolveApiBaseUrl } from "../config/apiProfile.ts";
 
 export interface LoginScreenProps {
   onSignedIn: (session: Session) => void;
@@ -17,7 +18,7 @@ export interface LoginScreenProps {
 export const INVALID_SESSION_MESSAGE = "Your session is no longer valid. Please sign in again.";
 
 export default function LoginScreen({ onSignedIn, initialError = null }: LoginScreenProps) {
-  const [apiBaseUrl, setApiBaseUrl] = useState("");
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => resolveApiBaseUrl());
   const [authToken, setAuthToken] = useState("");
   const [actorId, setActorId] = useState("");
   const [actorRole, setActorRole] = useState("");

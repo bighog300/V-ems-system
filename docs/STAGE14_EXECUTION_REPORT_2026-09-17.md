@@ -124,6 +124,21 @@ Stage 14 is not complete. Remaining gates include complete repository/service-ba
 
 This report records observed evidence only and does not claim overall Stage 14 acceptance or release readiness.
 
+## Windows-native Docker topology migration — 2026-09-19
+
+The hybrid WSL bridge is superseded for normal Windows Android development by
+Windows-native Metro on port 8081 and the Docker Desktop API published on host
+port 3001. The Android emulator uses `10.0.2.2` for both services. Existing
+Stage 14 evidence and Maestro flows remain retained as legacy/diagnostic
+evidence. No WSL IP routing, portproxy, ADB reverse, socat, remote ADB, or
+Maestro-in-WSL is required for normal operation.
+
+The API uses Compose service discovery for Redis, OpenEMR, and Vtiger and the
+retained bind-mounted SQLite database. C2 was not mutated during this
+migration: PCR-000001 remains one encounter, one assessment, and zero
+observations or observation timeline events; PCR-000002 is unchanged and
+PCR-000003 remains absent. No clinical records were recreated or edited.
+
 ## Continued execution addendum — 2026-09-17
 
 ### Git state

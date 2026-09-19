@@ -1,0 +1,14 @@
+appId: org.vems.mobilecrew
+tags:
+  - stage14
+  - connectivity-only
+---
+# Login and assignments list only. No patient case, encounter or clinical screen.
+- runFlow:
+    file: maestro-stage14-login.yaml
+- assertVisible:
+    id: jobs-list-screen
+- assertVisible:
+    id: job-ASN-000001
+- assertNotVisible:
+    id: jobs-error

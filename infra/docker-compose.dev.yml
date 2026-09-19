@@ -59,11 +59,11 @@ services:
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
       DB_USER: ${VTIGER_DB_USER:-vtiger}
-      DB_PASSWORD: ${VTIGER_DB_PASSWORD:-vtigerpass}
+      DB_PASSWORD: ${VTIGER_DB_PASSWORD:?VTIGER_DB_PASSWORD is required}
       DB_NAME: ${VTIGER_DB_NAME:-vtiger}
       DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
       VTIGER_ADMIN_USER: ${VTIGER_ADMIN_USER:-admin}
-      VTIGER_ADMIN_PASSWORD: ${VTIGER_ADMIN_PASSWORD:-Admin@123}
+      VTIGER_ADMIN_PASSWORD: ${VTIGER_ADMIN_PASSWORD:?VTIGER_ADMIN_PASSWORD is required}
       VTIGER_ADMIN_EMAIL: ${VTIGER_ADMIN_EMAIL:-admin@example.com}
       VTIGER_COMPANY_NAME: ${VTIGER_COMPANY_NAME:-VEMS Dev}
       VTIGER_TIMEZONE: ${VTIGER_TIMEZONE:-UTC}
@@ -131,6 +131,67 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/services/api-gateway/Dockerfile
+    container_name: vems-api-dev
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      openemr:
+        condition: service_healthy
+      vtiger:
+        condition: service_healthy
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      APP_ENV: development
+      APP_PROFILE: android-emulator-development
+      PORT: 3001
+      HOST: 0.0.0.0
+      VEMS_DB_DRIVER: sqlite
+      VEMS_DB_PATH: /var/lib/vems/data/platform.sqlite
+      VEMS_REQUIRE_EXISTING_DB: "true"
+      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      OPENEMR_BASE_URL: http://openemr
+      OPENEMR_TOKEN_URL: http://openemr/oauth2/default/token
+      OPENEMR_API_STYLE: standard
+      OPENEMR_GRANT_TYPE: ${OPENEMR_GRANT_TYPE:-password}
+      OPENEMR_SCOPE: ${OPENEMR_SCOPE:?OPENEMR_SCOPE is required}
+      OPENEMR_CLIENT_ID: ${OPENEMR_CLIENT_ID:?OPENEMR_CLIENT_ID is required}
+      OPENEMR_CLIENT_SECRET: ${OPENEMR_CLIENT_SECRET:?OPENEMR_CLIENT_SECRET is required}
+      OPENEMR_USERNAME: ${OPENEMR_USERNAME:?OPENEMR_USERNAME is required}
+      OPENEMR_PASSWORD: ${OPENEMR_PASSWORD:?OPENEMR_PASSWORD is required}
+      OPENEMR_USER_ROLE: ${OPENEMR_USER_ROLE:-users}
+      VTIGER_BASE_URL: http://vtiger
+      VTIGER_USERNAME: ${VTIGER_USERNAME:?VTIGER_USERNAME is required}
+      VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:?VTIGER_ACCESS_KEY is required}
+      JWT_HS256_SECRET: ${JWT_HS256_SECRET:?JWT_HS256_SECRET is required}
+      JWT_ISSUER: ${JWT_ISSUER:?JWT_ISSUER is required}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?JWT_AUDIENCE is required}
+      VEMS_ENABLE_DEVELOPMENT_TEST_AUTH: ${VEMS_ENABLE_DEVELOPMENT_TEST_AUTH:-false}
+      VEMS_DEVELOPMENT_TEST_SESSION_TTL_SECONDS: ${VEMS_DEVELOPMENT_TEST_SESSION_TTL_SECONDS:-3600}
+      AUTH_TRUST_HEADERS: "false"
+    volumes:
+      - ../services/api-gateway/.data:/var/lib/vems/data:rw
+    networks:
+      - vems-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/health').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     logging:
       driver: json-file
       options:
