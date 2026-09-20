@@ -3076,9 +3076,8 @@ relay topology for all further runs; it does not retract the earlier findings ab
 - Result: **C2 PASS** on Android emulator. Not yet run on iOS or physical hardware.
 
 ### Observations (not classified as defects)
-- The patient case detail for the linked case showed "Unidentified patient". VEMS stores no
-  demographics for a case created through the API, so this may be expected; confirm against the
-  intended identity flow.
+- Corrected 2026-09-20: the "Unidentified patient" text on the patient case detail is the label of a switch in the
+  DEMOGRAPHICS card, not a status; it was misread here as an identity problem. It is not a defect.
 - A retained session token from an earlier environment produced "Your session is no longer valid"
   after the first install; development sign-in recovered it.
 - The jobs list loads on app start and pull to refresh only; the workspace also caches its case list.
@@ -3091,3 +3090,52 @@ relay topology for all further runs; it does not retract the earlier findings ab
 Stage 14 is not complete. Scenarios 1 to 10, iOS coverage, per-vendor device pairing, the security and
 clinical-safety reviews, the field-scale DR drill and release readiness remain open. See the exit gate
 in `docs/STAGE14_FIELD_VALIDATION_TEST_PLAN.md`.
+## Scenario 1 golden path on the Windows-native topology — 2026-09-20
+
+Synthetic data only; Android emulator (Pixel_Tablet, Android 15); API on `48529e4` plus the fix below.
+Not a pass: the plan's PDF criterion fails for both dispositions.
+
+### What was run
+- **Transported (PCR-000003)**, through the app UI: demographics, primary-survey assessment, two vitals sets
+  (both delivered to OpenEMR), a free-text medication, a procedure, disposition (Transported, facility,
+  receiving provider), Complete ePCR, sign (treating clinician, typed attestation), Submit ePCR.
+  Through the API: the case, patient, link and encounter; a **stock-linked medication** (ITEM-001 on AMB-001,
+  stock 10 to 9); the **handover**; reviewer accept, finalize, and the PDF export.
+- **Refusal (PCR-000004)**, through the UI: demographics, an assessment documenting capacity and informed
+  refusal, disposition Refusal Transport, Complete, sign as patient, Submit. Through the API: case, patient,
+  link, encounter, reviewer accept and finalize, export. The system raised the automatic `refusal` QA flag.
+- Not done on the device: "accept assignment". INC-000001 was already advanced to Transporting (four
+  `PATCH /api/incidents/INC-000001` calls at 09:26:34 to 09:26:41Z) before this run; I did not issue them.
+
+### Results against the plan's pass criteria
+- Every crew step through the UI succeeded. PASS.
+- Audit report: an entry with `actor_id=STAFF-001` for every mutating step, including create_intervention,
+  record_stock_usage, create_handover and the five ePCR lifecycle transitions; 0 of 55 entries had a null actor. PASS.
+- Exported PDF shows the case ID, version number and content hash (the hash matches the export response). PASS.
+- Exported PDF shows every charted item. **FAIL** (D2).
+
+### Defects and gaps
+- **D1, fixed (high):** `getEpcrReadiness()` referenced an undeclared `encounterLink` for transported outcomes, so
+  crew completion of any transported case threw `ReferenceError`. Reproduced on a scratch database; fixed;
+  regression tests in `services/orchestration/test/epcr-readiness-transported.test.mjs`.
+- **D2, open (high):** the PDF renderer (`services/orchestration/src/reporting/pcr-document.mjs`) has no vitals
+  section and prints only an assessment's type and time. The hashed version content does include them. Missing from
+  the transported PDF: both vitals sets, the assessment findings, the receiving provider, the handover, and the
+  stock-linked medication. Missing from the refusal PDF: the capacity and refusal documentation and the disposition
+  notes. For a signed legal record this is the most important open item from this run.
+- **D3, open (medium):** `GET /api/patient-cases/{id}/history` returns 500 for every case because the OpenEMR
+  standard-API transport has no `getPatientHistory` route; the app shows `history-error` on each case.
+- **D4, workflow gaps:** (a) the handover has no mobile screen, recording a disposition closes the case, and a
+  handover recorded after that is rejected (`Closed` to `Handover Completed`), so a transported case cannot be
+  completed on the device without an out-of-app handover recorded first; (b) only one signature per version is
+  possible (the first moves the record to `signed`; a second returns 409), so a refusal cannot capture patient,
+  witness and clinician signatures; (c) the app's medication form cannot link stock, so the stock-usage path is
+  API-only; (d) the reviewer, finalize and export steps have no crew-app UI.
+
+### Limits and observations
+- The development sign-in only mints STAFF-001, and RBAC is not enforced in this profile, so the reviewer steps
+  ran as the same actor; separation of duties was not tested.
+- A drawn signature was not verified (synthetic swipes were recorded as a typed attestation).
+- The 1 hour development token expired mid-run; screens showed "Token expired" until the app restarted to sign-in.
+- The disposition save showed only a spinner for 5 to 30 seconds (care-location capture).
+- The app reloaded to the jobs list once during a procedure entry; cause not established.
