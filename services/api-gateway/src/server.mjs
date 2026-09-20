@@ -1274,7 +1274,15 @@ export function createApp(orchestration = new OrchestrationService()) {
 
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const server = createApp();
+  const orchestration = new OrchestrationService();
+  const server = createApp(orchestration);
+  // D7: re-send clinical entries whose OpenEMR write never left VEMS while OpenEMR was unreachable (0 disables).
+  const retryEveryMs = Number(process.env.DOWNSTREAM_RETRY_INTERVAL_MS ?? 30000);
+  if (retryEveryMs > 0) {
+    setInterval(() => {
+      orchestration.retryFailedClinicalDownstream().then((r) => { if (r.retried) console.log(`downstream retry: ${r.created}/${r.retried} created`); }, (error) => console.error(`downstream retry failed: ${error?.message}`));
+    }, retryEveryMs).unref();
+  }
   const port = Number(process.env.PORT ?? 8080);
   const host = process.env.HOST ?? "0.0.0.0";
   server.listen(port, host, () => {

@@ -283,6 +283,15 @@ test("a refused connection is also reported as not sent", async () => {
   await assert.rejects(() => transport({ method: "createEncounter", payload: { patient_id: "p1", care_started_at: "2026-09-20T10:00:00Z", presenting_complaint: "x" } }), (error) => error.notSent === true);
 });
 
+test("vitals and intervention writes are also reported as not sent when OpenEMR is unreachable", async () => {
+  const { createServer: create } = await import("node:http");
+  const server = create(); await new Promise((r) => server.listen(0, r)); const port = server.address().port; await new Promise((r) => server.close(r));
+  const transport = standardTransport(port, { OPENEMR_PROBE_TIMEOUT_MS: "500" });
+  const base = { patient_id: "p1", encounter_id: "e1" };
+  await assert.rejects(() => transport({ method: "createObservation", payload: { ...base, vital_signs: { heart_rate_bpm: 80 } } }), (error) => error.notSent === true);
+  await assert.rejects(() => transport({ method: "createIntervention", payload: { ...base, type: "medication", name: "Aspirin" } }), (error) => error.notSent === true);
+});
+
 test("a reachable OpenEMR is probed once and then written to, even when the probe answers with an error status", async () => {
   for (const probeStatus of [302, 500]) {
     const requests = [];

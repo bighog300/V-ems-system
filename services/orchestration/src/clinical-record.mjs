@@ -13,6 +13,13 @@ function codeFor(category, rawValue) {
   return resolveCode(getActiveProfile(), category, rawValue)?.code ?? null;
 }
 
+// A write that never left VEMS (OpenEMR unreachable) is safe to send again; any other failure may have been applied
+// downstream (timeout, 5xx), so re-sending it could duplicate a clinical entry and it stays failed for reconciliation.
+export const DOWNSTREAM_NOT_SENT = "failed:DOWNSTREAM_NOT_SENT";
+// The OpenEMR client wraps transport errors, keeping the original as `cause`, so the marker may be a level down.
+const provenNotSent = (error, depth = 0) => Boolean(error) && typeof error === "object" && depth <= 8 && (error.notSent === true || provenNotSent(error.cause, depth + 1));
+const failureStatus = (error) => (provenNotSent(error) ? DOWNSTREAM_NOT_SENT : `failed:${error?.code ?? "DOWNSTREAM_UNAVAILABLE"}`);
+
 const OUTCOMES = new Set([
   "transported", "treated_not_transported", "refusal_assessment", "refusal_treatment",
   "refusal_transport", "no_patient_found", "left_scene", "transfer_other_provider",
@@ -112,6 +119,41 @@ export const clinicalRecordMethods = {
     await appendTimeline(this, { ...record, timeline_event_id: undefined, event_type: "assessment_recorded", source_entity_type: "assessment", source_entity_id: record.assessment_id }, meta);
     return record;
   },
+  // D7: re-send clinical entries whose OpenEMR write provably never left VEMS (OpenEMR was unreachable). Stops at the
+  // first entry that is still unreachable so an outage costs one probe per pass, not one per entry.
+  async retryFailedClinicalDownstream({ limit = 25 } = {}) {
+    if (this._clinicalRetryRunning) return { retried: 0, created: 0, skipped: "already running" };
+    this._clinicalRetryRunning = true;
+    const result = { retried: 0, created: 0, still_failing: 0 };
+    try {
+      const kinds = [
+        { table: "clinical_observations", key: "observation_event_id", ref: "openemr_observation_id", type: "observation", send: (r, c) => this.openemr.createObservation({ encounter_id: r.encounter_id, incident_id: c.incident_id, patient_case_id: r.patient_case_id, patient_id: c.openemr_patient_id, recorded_at: r.performed_at, source: r.device_pairing_id ? "device" : "manual", notes: r.notes ?? undefined, vital_signs: JSON.parse(r.observations_json ?? "{}") }), out: (d) => d.observation_id },
+        { table: "medication_administrations", key: "medication_administration_id", ref: "openemr_reference_id", type: "medication", send: (r, c) => this.openemr.createIntervention({ encounter_id: r.encounter_id, incident_id: c.incident_id, patient_case_id: r.patient_case_id, patient_id: c.openemr_patient_id, type: "medication", name: r.medication_name, dose: r.dose, route: r.route, performed_at: r.performed_at, response: r.response, stock_item_id: r.stock_item_id }), out: (d) => d.intervention_id },
+        { table: "clinical_procedures", key: "procedure_id", ref: "openemr_reference_id", type: "procedure", send: (r, c) => this.openemr.createIntervention({ encounter_id: r.encounter_id, incident_id: c.incident_id, patient_case_id: r.patient_case_id, patient_id: c.openemr_patient_id, type: "procedure", name: r.procedure_name, performed_at: r.performed_at, response: r.response }), out: (d) => d.intervention_id }
+      ];
+      for (const kind of kinds) {
+        const rows = await this.db.queryAll(`SELECT * FROM ${kind.table} WHERE downstream_status=${sqlValue(DOWNSTREAM_NOT_SENT)} AND encounter_id IS NOT NULL ORDER BY created_at LIMIT ${Number(limit)};`);
+        for (const row of rows) {
+          const current = await this.getPatientCase(row.patient_case_id).catch(() => undefined);
+          if (!current?.openemr_patient_id) continue;
+          result.retried += 1;
+          let status;
+          let reference = null;
+          try { reference = kind.out(await kind.send(row, current)) ?? null; status = "created"; }
+          catch (error) { status = failureStatus(error); }
+          await this.db.execute(`UPDATE ${kind.table} SET ${kind.ref}=${sqlValue(reference)},downstream_status=${sqlValue(status)} WHERE ${kind.key}=${sqlValue(row[kind.key])} AND downstream_status=${sqlValue(DOWNSTREAM_NOT_SENT)};`);
+          if (status === "created") {
+            result.created += 1;
+            await this.audit(`clinical_${kind.type}`, row[kind.key], "retry_downstream", { correlationId: randomUUID(), actorId: "system:downstream-retry" }, undefined, { patient_case_id: row.patient_case_id, downstream_status: status });
+          } else {
+            result.still_failing += 1;
+            if (status === DOWNSTREAM_NOT_SENT) return result;
+          }
+        }
+      }
+      return result;
+    } finally { this._clinicalRetryRunning = false; }
+  },
   async listPatientCaseObservations(patientCaseId) { await requiredCase.call(this, patientCaseId); return this.clinicalObservations.list(patientCaseId); },
   async createPatientCaseObservation(patientCaseId, payload, meta) {
     const current = await requiredCase.call(this, patientCaseId); object(payload);
@@ -140,7 +182,7 @@ export const clinicalRecordMethods = {
     try {
       const downstream = await this.openemr.createObservation({ encounter_id: record.encounter_id, incident_id: current.incident_id, patient_case_id: patientCaseId, patient_id: current.openemr_patient_id, recorded_at: performedAt, source: payload.source ?? "manual", notes: payload.notes, vital_signs: observations });
       record.openemr_observation_id = downstream.observation_id ?? null; downstreamStatus = "created";
-    } catch (error) { downstreamStatus = `failed:${error.code ?? "DOWNSTREAM_UNAVAILABLE"}`; }
+    } catch (error) { downstreamStatus = failureStatus(error); }
     await this.db.execute(`UPDATE clinical_observations SET openemr_observation_id=${sqlValue(record.openemr_observation_id)},downstream_status=${sqlValue(downstreamStatus)} WHERE observation_event_id=${sqlValue(record.observation_event_id)};`);
     record.downstream_status = downstreamStatus;
     if (meta.idempotencyKey) await this.idempotency.save("observation", meta.idempotencyKey, record.observation_event_id, record.created_at, fingerprint);
@@ -159,7 +201,7 @@ export const clinicalRecordMethods = {
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, medication_name: record.medication_name, dose: record.dose, performed_at: record.performed_at, route: record.route });
     if (meta.idempotencyKey) { const existing = await this.idempotency.get("medication", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalMedications.find(existing.resource_id); } }
     await this.clinicalMedications.create(record);
-    try { const downstream = await this.openemr.createIntervention({ encounter_id: record.encounter_id, incident_id: current.incident_id, patient_case_id: patientCaseId, patient_id: current.openemr_patient_id, type: "medication", name: record.medication_name, dose: record.dose, route: record.route, performed_at: record.performed_at, response: record.response, stock_item_id: record.stock_item_id }); record.openemr_reference_id = downstream.intervention_id ?? null; record.downstream_status = "created"; } catch (error) { record.downstream_status = `failed:${error.code ?? "DOWNSTREAM_UNAVAILABLE"}`; }
+    try { const downstream = await this.openemr.createIntervention({ encounter_id: record.encounter_id, incident_id: current.incident_id, patient_case_id: patientCaseId, patient_id: current.openemr_patient_id, type: "medication", name: record.medication_name, dose: record.dose, route: record.route, performed_at: record.performed_at, response: record.response, stock_item_id: record.stock_item_id }); record.openemr_reference_id = downstream.intervention_id ?? null; record.downstream_status = "created"; } catch (error) { record.downstream_status = failureStatus(error); }
     await this.db.execute(`UPDATE medication_administrations SET openemr_reference_id=${sqlValue(record.openemr_reference_id)},downstream_status=${sqlValue(record.downstream_status)} WHERE medication_administration_id=${sqlValue(record.medication_administration_id)};`);
     if (record.stock_item_id) await this.recordClinicalStockUsage({ ...record, intervention_id: record.medication_administration_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "medication", name: record.medication_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta);
     if (meta.idempotencyKey) await this.idempotency.save("medication", meta.idempotencyKey, record.medication_administration_id, record.created_at, fingerprint);
@@ -178,7 +220,7 @@ export const clinicalRecordMethods = {
     const fingerprint = JSON.stringify({ patient_case_id: patientCaseId, procedure_type: record.procedure_type, procedure_name: record.procedure_name, performed_at: record.performed_at });
     if (meta.idempotencyKey) { const existing = await this.idempotency.get("procedure", meta.idempotencyKey); if (existing) { if (existing.request_fingerprint !== fingerprint) throw new ApiError("CONFLICT", "Idempotency key was reused with a different request", 409); return this.clinicalProcedures.find(existing.resource_id); } }
     await this.clinicalProcedures.create(record);
-    try { const downstream = await this.openemr.createIntervention({ encounter_id: record.encounter_id, incident_id: current.incident_id, patient_case_id: patientCaseId, patient_id: current.openemr_patient_id, type: "procedure", name: record.procedure_name, performed_at: record.performed_at, response: record.response }); record.openemr_reference_id = downstream.intervention_id ?? null; record.downstream_status = "created"; } catch (error) { record.downstream_status = `failed:${error.code ?? "DOWNSTREAM_UNAVAILABLE"}`; }
+    try { const downstream = await this.openemr.createIntervention({ encounter_id: record.encounter_id, incident_id: current.incident_id, patient_case_id: patientCaseId, patient_id: current.openemr_patient_id, type: "procedure", name: record.procedure_name, performed_at: record.performed_at, response: record.response }); record.openemr_reference_id = downstream.intervention_id ?? null; record.downstream_status = "created"; } catch (error) { record.downstream_status = failureStatus(error); }
     await this.db.execute(`UPDATE clinical_procedures SET openemr_reference_id=${sqlValue(record.openemr_reference_id)},downstream_status=${sqlValue(record.downstream_status)} WHERE procedure_id=${sqlValue(record.procedure_id)};`);
     if (record.stock_item_id) await this.recordClinicalStockUsage({ ...record, intervention_id: record.procedure_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "procedure", name: record.procedure_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta);
     if (meta.idempotencyKey) await this.idempotency.save("procedure", meta.idempotencyKey, record.procedure_id, record.created_at, fingerprint);

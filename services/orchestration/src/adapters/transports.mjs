@@ -128,7 +128,7 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
     return async ({ method, payload }) => {
       const patient = encodeURIComponent(payload?.patient_id ?? "");
       const encounter = encodeURIComponent(payload?.encounter_id ?? "");
-      if (method === "createPatient" || method === "createEncounter") await assertReachable(method);
+      if (method === "createPatient" || method === "createEncounter" || method === "createObservation" || method === "createIntervention") await assertReachable(method);
       if (method === "searchPatient") {
         const query = new URLSearchParams(); if (payload?.first_name) query.set("fname", payload.first_name); if (payload?.last_name) query.set("lname", payload.last_name); if (payload?.dob) query.set("DOB", payload.dob); if (payload?.phone) query.set("phone", payload.phone);
         const response = await call(method, `/patient?${query}`, undefined, "GET");

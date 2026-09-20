@@ -3241,6 +3241,16 @@ Nothing below is a pass for the full scenario unless it says so.
   (PCR-000017, PCR-000018) still needs manual reconciliation.
 - **D7, high — OpenEMR write failures are never retried.** Vitals charted during the outage stayed
   `failed:DOWNSTREAM_UNAVAILABLE` 60 s after recovery with no OpenEMR id, so VEMS and OpenEMR silently diverge.
+  **Fixed for the provable case:** the reachability probe now also guards `createObservation` and `createIntervention`; a
+  write that never left VEMS is stored as `failed:DOWNSTREAM_NOT_SENT`, and a background pass in the API
+  (`retryFailedClinicalDownstream`, every `DOWNSTREAM_RETRY_INTERVAL_MS`, default 30000, 0 disables) re-sends vitals,
+  medications and procedures once OpenEMR is back, audits each re-send (`retry_downstream`), and stops at the first
+  still-unreachable entry. Live: three entries charted with OpenEMR stopped were all `created` in OpenEMR after restart
+  with no client action. **Deliberately not retried:** failures with an unknown outcome (timeout, 5xx), because the
+  entry may already exist in OpenEMR and a re-send would duplicate a clinical record; they stay `failed:*` for
+  reconciliation, as do entries that failed before this fix (PCR-000005 to PCR-000020 drill leftovers). Not covered:
+  a crash in the middle of a re-send can duplicate one entry; assessments have no OpenEMR write; the Vtiger mirror is
+  D8.
 - **D8, high (configuration) — the Vtiger mirror cannot work in the development stack.** The sync worker is not part of
   the stack, and when run it logs `vtiger_owner_set=false`. Creates fail with `assigned_user_id does not have a value` /
   `requires VTIGER_ASSIGNED_USER_ID…`, and dependent updates then fail with `REMOTE_NOT_FOUND`: 13 of 27 intents were
