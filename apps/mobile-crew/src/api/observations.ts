@@ -52,7 +52,7 @@ export async function createPatientCaseObservation({
     fetchImpl,
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/observations`,
     method: "POST",
-    payload: { vital_signs: vitalSigns, notes: notes || undefined },
+    payload: { vital_signs: vitalSigns, notes: notes || undefined, recorded_at: performedAt },
     config: { authToken, deviceId },
     scope: "observation",
     patientCaseId,

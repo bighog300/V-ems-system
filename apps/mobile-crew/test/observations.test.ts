@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { withoutChartingTime } from "./timeAssert.ts";
 
 import { createPatientCaseObservation, listPatientCaseObservations } from "../src/api/observations.ts";
 
@@ -67,6 +68,6 @@ test("createPatientCaseObservation posts vital_signs and notes", async () => {
   });
 
   assert.equal(capturedUrl, "https://api.example.test/api/patient-cases/PCR-000001/observations");
-  assert.deepEqual(capturedBody, { vital_signs: { heart_rate_bpm: 88, spo2_pct: 97 }, notes: "Improving" });
+  assert.deepEqual(withoutChartingTime(capturedBody, "recorded_at"), { vital_signs: { heart_rate_bpm: 88, spo2_pct: 97 }, notes: "Improving" });
   assert.equal(created.observation_event_id, "OBS-000002");
 });

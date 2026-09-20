@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { withoutChartingTime } from "./timeAssert.ts";
 
 import {
   createPatientCaseMedication,
@@ -70,7 +71,7 @@ test("createPatientCaseMedication posts the medication payload", async () => {
     fetchImpl: fetchImpl as typeof fetch
   });
   assert.equal(capturedUrl, "https://api.example.test/api/patient-cases/PCR-000001/medications");
-  assert.deepEqual(capturedBody, { medication_name: "Aspirin", dose: "300", dose_unit: "mg", route: "oral" });
+  assert.deepEqual(withoutChartingTime(capturedBody, "performed_at"), { medication_name: "Aspirin", dose: "300", dose_unit: "mg", route: "oral" });
   assert.equal(created.medication_administration_id, "MED-000001");
 });
 
@@ -102,6 +103,6 @@ test("createPatientCaseProcedure posts the procedure payload", async () => {
     fetchImpl: fetchImpl as typeof fetch
   });
   assert.equal(capturedUrl, "https://api.example.test/api/patient-cases/PCR-000001/procedures");
-  assert.deepEqual(capturedBody, { procedure_type: "airway", procedure_name: "OPA insertion", success: true });
+  assert.deepEqual(withoutChartingTime(capturedBody, "performed_at"), { procedure_type: "airway", procedure_name: "OPA insertion", success: true });
   assert.equal(created.procedure_id, "PROC-000001");
 });

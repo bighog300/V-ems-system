@@ -58,7 +58,7 @@ export async function createPatientCaseNote({
     fetchImpl,
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/notes`,
     method: "POST",
-    payload: { tags, text },
+    payload: { tags, text, authored_at: authoredAt },
     config: { authToken, deviceId },
     scope: "note",
     patientCaseId,

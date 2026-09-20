@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { withoutChartingTime } from "./timeAssert.ts";
 
 import { createPatientCaseAssessment, listPatientCaseAssessments } from "../src/api/assessments.ts";
 
@@ -45,6 +46,6 @@ test("createPatientCaseAssessment posts section_type and wraps notes in payload"
   });
 
   assert.equal(capturedUrl, "https://api.example.test/api/patient-cases/PCR-000001/assessments");
-  assert.deepEqual(capturedBody, { section_type: "primary_survey", payload: { notes: "Airway patent, breathing normal" } });
+  assert.deepEqual(withoutChartingTime(capturedBody, "performed_at"), { section_type: "primary_survey", payload: { notes: "Airway patent, breathing normal" } });
   assert.equal(created.assessment_id, "ASM-000001");
 });

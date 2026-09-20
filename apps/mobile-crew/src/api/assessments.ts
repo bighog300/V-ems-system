@@ -40,7 +40,7 @@ export async function createPatientCaseAssessment({
     fetchImpl,
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/assessments`,
     method: "POST",
-    payload: { section_type: sectionType, payload: { notes } },
+    payload: { section_type: sectionType, payload: { notes }, performed_at: performedAt },
     config: { authToken, deviceId },
     scope: "assessment",
     patientCaseId,
