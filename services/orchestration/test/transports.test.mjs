@@ -192,3 +192,66 @@ test("vtiger transport enforces timeout", async () => {
     );
   });
 });
+
+test("native OpenEMR transport reads patient history: encounters by uuid, medications by the resolved numeric pid", async () => {
+  const requests = [];
+  await withServer((req, res) => {
+    requests.push(`${req.method} ${req.url}`);
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token", token_type: "Bearer" }));
+    if (req.url === "/apis/default/api/patient/pat-1/encounter") return res.end(JSON.stringify({ data: [{ date: "2026-09-20 09:46:28", reason: "Chest pain", facility_name: "Dev Clinic" }, { date: "2026-08-01 10:00:00", reason: "Review", facility_name: null }] }));
+    if (req.url === "/apis/default/api/patient/pat-1") return res.end(JSON.stringify({ data: { uuid: "pat-1", pid: 3 } }));
+    if (req.url === "/apis/default/api/patient/3/medication") return res.end(JSON.stringify([{ title: "Aspirin", activity: 1, enddate: null }, { title: "Warfarin", activity: "0", enddate: "2020-01-01 00:00:00" }])); // the real list route returns a bare array
+    res.writeHead(404); res.end(JSON.stringify({ error: "not found" }));
+  }, async (port) => {
+    const transport = createOpenEmrTransportFromEnv({
+      OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+      OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users"
+    });
+    const history = await transport({ method: "getPatientHistory", payload: { patient_id: "pat-1" } });
+    assert.deepEqual(history.encounters, [
+      { encounter_date: "2026-09-20 09:46:28", reason: "Chest pain", facility: "Dev Clinic" },
+      { encounter_date: "2026-08-01 10:00:00", reason: "Review", facility: null }
+    ]);
+    assert.deepEqual(history.medications.map((m) => [m.medication_name, m.status]), [["Aspirin", "active"], ["Warfarin", "inactive"]]);
+    assert.ok(history.as_of);
+    assert.ok(requests.includes("GET /apis/default/api/patient/3/medication"));
+  });
+});
+
+test("native OpenEMR patient history fails visibly, not with an empty list, when the pid cannot be resolved", async () => {
+  await withServer((req, res) => {
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token", token_type: "Bearer" }));
+    if (req.url.endsWith("/encounter")) return res.end(JSON.stringify({ data: [] }));
+    if (req.url === "/apis/default/api/patient/pat-9") return res.end(JSON.stringify({ data: {} }));
+    res.writeHead(500); res.end("{}");
+  }, async (port) => {
+    const transport = createOpenEmrTransportFromEnv({
+      OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+      OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users"
+    });
+    await assert.rejects(() => transport({ method: "getPatientHistory", payload: { patient_id: "pat-9" } }), /did not include a pid/);
+  });
+});
+test("native OpenEMR patient history treats OpenEMR's 404 for an empty medication list as no medications, and fails on other errors", async () => {
+  for (const [status, expectFailure] of [[404, false], [500, true]]) {
+    await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token", token_type: "Bearer" }));
+      if (req.url.endsWith("/encounter")) return res.end(JSON.stringify({ data: [{ date: "2026-09-20 09:46:28", reason: "Chest pain", facility_name: null }] }));
+      if (req.url === "/apis/default/api/patient/pat-1") return res.end(JSON.stringify({ data: { uuid: "pat-1", pid: 3 } }));
+      res.writeHead(status); res.end(status === 404 ? "" : "{}");
+    }, async (port) => {
+      const transport = createOpenEmrTransportFromEnv({
+        OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+        OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users"
+      });
+      const outcome = transport({ method: "getPatientHistory", payload: { patient_id: "pat-1" } });
+      if (expectFailure) return assert.rejects(() => outcome);
+      const history = await outcome;
+      assert.deepEqual(history.medications, []);
+      assert.equal(history.encounters.length, 1);
+    });
+  }
+});

@@ -106,6 +106,8 @@ test("development OpenEMR client scope covers the adapter's write routes and pro
   }
   const provisioner = readFileSync(new URL("../../infra/services/openemr/development/provision-development.php", import.meta.url), "utf8");
   assert.match(provisioner, /UPDATE oauth_clients SET scope/);
+  // Patient history reads the medication list.
+  assert.match(template, /user\/medication\.read/);
 });
 test("OpenEMR integration user is provisioned into the Physicians ACL group", () => {
   const provisioner = readFileSync(new URL("../../infra/services/openemr/development/provision-development.php", import.meta.url), "utf8");

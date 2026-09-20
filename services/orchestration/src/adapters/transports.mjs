@@ -151,6 +151,38 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
         const response = await call(method, `/patient/${patient}/encounter/${encounter}/soap_note`, undefined, "GET");
         return Array.isArray(response?.data) ? response.data[response.data.length - 1] ?? null : response ?? null;
       }
+      if (method === "getPatientHistory") {
+        // Encounter lists arrive as { data: [...] }; the medication list is a bare array.
+        const list = (response) => (Array.isArray(response) ? response : Array.isArray(response?.data) ? response.data : []);
+        const encounters = list(await call(method, `/patient/${patient}/encounter`, undefined, "GET"));
+        // The medication list is keyed by the numeric pid, not the uuid VEMS stores, so resolve the pid first.
+        const record = standardData(await call(method, `/patient/${patient}`, undefined, "GET"));
+        const pid = (Array.isArray(record) ? record[0] : record)?.pid;
+        if (pid === undefined || pid === null) {
+          // An empty list here would read as "no prior medications"; fail visibly instead.
+          const error = new Error("OpenEMR patient record did not include a pid; medication history cannot be read"); error.code = "DOWNSTREAM_SCHEMA_MISMATCH"; error.classification = error.code; throw error;
+        }
+        let medicationResponse;
+        try {
+          medicationResponse = await call(method, `/patient/${encodeURIComponent(pid)}/medication`, undefined, "GET");
+        } catch (error) {
+          // OpenEMR's list controller answers an empty list with 404 and an empty body (RestControllerHelper::responseHandler);
+          // the pid was just resolved from the patient record, so a 404 here means "no medications". Any other failure propagates.
+          if (error?.status !== 404) throw error;
+        }
+        const medications = list(medicationResponse);
+        return {
+          as_of: new Date().toISOString(),
+          encounters: encounters.map((row) => ({ encounter_date: row.date ?? null, reason: row.reason ?? null, facility: row.facility_name ?? null })),
+          // OpenEMR's medication list carries a title and dates, not a dose or frequency.
+          medications: medications.map((row) => ({
+            medication_name: row.title ?? null,
+            dose: null,
+            frequency: null,
+            status: String(row.activity) === "1" && !row.enddate ? "active" : "inactive"
+          }))
+        };
+      }
       throw new Error(`OpenEMR native route not configured for ${method}`);
     };
   }
