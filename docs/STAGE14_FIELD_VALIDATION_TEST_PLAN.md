@@ -320,6 +320,7 @@ environment and C2 acceptance — 2026-09-20".
 | C2: vitals recorded through the rendered UI (one tap, PCR-000002) | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | `48529e4` (API), `52a4dd8` (APK) | PASS | none |
 | Scenario 1 golden path, transported-to-facility (PCR-000003) | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | `48529e4` + working-tree fix (later committed) | FAIL | PDF omits vitals and other charted items (D2); transported readiness threw ReferenceError (D1, fixed) |
 | Scenario 1 repeat, refusal outcome (PCR-000004) | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | as above | FAIL | PDF omits the refusal and capacity documentation (D2); only one signature per version (D4b) |
+| Scenario 1 PDF-content criterion, re-export of PCR-000003 and PCR-000004 after the D2 fix (export format 2) | Windows host API, Pixel_Tablet data as above | 2026-09-20 | Claude Code | this commit | PASS (criterion only; scenario not re-run end to end) | D2 fixed |
 | Scenarios 2 to 10 | not executed | | | | NOT RUN | |
 
 ## Exit gate

@@ -3118,7 +3118,7 @@ Not a pass: the plan's PDF criterion fails for both dispositions.
 - **D1, fixed (high):** `getEpcrReadiness()` referenced an undeclared `encounterLink` for transported outcomes, so
   crew completion of any transported case threw `ReferenceError`. Reproduced on a scratch database; fixed;
   regression tests in `services/orchestration/test/epcr-readiness-transported.test.mjs`.
-- **D2, open (high):** the PDF renderer (`services/orchestration/src/reporting/pcr-document.mjs`) has no vitals
+- **D2, fixed 2026-09-20 (see the section below) (high):** the PDF renderer (`services/orchestration/src/reporting/pcr-document.mjs`) has no vitals
   section and prints only an assessment's type and time. The hashed version content does include them. Missing from
   the transported PDF: both vitals sets, the assessment findings, the receiving provider, the handover, and the
   stock-linked medication. Missing from the refusal PDF: the capacity and refusal documentation and the disposition
@@ -3129,8 +3129,7 @@ Not a pass: the plan's PDF criterion fails for both dispositions.
   handover recorded after that is rejected (`Closed` to `Handover Completed`), so a transported case cannot be
   completed on the device without an out-of-app handover recorded first; (b) only one signature per version is
   possible (the first moves the record to `signed`; a second returns 409), so a refusal cannot capture patient,
-  witness and clinician signatures; (c) the app's medication form cannot link stock, so the stock-usage path is
-  API-only; (d) the reviewer, finalize and export steps have no crew-app UI.
+  witness and clinician signatures; (c) the app's medication form sends no stock item. The patient-case medications API does accept `stock_item_id`, `vehicle_id` and `quantity_used` and records stock usage; this run used the legacy `/api/encounters/{id}/interventions` route instead, whose stock usage is not part of the ePCR snapshot; (d) the reviewer, finalize and export steps have no crew-app UI.
 
 ### Limits and observations
 - The development sign-in only mints STAFF-001, and RBAC is not enforced in this profile, so the reviewer steps
@@ -3139,3 +3138,19 @@ Not a pass: the plan's PDF criterion fails for both dispositions.
 - The 1 hour development token expired mid-run; screens showed "Token expired" until the app restarted to sign-in.
 - The disposition save showed only a spinner for 5 to 30 seconds (care-location capture).
 - The app reloaded to the jobs list once during a procedure entry; cause not established.
+### D2 fixed: signed PDF content (export format 2) — 2026-09-20
+- `services/orchestration/src/reporting/pcr-document.mjs` now renders every clinical item the hashed version
+  content holds: assessment findings, a Vital signs section, full medication and procedure detail, the complete
+  disposition (receiving provider, reason, notes), a Handover section and Crew notes. Optional fields and
+  sections are omitted when empty. `EXPORT_FORMAT_VERSION` is now 2; the pinned golden-bytes test and the
+  gateway assertion were updated deliberately, and a failing run confirmed both guards fired first.
+- Regression tests: `services/orchestration/test/pcr-document-content.test.mjs` (unit content, determinism, and an
+  end-to-end refusal export that reproduces the original defect).
+- Live check on the already-finalized cases (PDFs are rendered on demand from the stored content): PCR-000003's
+  export now shows both vitals sets, the assessment findings, receiving provider, disposition notes and the
+  handover; PCR-000004's shows the capacity and refusal documentation and the disposition notes. Their content
+  hashes are unchanged (`f9379edd…`, `a4dcbb49…`), so the records were not altered.
+- Still not in the ePCR snapshot, so still not in the PDF: stock usage recorded through the legacy
+  `/api/encounters/{id}/interventions` route, and its handover-audit companions. Charting medications through the
+  patient-case medications route puts them in the record.
+- This re-check covers the PDF-content criterion only; Scenario 1 as a whole has not been re-run end to end.
