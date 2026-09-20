@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { ApiError, ForbiddenError, UnauthorizedError } from "../src/api/apiError.ts";
 import { buildRequestHeaders, requestJson } from "../src/api/httpClient.ts";
+import { onSessionRejected, type SessionRejection } from "../src/auth/sessionEvents.ts";
 
 test("buildRequestHeaders rejects a missing token", () => {
   assert.throws(() => buildRequestHeaders({}), UnauthorizedError);
@@ -74,4 +75,34 @@ test("requestJson raises a generic ApiError on other failures", async () => {
     () => requestJson(fetchImpl as typeof fetch, "https://example.test/api/support/readiness", { config: { authToken: "token" } }),
     ApiError
   );
+});
+
+async function rejectionsFor(status: number, code?: string): Promise<SessionRejection[]> {
+  const seen: SessionRejection[] = [];
+  const off = onSessionRejected((r) => seen.push(r));
+  const fetchImpl = (async () => new Response(JSON.stringify({ error: { code, message: "x" } }), { status })) as unknown as typeof fetch;
+  await requestJson(fetchImpl, "https://api.example.test/x", { config: { authToken: "t" } }).catch(() => {});
+  off();
+  return seen;
+}
+
+test("requestJson reports a revoked session, and a session the server no longer accepts, exactly once each", async () => {
+  assert.deepEqual(await rejectionsFor(401, "SESSION_REVOKED"), ["revoked"]);
+  assert.deepEqual(await rejectionsFor(401, "UNAUTHENTICATED"), ["invalid"]);
+});
+
+test("requestJson does not report other failures as a rejected session", async () => {
+  assert.deepEqual(await rejectionsFor(403, "FORBIDDEN"), []);
+  assert.deepEqual(await rejectionsFor(401, "SOMETHING_ELSE"), []);
+  assert.deepEqual(await rejectionsFor(500, "SESSION_REVOKED"), []);
+  assert.deepEqual(await rejectionsFor(503), []);
+});
+
+test("a failing listener cannot break the request that reported the rejection", async () => {
+  const off = onSessionRejected(() => { throw new Error("listener bug"); });
+  const seen: SessionRejection[] = []; const off2 = onSessionRejected((r) => seen.push(r));
+  const fetchImpl = (async () => new Response(JSON.stringify({ error: { code: "SESSION_REVOKED" } }), { status: 401 })) as unknown as typeof fetch;
+  await assert.rejects(() => requestJson(fetchImpl, "https://api.example.test/x", { config: { authToken: "t" } }), UnauthorizedError);
+  off(); off2();
+  assert.deepEqual(seen, ["revoked"]);
 });

@@ -1,4 +1,4 @@
-import { ApiError } from "../api/apiError.ts";
+import { ApiError, UnauthorizedError } from "../api/apiError.ts";
 import { isQueueableFailure, LOCAL_ID_PREFIX } from "../api/offlineMutation.ts";
 import { requestJson } from "../api/httpClient.ts";
 import { listMutations, markMutationStatus, remapPatientCaseId, type OutboxEntry } from "./outboxStore.ts";
@@ -157,6 +157,13 @@ export async function runSync(db: OfflineSqliteLike, key: Uint8Array, session: S
         }
       }
     } catch (error) {
+      // The server rejecting the session says nothing about this entry: keep it queued for after the next sign-in, and
+      // stop, since every remaining entry would be rejected the same way.
+      if (error instanceof UnauthorizedError) {
+        await markMutationStatus(db, entry.entryId, { status: "queued" });
+        result.attempted -= 1;
+        break;
+      }
       const attemptCount = entry.attemptCount + 1;
       const lastAttemptedAt = new Date(now()).toISOString();
       const lastError = errorMessage(error);

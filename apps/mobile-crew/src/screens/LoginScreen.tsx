@@ -16,6 +16,7 @@ export interface LoginScreenProps {
 }
 
 export const INVALID_SESSION_MESSAGE = "Your session is no longer valid. Please sign in again.";
+export const REVOKED_SESSION_MESSAGE = "Your access to this device has been revoked. Contact your supervisor.";
 
 export default function LoginScreen({ onSignedIn, initialError = null }: LoginScreenProps) {
   const [apiBaseUrl, setApiBaseUrl] = useState(() => resolveApiBaseUrl());
@@ -126,7 +127,7 @@ export default function LoginScreen({ onSignedIn, initialError = null }: LoginSc
       />
 
       {error ? (
-        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={error === INVALID_SESSION_MESSAGE ? "session-invalid" : "login-error"}>
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={error === REVOKED_SESSION_MESSAGE ? "session-revoked" : error === INVALID_SESSION_MESSAGE ? "session-invalid" : "login-error"}>
           {error}
         </Text>
       ) : null}

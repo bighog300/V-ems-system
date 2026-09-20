@@ -324,3 +324,22 @@ test("no due entries means an empty, no-op sync pass", async () => {
   assert.deepEqual(result, { attempted: 0, acknowledged: 0, retrying: 0, failed: 0, conflicted: 0 });
   assert.equal((await listMutations(db, key)).length, 0);
 });
+
+test("runSync keeps entries queued, untouched, and stops when the server rejects the session", async () => {
+  const db = await setupDb();
+  const key = new Uint8Array(randomBytes(32));
+  const first = await seedEntry(db, key);
+  const second = await seedEntry(db, key);
+  let calls = 0;
+  const fetchImpl = (async () => { calls += 1; return new Response(JSON.stringify({ error: { code: "SESSION_REVOKED", message: "revoked" } }), { status: 401 }); }) as unknown as typeof fetch;
+
+  const result = await runSync(db, key, { authToken: "token" }, { fetchImpl });
+
+  assert.equal(calls, 1, "stops after the first rejection");
+  assert.deepEqual(result, { attempted: 0, acknowledged: 0, retrying: 0, failed: 0, conflicted: 0 });
+  for (const id of [first, second]) {
+    const entry = await getMutation(db, key, id);
+    assert.equal(entry?.status, "queued", "charting is not lost or marked failed");
+    assert.equal(entry?.attemptCount, 0);
+  }
+});

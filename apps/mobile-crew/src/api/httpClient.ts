@@ -1,3 +1,4 @@
+import { emitSessionRejected } from "../auth/sessionEvents.ts";
 import { ApiError, ForbiddenError, UnauthorizedError } from "./apiError.ts";
 
 export interface RequestConfig {
@@ -95,6 +96,11 @@ export async function requestJson<T = unknown>(
     const body = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      if (response.status === 401) {
+        const code = body?.error?.code;
+        if (code === "SESSION_REVOKED") emitSessionRejected("revoked");
+        else if (code === "UNAUTHENTICATED") emitSessionRejected("invalid");
+      }
       throw buildApiError(response.status, body, response);
     }
 

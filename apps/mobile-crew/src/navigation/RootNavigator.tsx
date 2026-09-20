@@ -26,7 +26,8 @@ import IncidentDetailScreen from "../screens/IncidentDetailScreen.tsx";
 import IncidentWorkspaceScreen from "../screens/IncidentWorkspaceScreen.tsx";
 import InterventionsScreen from "../screens/InterventionsScreen.tsx";
 import JobsListScreen from "../screens/JobsListScreen.tsx";
-import LoginScreen, { INVALID_SESSION_MESSAGE } from "../screens/LoginScreen.tsx";
+import LoginScreen, { INVALID_SESSION_MESSAGE, REVOKED_SESSION_MESSAGE } from "../screens/LoginScreen.tsx";
+import { onSessionRejected } from "../auth/sessionEvents.ts";
 import NotesScreen from "../screens/NotesScreen.tsx";
 import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
 import PatientIdentityScreen from "../screens/PatientIdentityScreen.tsx";
@@ -61,6 +62,8 @@ export default function RootNavigator() {
   const [navigatorReady, setNavigatorReady] = useState(false);
   const [pendingDeepLink, setPendingDeepLink] = useState<AssignmentDeepLink | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const sessionRef = useRef<Session | null>(null);
+  sessionRef.current = session;
   const sync = useSyncTriggers(state === "signed-in" ? session : null);
   const isTabletLayout = useIsTabletLayout();
 
@@ -149,7 +152,7 @@ export default function RootNavigator() {
             await clearSession();
             if (cancelled) return;
             setSession(null);
-            setLoginNotice(INVALID_SESSION_MESSAGE);
+            setLoginNotice(error.code === "SESSION_REVOKED" ? REVOKED_SESSION_MESSAGE : INVALID_SESSION_MESSAGE);
             setState("signed-out");
             return;
           }
@@ -166,6 +169,17 @@ export default function RootNavigator() {
       cancelled = true;
     };
   }, []);
+
+  // Any request, on any screen or in the background sync, that learns the server no longer accepts this session ends it
+  // here, once, with a message that says why. The offline outbox is left alone: queued charting is kept, not discarded.
+  useEffect(() => onSessionRejected((rejection) => {
+    if (!sessionRef.current) return;
+    sessionRef.current = null;
+    clearSession().catch(() => {});
+    setSession(null);
+    setLoginNotice(rejection === "revoked" ? REVOKED_SESSION_MESSAGE : INVALID_SESSION_MESSAGE);
+    setState("signed-out");
+  }), []);
 
   // Re-lock whenever the app returns to the foreground from the background,
   // so a crew member's session isn't left exposed if the device changes hands.

@@ -60,6 +60,38 @@ describe("RootNavigator", () => {
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("vems.mobile.session");
   });
 
+  it("tells the crew member their access was revoked when the session is revoked at start-up", async () => {
+    const session = { apiBaseUrl: "https://api.example.test", authToken: "t", actorId: "crew-1", actorRole: "field_crew" };
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce(JSON.stringify(session));
+    jest.mocked(SecureStore.deleteItemAsync).mockResolvedValueOnce(undefined);
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({ error: { message: "This session or device has been revoked", code: "SESSION_REVOKED" } }), { status: 401 })) as unknown as typeof fetch;
+
+    const { getByTestId } = await render(<RootNavigator />);
+
+    await waitFor(() => expect(getByTestId("login-screen")).toBeTruthy());
+    expect(getByTestId("session-revoked").props.children).toBe("Your access to this device has been revoked. Contact your supervisor.");
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("vems.mobile.session");
+  });
+
+  it("signs out with the revoked message when a request made while signed in learns the session was revoked", async () => {
+    const session = { apiBaseUrl: "https://api.example.test", authToken: "t", actorId: "crew-1", actorRole: "field_crew" };
+    jest.mocked(SecureStore.getItemAsync).mockResolvedValueOnce(JSON.stringify(session));
+    jest.mocked(SecureStore.deleteItemAsync).mockResolvedValue(undefined);
+    jest.mocked(LocalAuthentication.hasHardwareAsync).mockResolvedValueOnce(false);
+    // The session verifies at start-up; the first real request afterwards finds it revoked.
+    global.fetch = jest.fn(async (url: unknown) => String(url).includes("/readiness")
+      ? new Response("{}", { status: 200 })
+      : new Response(JSON.stringify({ error: { message: "This session or device has been revoked", code: "SESSION_REVOKED" } }), { status: 401 })) as unknown as typeof fetch;
+
+    const { getByTestId, queryByTestId, queryByText } = await render(<RootNavigator />);
+
+    await waitFor(() => expect(getByTestId("login-screen")).toBeTruthy());
+    expect(getByTestId("session-revoked")).toBeTruthy();
+    expect(queryByTestId("jobs-list-screen")).toBeNull();
+    expect(queryByText(/This session or device has been revoked/)).toBeNull();
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("vems.mobile.session");
+  });
+
   it("preserves a restored session when verification fails for connectivity or server reasons", async () => {
     const session = {
       apiBaseUrl: "https://api.example.test",

@@ -3296,6 +3296,15 @@ Nothing below is a pass for the full scenario unless it says so.
   yet." (false), leaves "New patient case" and "Arrived at destination" active, does not sign out and never mentions a
   supervisor. Device-scope revocation only applies to requests that send `x-device-id`. Revocations are permanent: there is
   no lift endpoint (test rows were removed directly from the development database).
+  **Fixed.** `requestJson` now reports a `401 SESSION_REVOKED` (or `UNAUTHENTICATED`) once through `auth/sessionEvents`;
+  the root navigator clears the session and returns to sign-in with a fixed message ("Your access to this device has been
+  revoked. Contact your supervisor.", or the existing "session is no longer valid" text) instead of the server's raw
+  string, on any screen and at start-up. The sync engine no longer marks queued charting `failed` when the server rejects
+  the session: the entry stays `queued` and the pass stops, so nothing is lost for after the next sign-in. JS-only change.
+  Device drill (Pixel_Tablet AVD): signed in, revoked STAFF-001 through `POST /api/revocations`, opened the job, and the
+  app went straight to sign-in showing the revoked message; my test row was then removed from the development database.
+  Not covered: there is still no way to lift a revocation, the outbox is not tied to the actor who charted the entries
+  (whoever signs in next syncs them), and a device-scope revocation only applies to requests that send `x-device-id`.
 - **D11, medium — reconciliation does not merge downstream.** After `identity-reconciliation` the case stays linked to
   the provisional patient with `verification_status: provisional`; OpenEMR keeps the provisional "Unidentified PCR-…"
   records (three, for the two-crew variant) beside the verified patient. An administrator must merge them.
