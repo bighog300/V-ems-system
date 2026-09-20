@@ -8,6 +8,17 @@ env/*.local.env
 # Development-only generated TLS material (private keys are never committed)
 infra/.tls/
 
+# Local populated environment backups
+infra/.env.*.bak
+
+# Generated local databases and mobile build artifacts
+*.sqlite
+*.sqlite3
+*.apk
+*.aab
+screenshots/
+captures/
+
 # Docker volumes and data
 infra/.env
 infra/.env.*

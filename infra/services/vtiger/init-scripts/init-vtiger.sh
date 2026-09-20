@@ -21,7 +21,7 @@ DB_HOST="${DB_HOST:-mysql}"
 DB_PORT="${DB_PORT:-3306}"
 DB_NAME="${DB_NAME:-vtiger}"
 DB_USER="${DB_USER:-vtiger}"
-DB_PASSWORD="${DB_PASSWORD:-vtigerpass}"
+DB_PASSWORD="${DB_PASSWORD:?DB_PASSWORD is required}"
 DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-}"
 
 APP_ROOT="/var/www/html"

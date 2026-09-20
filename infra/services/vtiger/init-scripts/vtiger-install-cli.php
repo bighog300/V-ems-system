@@ -80,7 +80,7 @@ $db_user     = env_required('DB_USER');
 $db_pass     = env_required('DB_PASSWORD');
 
 $admin_user  = env_default('VTIGER_ADMIN_USER',     'admin');
-$admin_pass  = env_default('VTIGER_ADMIN_PASSWORD',  'Admin@123');
+$admin_pass  = env_required('VTIGER_ADMIN_PASSWORD');
 $admin_email = env_default('VTIGER_ADMIN_EMAIL',     'admin@example.com');
 $access_key  = env_default('VTIGER_ACCESS_KEY',      '');
 $site_url    = env_default('VTIGER_SITE_URL',        'http://localhost:8080');
