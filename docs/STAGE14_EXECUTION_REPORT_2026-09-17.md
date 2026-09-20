@@ -3280,6 +3280,17 @@ Nothing below is a pass for the full scenario unless it says so.
 - **D9, medium — parallel patient creation races in OpenEMR.** Four parallel `POST /patient` calls: one 201 and three
   `HTTP 200` HTML "Query Error: insert failed: INSERT INTO patient_data" responses (nothing created); VEMS surfaces
   `500 DOWNSTREAM_UNAVAILABLE`. Sequential creates all succeed. Reproduced directly against OpenEMR.
+  **Fixed.** OpenEMR allocates a pid without a lock, so overlapping creates collide. The transport now sends patient
+  creates one at a time (this API is the only writer VEMS controls) and retries a failed INSERT twice
+  (`OPENEMR_INSERT_RETRIES`, `OPENEMR_INSERT_RETRY_DELAY_MS`), which also covers a collision with a patient created in
+  the OpenEMR UI. A persistent failure is reported as `notSent` (nothing was written), so the case reservation is
+  released and the client can retry; the HTML error page is not kept because it quotes the SQL with patient details.
+  Live: 4 and then 8 parallel `POST /api/patients` all returned 201 (before: 1 of 4). Not covered: the serialization is
+  per API process, so a second API instance would need a shared lock; the retry is the backstop.
+  Separately, `start-development.ps1` exited 1 on four runs (three while the mirror worker was being introduced, one
+  after this change) without a reproducible cause: every compose step passes when run singly, including after a forced
+  rebuild, and the last several full runs passed. The suspected cause is the seed colliding with the worker on the
+  SQLite file (fixed by the busy timeout) but that is unconfirmed, so the failure message now names the compose step.
 - **D10, medium — revoked-session behaviour.** The API denies the next request with `401 SESSION_REVOKED`. The app shows
   only the raw string "This session or device has been revoked" in the patient-cases card, reports "No patient cases
   yet." (false), leaves "New patient case" and "Arrived at destination" active, does not sign out and never mentions a

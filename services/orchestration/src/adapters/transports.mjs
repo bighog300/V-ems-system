@@ -33,6 +33,9 @@ function parseJsonBody(text, target, method) {
     const error = new Error(`${target}.${method} returned invalid JSON`);
     error.code = "DOWNSTREAM_INVALID_RESPONSE";
     error.classification = "DOWNSTREAM_INVALID_RESPONSE";
+    // OpenEMR answers a failed INSERT with HTTP 200 and an HTML "Query Error" page. The page quotes the SQL, which can hold
+    // patient details, so keep only the fact that it happened.
+    error.insertFailed = /Query Error[\s\S]{0,200}insert failed/i.test(text);
     throw error;
   }
 }
@@ -124,6 +127,27 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
         throw error;
       }
     };
+    // OpenEMR allocates a patient's pid without a lock, so concurrent creates collide: one succeeds and the others get a failed
+    // INSERT. This process is the only writer VEMS controls, so creates go through one at a time, and a failed INSERT (nothing
+    // was written) is retried a couple of times, which also covers a collision with someone creating a patient in the UI.
+    let patientCreates = Promise.resolve();
+    const oneAtATime = (task) => { const run = patientCreates.then(task); patientCreates = run.then(() => {}, () => {}); return run; };
+    const insertRetries = Number(env.OPENEMR_INSERT_RETRIES ?? 2);
+    const insertRetryDelayMs = Number(env.OPENEMR_INSERT_RETRY_DELAY_MS ?? 150);
+    const createPatientRecord = (method, body) => oneAtATime(async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try { return await call(method, "/patient", body); }
+        catch (error) {
+          if (!error?.insertFailed) throw error;
+          if (attempt >= insertRetries) {
+            const failure = new Error(`openemr.${method} failed: OpenEMR could not insert the patient record`);
+            failure.code = "DOWNSTREAM_UNAVAILABLE"; failure.classification = "DOWNSTREAM_UNAVAILABLE"; failure.notSent = true; failure.cause = error;
+            throw failure;
+          }
+          await new Promise((resolve) => setTimeout(resolve, insertRetryDelayMs * (attempt + 1)));
+        }
+      }
+    });
     const patientId = (data) => data?.uuid ?? data?.id ?? data?.pid ?? null;
     return async ({ method, payload }) => {
       const patient = encodeURIComponent(payload?.patient_id ?? "");
@@ -136,7 +160,7 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
         return { match_status: candidates.length === 1 ? "matched" : candidates.length > 1 ? "ambiguous" : "not_found", match_confidence: candidates.length === 1 ? 1 : 0, patient_id: candidates.length === 1 ? patientId(candidates[0]) : null, candidates };
       }
       if (method === "createPatient") {
-        const response = await call(method, "/patient", { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex === "X" ? "Other" : payload.sex, phone_contact: payload.phone, ...(payload.provisional_identity ? { genericname1: PROVISIONAL_IDENTITY_LABEL, genericval1: PROVISIONAL_IDENTITY_NOTE } : {}) });
+        const response = await createPatientRecord(method, { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex === "X" ? "Other" : payload.sex, phone_contact: payload.phone, ...(payload.provisional_identity ? { genericname1: PROVISIONAL_IDENTITY_LABEL, genericval1: PROVISIONAL_IDENTITY_NOTE } : {}) });
         const data = standardData(response); return { patient_id: patientId(data), display_name: [data?.fname, data?.lname].filter(Boolean).join(" ") };
       }
       if (method === "createEncounter") {

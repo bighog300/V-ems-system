@@ -17,7 +17,7 @@ function Invoke-Native([string]$File, [string[]]$Arguments, [string]$Failure = '
 }
 
 function Invoke-Compose([string[]]$Arguments) {
-    Invoke-Native 'docker.exe' (@('compose', '--project-name', 'vems-dev', '--env-file', $script:RuntimeFile, '-f', $script:ComposeFile) + $Arguments) 'VEMS Compose operation failed'
+    Invoke-Native 'docker.exe' (@('compose', '--project-name', 'vems-dev', '--env-file', $script:RuntimeFile, '-f', $script:ComposeFile) + $Arguments) "VEMS Compose operation failed (docker compose $($Arguments -join ' '))"
 }
 
 function Assert-Environment {

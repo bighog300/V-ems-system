@@ -368,3 +368,64 @@ test("Vtiger lookup queries select only fields the module schema defines", async
     }
   });
 });
+
+// OpenEMR-like server: a POST /patient that starts while another is still in flight fails with HTTP 200 and an HTML
+// "Query Error" page (the observed race); everything else succeeds.
+async function withRacyOpenEmr(options, fn) {
+  const state = { inFlight: 0, maxInFlight: 0, posts: 0, created: 0, failuresLeft: options.failFirst ?? 0 };
+  await withServer(async (req, res) => {
+    let body = ""; for await (const chunk of req) body += chunk;
+    if (req.url === "/oauth/token") { res.setHeader("content-type", "application/json"); return res.end(JSON.stringify({ access_token: "opaque-test-token" })); }
+    if (req.url === "/apis/default/api/patient" && req.method === "POST") {
+      state.posts += 1; state.inFlight += 1; state.maxInFlight = Math.max(state.maxInFlight, state.inFlight);
+      await new Promise((r) => setTimeout(r, 40));
+      const collided = state.maxInFlight > 1 && state.inFlight > 1;
+      state.inFlight -= 1;
+      if (collided || state.failuresLeft > 0) {
+        if (!collided) state.failuresLeft -= 1;
+        res.writeHead(200, { "content-type": "text/html" });
+        return res.end("<b>Query Error</b><br>insert failed: INSERT INTO patient_data (fname) VALUES ('SECRETNAME')");
+      }
+      state.created += 1; res.setHeader("content-type", "application/json");
+      return res.end(JSON.stringify({ data: { uuid: `pat-${state.created}`, fname: "A", lname: "B" } }));
+    }
+    res.setHeader("content-type", "application/json"); res.writeHead(200); res.end("{}");
+  }, (port) => fn(port, state));
+}
+const newPatient = (n) => ({ method: "createPatient", payload: { first_name: `P${n}`, last_name: "Test", dob: "1990-01-01", sex: "Female" } });
+
+test("parallel patient creates are sent to OpenEMR one at a time and all succeed", async () => {
+  await withRacyOpenEmr({}, async (port, state) => {
+    const transport = standardTransport(port);
+    const results = await Promise.all([1, 2, 3, 4].map((n) => transport(newPatient(n))));
+    assert.equal(state.maxInFlight, 1, "never two creates in flight");
+    assert.equal(new Set(results.map((r) => r.patient_id)).size, 4);
+    assert.equal(state.created, 4);
+  });
+});
+
+test("a failed INSERT is retried, and the caller sees the created patient", async () => {
+  await withRacyOpenEmr({ failFirst: 2 }, async (port, state) => {
+    const result = await standardTransport(port, { OPENEMR_INSERT_RETRY_DELAY_MS: "5" })(newPatient(1));
+    assert.ok(result.patient_id); assert.equal(state.posts, 3); assert.equal(state.created, 1);
+  });
+});
+
+test("a persistent INSERT failure is reported as not sent, after a bounded number of attempts, without leaking the SQL", async () => {
+  await withRacyOpenEmr({ failFirst: 99 }, async (port, state) => {
+    await assert.rejects(() => standardTransport(port, { OPENEMR_INSERT_RETRY_DELAY_MS: "5" })(newPatient(1)), (error) => {
+      assert.equal(error.notSent, true); assert.equal(error.code, "DOWNSTREAM_UNAVAILABLE");
+      assert.ok(!JSON.stringify({ m: error.message, c: error.cause?.message }).includes("SECRETNAME"));
+      return true;
+    });
+    assert.equal(state.posts, 3, "one try plus two retries");
+  });
+});
+
+test("one failing patient create does not block the ones queued behind it", async () => {
+  await withRacyOpenEmr({ failFirst: 3 }, async (port, state) => {
+    const transport = standardTransport(port, { OPENEMR_INSERT_RETRY_DELAY_MS: "5" });
+    const [first, second] = await Promise.allSettled([transport(newPatient(1)), transport(newPatient(2))]);
+    assert.equal(first.status, "rejected"); assert.equal(second.status, "fulfilled"); assert.equal(state.created, 1);
+  });
+});
