@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
+import { runSyncWorkerService } from "@vems/orchestration/src/sync-worker-service.mjs";
 import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCIDENT_STATUSES, createLogger, isInsecureSecret, isProductionEnv } from "@vems/shared";
 import { authenticateRequest, issueHs256Token } from "./auth.mjs";
 import { RBAC_POLICIES } from "./authorization-policy.mjs";
@@ -1278,6 +1279,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const server = createApp(orchestration);
   // D7: re-send clinical entries whose OpenEMR write never left VEMS while OpenEMR was unreachable (0 disables).
   const retryEveryMs = Number(process.env.DOWNSTREAM_RETRY_INTERVAL_MS ?? 30000);
+  // The Vtiger mirror worker runs in this process, sharing the API's database handle: two containers cannot safely share
+  // a SQLite file on a bind mount.
+  const stopWorker = new AbortController();
+  if (process.env.SYNC_WORKER_ENABLED === "true") {
+    runSyncWorkerService({ db: orchestration.db, stopSignal: stopWorker.signal }).catch((error) => console.error("[sync-worker] stopped:", error?.message));
+  }
+  for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { stopWorker.abort(); server.close(); setTimeout(() => process.exit(0), 500).unref(); });
   if (retryEveryMs > 0) {
     setInterval(() => {
       orchestration.retryFailedClinicalDownstream().then((r) => { if (r.retried) console.log(`downstream retry: ${r.created}/${r.retried} created`); }, (error) => console.error(`downstream retry failed: ${error?.message}`));

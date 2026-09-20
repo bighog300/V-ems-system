@@ -304,6 +304,20 @@ export class OrchestrationService {
     });
   }
 
+  // A personnel row that was not created through createPersonnel (a seed, an import) has no Vtiger mirror, and every
+  // assignment crewing that person then waits forever on a link that is never created. Queue the mirror once.
+  async ensurePersonnelMirror(staffId, meta) {
+    const record = await this.personnel.findById(staffId);
+    if (!record) throw new ApiError("NOT_FOUND", `Personnel ${staffId} not found`, 404);
+    if (await this.personnelVtigerLinks.findByStaffId(staffId)) return { queued: false };
+    return this.db.withTransaction(async () => {
+      const now = new Date().toISOString();
+      await this.syncIntent("personnel", "createPersonnelMirror", meta.correlationId, this.vtigerMapper.mapPersonnelCreate(record));
+      await this.personnelVtigerLinks.upsert({ staff_id: staffId, external_key: `${this.vtigerMapper.sourceNamespace}:personnel:${staffId}`, create_correlation_id: meta.correlationId, last_correlation_id: meta.correlationId, sync_status: "pending", last_error_code: null, last_synced_at: null, remote_id: null, remote_number: null, created_at: now, updated_at: now });
+      return { queued: true };
+    });
+  }
+
   async getPersonnel(staffId) {
     const record = await this.personnel.findById(staffId);
     if (!record) throw new ApiError("NOT_FOUND", `Personnel ${staffId} not found`, 404);

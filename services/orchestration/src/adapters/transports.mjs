@@ -251,14 +251,24 @@ export function createVtigerTransportFromEnv(env = process.env) {
   // The real transport is intentionally lazy: authentication happens on the
   // first worker call and the session remains in memory only.
   let clientPromise;
-  const getClient = () => clientPromise ??= import("./vtiger/client.mjs").then(({ createVtigerWebserviceClient }) => createVtigerWebserviceClient(env));
+  // Vtiger rejects a create without an owner, and mirror payloads are built when the intent is queued, often before an owner
+  // is known. Fill it in at send time for every create, so no module has to remember to. Read live: the worker may resolve
+  // the integration user after this transport was built.
+  const getClient = () => clientPromise ??= import("./vtiger/client.mjs").then(({ createVtigerWebserviceClient }) => {
+    const client = createVtigerWebserviceClient(env);
+    const create = client.create.bind(client);
+    return { ...client, create: (element, elementType) => create(!element.assigned_user_id && env.VTIGER_ASSIGNED_USER_ID ? { ...element, assigned_user_id: env.VTIGER_ASSIGNED_USER_ID } : element, elementType) };
+  });
   return async ({ method, payload }) => {
     const client = await getClient();
     const externalKey = payload.vems_external_key;
     const module = payload.elementType ?? (method === "createPersonnelMirror" || method === "updatePersonnelMirror" ? "VEMSPersonnel" : method === "createAssignmentCrewMirror" || method === "updateAssignmentCrewMirror" ? "VEMSAssignmentCrew" : method === "createStockItemMirror" || method === "updateStockItemMirror" ? "VEMSStockItems" : method === "createVehicleStockMirror" || method === "updateVehicleStockMirror" ? "VEMSVehicleStock" : method === "recordStockUsageMirror" ? "VEMSStockUsage" : method.includes("Assignment") ? "VEMSAssignments" : "HelpDesk");
     const esc = (value) => String(value ?? "").replaceAll("'", "''");
-    const numberField = module === "VEMSAssignments" ? "vems_assignment_no" : module === "VEMSVehicles" ? "vems_vehicle_no" : module === "VEMSPersonnel" ? "vems_personnel_no" : module === "VEMSAssignmentCrew" ? "vems_assignment_crew_no" : module === "VEMSStockItems" ? "vems_stock_item_no" : module === "VEMSVehicleStock" ? "vems_vehicle_stock_no" : module === "VEMSStockUsage" ? "vems_stock_usage_no" : "ticket_no";
-    const query = `select id,${numberField},vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
+    // Only modules whose schema defines an auto-number field may select it: Vtiger answers a query naming an unknown field
+    // with PHP warnings ahead of the JSON, which surfaces as a non-JSON response. Vehicles, assignments and assignment crews
+    // have none (see infra/services/vtiger/development/modules.json).
+    const numberField = module === "VEMSPersonnel" ? "vems_personnel_no" : module === "VEMSStockItems" ? "vems_stock_item_no" : module === "VEMSVehicleStock" ? "vems_vehicle_stock_no" : module === "VEMSStockUsage" ? "vems_stock_usage_no" : module === "HelpDesk" ? "ticket_no" : null;
+    const query = `select id,${numberField ? `${numberField},` : ""}vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
     if (module === "VEMSAssignments" && !payload.vems_incident_remote_id) {
       const error = new Error("Vtiger incident linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
     }
@@ -285,7 +295,7 @@ export function createVtigerTransportFromEnv(env = process.env) {
       const junctions = [];
       for (const member of payload.personnel_links ?? []) {
         const key = member.external_key;
-        const found = await client.query(`select id,vems_assignment_crew_no from VEMSAssignmentCrew where vems_external_key='${esc(key)}';`);
+        const found = await client.query(`select id,vems_external_key from VEMSAssignmentCrew where vems_external_key='${esc(key)}';`);
         if (found.length > 1) { const error = new Error("Multiple Vtiger assignment crew records match the external key"); error.code = "VTIGER_DUPLICATE_CONFLICT"; error.classification = error.code; throw error; }
         if (found.length === 1) { junctions.push({ remote_id: found[0].id, remote_number: found[0].vems_assignment_crew_no ?? null, external_key: key, staff_id: member.staff_id }); continue; }
         const relation = { vems_assignment_crew_id: member.assignment_crew_id, vems_external_key: key, vems_assignment_id: payload.vems_assignment_id, vems_staff_id: member.staff_id, assignment_ref: remoteId, personnel_ref: member.personnel_remote_id, vems_correlation_id: payload.vems_correlation_id, vems_last_correlation_id: payload.vems_last_correlation_id, vems_created_at_utc: payload.vems_created_at_utc, vems_updated_at_utc: payload.vems_updated_at_utc, assigned_user_id: payload.assigned_user_id };

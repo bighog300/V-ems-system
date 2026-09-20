@@ -184,6 +184,10 @@ services:
       VTIGER_BASE_URL: http://vtiger
       VTIGER_USERNAME: ${VTIGER_USERNAME:?VTIGER_USERNAME is required}
       VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:?VTIGER_ACCESS_KEY is required}
+      # Optional; unset means records are owned by the integration user (resolved from the Vtiger login).
+      VTIGER_ASSIGNED_USER_ID: ${VTIGER_ASSIGNED_USER_ID:-}
+      # Mirror worker runs inside the API process (shared SQLite handle).
+      SYNC_WORKER_ENABLED: "true"
       JWT_HS256_SECRET: ${JWT_HS256_SECRET:?JWT_HS256_SECRET is required}
       JWT_ISSUER: ${JWT_ISSUER:?JWT_ISSUER is required}
       JWT_AUDIENCE: ${JWT_AUDIENCE:?JWT_AUDIENCE is required}

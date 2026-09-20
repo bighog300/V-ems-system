@@ -3255,6 +3255,28 @@ Nothing below is a pass for the full scenario unless it says so.
   the stack, and when run it logs `vtiger_owner_set=false`. Creates fail with `assigned_user_id does not have a value` /
   `requires VTIGER_ASSIGNED_USER_ID…`, and dependent updates then fail with `REMOTE_NOT_FOUND`: 13 of 27 intents were
   dead-lettered with Vtiger healthy, 8 stayed pending, 6 succeeded.
+  **Fixed.** Root causes, found one live failure at a time:
+  1. *No worker.* The mirror worker now runs inside the API process (`SYNC_WORKER_ENABLED`, set in the dev compose file).
+     It shares the API's database handle because two containers cannot safely share a SQLite file on a bind mount.
+  2. *No owner.* With `VTIGER_ASSIGNED_USER_ID` unset the worker defaults to the integration user (`userId` from the
+     Vtiger login); an explicit setting still wins. The transport now fills the owner in at send time for every create.
+  3. *Lookups named fields that do not exist.* Vehicles, assignments and assignment crews have no `_no` field in the
+     module schema, so the lookup query drew PHP warnings ahead of the JSON ("non-JSON response"). A test now checks
+     every lookup against `infra/services/vtiger/development/modules.json`.
+  4. *Updates had no record id.* Vehicle, personnel, stock-item, incident and assignment updates were queued with the id
+     known at that moment (none if the create had not landed) and failed with `requires a remote record ID`; each failure
+     also flipped the link to `dead_lettered`, which blocked assignment creates. The id is now resolved from the link at
+     send time and an update whose record does not exist yet waits instead of failing.
+  5. *STAFF-001 was never mirrored.* The seed inserts it directly, so no personnel intent existed and its assignments
+     waited forever. `ensurePersonnelMirror` (used by the seed) queues it once.
+  6. *Latent, found on the way:* Node 22.14 ignores the SQLite `timeout` option, so the busy timeout was 0 and any second
+     process on the database file (the seed, ops tasks) failed at once with `database is locked`; it showed up as an
+     intermittent seed failure once the worker was running. Now `PRAGMA busy_timeout = 5000` is set explicitly.
+  Live: after replaying the dead-lettered intents through `POST /api/support/sync-intents/{id}/replay`, all 29 intents
+  were `succeeded` and every incident, assignment, vehicle and personnel link was `succeeded`; Vtiger held 3 incidents,
+  2 assignments, 3 personnel, 3 crew links and the stock records. One extra vehicle in Vtiger (`PROBE-1`) is my own
+  diagnostic record. Not covered: a failed update still marks the link `dead_lettered` after retries, and only a
+  successful later sync restores it; Vtiger to VEMS sync does not exist.
 - **D9, medium — parallel patient creation races in OpenEMR.** Four parallel `POST /patient` calls: one 201 and three
   `HTTP 200` HTML "Query Error: insert failed: INSERT INTO patient_data" responses (nothing created); VEMS surfaces
   `500 DOWNSTREAM_UNAVAILABLE`. Sequential creates all succeed. Reproduced directly against OpenEMR.

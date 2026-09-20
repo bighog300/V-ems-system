@@ -65,6 +65,19 @@ export async function resolveVehicleStockDependencies(payload, vehicleLinks, sto
   return { vehicleId, stockItemId, vehicle, item };
 }
 
+// Vtiger requires an owner on every create. When VTIGER_ASSIGNED_USER_ID is not configured, records are owned by the
+// integration user itself, whose webservice id the login response returns. An explicit setting always wins, and the
+// id is not a secret (it is only logged as set/unset elsewhere).
+export async function resolveVtigerOwner(env = process.env, { createClient } = {}) {
+  if (env.VTIGER_ASSIGNED_USER_ID) return env.VTIGER_ASSIGNED_USER_ID;
+  if (!env.VTIGER_BASE_URL || !env.VTIGER_USERNAME || !env.VTIGER_ACCESS_KEY) return undefined;
+  const make = createClient ?? (async () => (await import("./adapters/vtiger/client.mjs")).createVtigerWebserviceClient(env));
+  const login = await (await make()).auth.authenticate();
+  if (!login?.userId) return undefined;
+  env.VTIGER_ASSIGNED_USER_ID = String(login.userId);
+  return env.VTIGER_ASSIGNED_USER_ID;
+}
+
 export async function runSyncWorkerService(options = {}) {
   const config = options.config ?? loadSyncWorkerConfig();
   const db = options.db ?? createDbClient({ dbPath: config.dbPath });
@@ -92,16 +105,24 @@ export async function runSyncWorkerService(options = {}) {
       return expo.sendPush({ tokens, title: payload.title, body: payload.body, data: payload.data ?? {} });
     }
   };
+  // An update is queued with whatever Vtiger record id was known then, which is none when the create has not landed yet.
+  // Resolve it from the link at send time; until the record exists the update waits instead of failing.
+  const withRemoteId = async (payload, link) => {
+    const remoteId = link?.remote_id ?? payload.id;
+    if (!remoteId) { const error = new Error("Vtiger record linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error; }
+    return { ...payload, id: remoteId, remote_id: remoteId };
+  };
   const workerVtiger = {
     createIncidentMirror: (...args) => vtiger.createIncidentMirror(...args),
-    updateIncidentMirror: (...args) => vtiger.updateIncidentMirror(...args),
-    recordStockUsageMirror: (...args) => vtiger.recordStockUsageMirror(...args),
+    // The queued update cannot know the Vtiger record id (the incident is often not mirrored yet when it is queued), so
+    // resolve it from the link at send time, as the assignment update does. Until the create has landed the update waits.
+    async updateIncidentMirror(payload) { return vtiger.updateIncidentMirror(await withRemoteId(payload, await vtigerLinks.findByIncidentId(payload.incident_id))); },    recordStockUsageMirror: (...args) => vtiger.recordStockUsageMirror(...args),
     createVehicleMirror: (payload) => vtiger.createVehicleMirror({ ...payload, assigned_user_id: payload?.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID }),
-    updateVehicleMirror: (...args) => vtiger.updateVehicleMirror(...args),
+    updateVehicleMirror: async (payload) => vtiger.updateVehicleMirror(await withRemoteId(payload, await vehicleLinks.findByVehicleId(payload.vehicle_id))),
     createPersonnelMirror: (payload) => vtiger.createPersonnelMirror({ ...payload, assigned_user_id: payload?.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID }),
-    updatePersonnelMirror: (...args) => vtiger.updatePersonnelMirror(...args),
+    updatePersonnelMirror: async (payload) => vtiger.updatePersonnelMirror(await withRemoteId(payload, await personnelLinks.findByStaffId(payload.staff_id))),
     createStockItemMirror: (payload) => vtiger.createStockItemMirror(payload),
-    updateStockItemMirror: (...args) => vtiger.updateStockItemMirror(...args),
+    updateStockItemMirror: async (payload) => vtiger.updateStockItemMirror(await withRemoteId(payload, await stockItemLinks.findByStockItemId(payload.stock_item_id))),
     createVehicleStockMirror: async (payload) => {
       const { vehicleId, stockItemId, vehicle, item } = await resolveVehicleStockDependencies(payload, vehicleLinks, stockItemLinks);
       return vtiger.createVehicleStockMirror({ ...payload, vehicle_id: vehicleId, stock_item_id: stockItemId, vehicle_remote_id: vehicle.remote_id, stock_item_remote_id: item.remote_id, assigned_user_id: payload?.assigned_user_id ?? process.env.VTIGER_ASSIGNED_USER_ID });
@@ -153,7 +174,7 @@ export async function runSyncWorkerService(options = {}) {
         throw error;
       }
       const vehicle = await vehicleLinks.findByVehicleId(payload.vems_vehicle_id);
-      return vtiger.updateAssignmentMirror({ ...payload, remote_id: link.remote_id, incident_remote_id: link.incident_remote_id, vems_incident_remote_id: link.incident_remote_id, vehicle_ref: vehicle?.remote_id ?? null });
+      return vtiger.updateAssignmentMirror({ ...payload, id: link.remote_id, remote_id: link.remote_id, incident_remote_id: link.incident_remote_id, vems_incident_remote_id: link.incident_remote_id, vehicle_ref: vehicle?.remote_id ?? null });
     }
   };
   const worker = options.worker ?? new SyncWorker({
@@ -267,6 +288,7 @@ export async function runSyncWorkerService(options = {}) {
     }
   });
 
+  // An embedding process (the API) passes stopSignal and owns signal handling; standalone runs handle SIGINT/SIGTERM.
   let stopping = false;
   const stop = () => {
     if (!stopping) {
@@ -275,8 +297,8 @@ export async function runSyncWorkerService(options = {}) {
     }
   };
 
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
+  if (options.stopSignal) options.stopSignal.addEventListener("abort", stop, { once: true });
+  else { process.once("SIGINT", stop); process.once("SIGTERM", stop); }
 
   console.info(
     `[sync-worker] starting service db_path=${config.dbPath} poll_ms=${config.pollIntervalMs} batch_size=${config.batchSize} max_attempts=${config.maxAttempts} vtiger_owner_set=${Boolean(process.env.VTIGER_ASSIGNED_USER_ID)}`
@@ -285,14 +307,17 @@ export async function runSyncWorkerService(options = {}) {
   let cycleNumber = 0;
   while (!stopping) {
     cycleNumber += 1;
+    if (!process.env.VTIGER_ASSIGNED_USER_ID) {
+      try { if (await resolveVtigerOwner()) console.info("[sync-worker] Vtiger owner defaulted to the integration user"); }
+      catch (error) { console.warn(`[sync-worker] Vtiger owner not resolved yet: ${error?.code ?? error?.message}`); }
+    }
     const cycle = await worker.processCycle(config.batchSize);
     logCycle(cycleNumber, config, cycle);
 
     if (!stopping) await sleep(config.pollIntervalMs);
   }
 
-  process.removeListener("SIGINT", stop);
-  process.removeListener("SIGTERM", stop);
+  if (!options.stopSignal) { process.removeListener("SIGINT", stop); process.removeListener("SIGTERM", stop); }
   console.info("[sync-worker] service stopped");
 }
 
