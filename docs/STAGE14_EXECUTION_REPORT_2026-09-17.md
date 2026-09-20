@@ -3308,6 +3308,17 @@ Nothing below is a pass for the full scenario unless it says so.
 - **D11, medium — reconciliation does not merge downstream.** After `identity-reconciliation` the case stays linked to
   the provisional patient with `verification_status: provisional`; OpenEMR keeps the provisional "Unidentified PCR-…"
   records (three, for the two-crew variant) beside the verified patient. An administrator must merge them.
+  **Mitigated, not automated.** OpenEMR 8.3 has no API for merging patients (only the interactive Merge Patients page,
+  `interface/patient_file/merge_patients.php`), so VEMS cannot perform or verify the merge. What was missing was any
+  tracking: a reconciliation was a row visible only by opening that case, so provisional patients could stay forever.
+  Now: migration `023_identity_merge_tracking` adds `merged_at/merged_by/merge_note`; `GET /api/support/pending-identity-merges`
+  (supervisor, sys_admin) lists every reconciliation still awaiting a merge with both OpenEMR patient ids; a case carries
+  `identity_merge_pending`; and `POST /api/patient-cases/{id}/identity-merge` (supervisor, sys_admin; a note saying where
+  and how is required) records the administrator's attestation, idempotently, with an audit entry and an event. Live: the
+  worklist showed the 3 real leftovers from earlier drills (still pending: no merge has been done for them) plus a fresh
+  case, which left the list after confirmation. Limits: the confirmation is an attestation, not a check that OpenEMR
+  really merged; development mode does not enforce roles (the gateway test does, with `RBAC_ENFORCE`); no mobile or
+  web-control screen shows the worklist yet.
 - **D12, medium.** Termination of resuscitation and death on scene raise no QA flag (only refusals, stock discrepancies
   and safeguarding notes do). A stock discrepancy (`INSUFFICIENT_STOCK`, high-severity `medication_discrepancy` flag
   raised at completion) is never shown to the crew at entry: the response carries no indication and the app has no stock field.

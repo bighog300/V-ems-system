@@ -860,6 +860,9 @@ export function createApp(orchestration = new OrchestrationService()) {
         }, context);
       }
 
+      if (method === "GET" && url.pathname === "/api/support/pending-identity-merges") {
+        return okJson(res, 200, { pending_merges: await orchestration.listPendingIdentityMerges() }, context);
+      }
       if (method === "GET" && url.pathname === "/api/support/diagnostics") {
         return okJson(res, 200, await supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds), context);
       }
@@ -1046,7 +1049,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|provisional-patient-reconciliation|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history|lifenet-import)(?:\/([^/]+))?)?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|identity-merge|provisional-patient|provisional-patient-reconciliation|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history|lifenet-import)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -1071,6 +1074,7 @@ export function createApp(orchestration = new OrchestrationService()) {
         if (method === 'POST' && action === 'encounters') return okJson(res, 201, await orchestration.createEncounterForPatientCase(id, await parseJson(req), meta), context);
         if (method === 'PATCH' && action === 'assignment') return okJson(res, 200, await orchestration.changePatientCaseAssignment(id, await parseJson(req), meta), context);
         if (method === 'PATCH' && action === 'status') return okJson(res, 200, await orchestration.setPatientCaseStatus(id, (await parseJson(req)).status, meta), context);
+        if (method === 'POST' && action === 'identity-merge') return okJson(res, 200, await orchestration.confirmIdentityMerge(id, await parseJson(req), meta), context);
         if (method === 'POST' && action === 'identity-reconciliation') return okJson(res, 200, await orchestration.reconcilePatientCaseIdentity(id, await parseJson(req), meta), context);
         if (method === 'GET' && action === 'demographics') return okJson(res, 200, await orchestration.getPatientCaseDemographics(id), context);
         if (method === 'PUT' && action === 'demographics') return okJson(res, 200, await orchestration.savePatientCaseDemographics(id, await parseJson(req), meta), context);

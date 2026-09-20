@@ -1,0 +1,4 @@
+DROP INDEX IF EXISTS idx_identity_reconciliations_pending;
+ALTER TABLE patient_case_identity_reconciliations DROP COLUMN merge_note;
+ALTER TABLE patient_case_identity_reconciliations DROP COLUMN merged_by;
+ALTER TABLE patient_case_identity_reconciliations DROP COLUMN merged_at;

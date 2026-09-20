@@ -45,13 +45,15 @@ export const patientCaseMethods = {
     const encounter = await this.encounterLinks.findByPatientCaseId(id);
     const disposition = await this.clinicalDispositions?.find(id);
     const dispositionReady = Boolean(disposition?.outcome);
+    const reconciliations = await this.db.queryAll(`SELECT * FROM patient_case_identity_reconciliations WHERE patient_case_id=${sqlValue(id)} ORDER BY created_at;`);
     return { ...record, openemr_patient_id: patient?.openemr_patient_id ?? null,
       verification_status: patient?.verification_status ?? 'unknown',
       openemr_encounter_id: encounter?.openemr_encounter_id ?? null,
       encounter_status: encounter?.encounter_status ?? null,
       closure_ready: dispositionReady || Boolean(encounter?.closure_ready && encounter.handover_status === 'Handover Completed' && encounter.handover_time && encounter.disposition),
       provisional_identity: (await this.db.queryOne(`SELECT status FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`)) ? { dob_unknown: true, native_dob_placeholder: PROVISIONAL_DOB_SENTINEL } : null,
-      identity_reconciliations: await this.db.queryAll(`SELECT * FROM patient_case_identity_reconciliations WHERE patient_case_id=${sqlValue(id)} ORDER BY created_at;`) };
+      identity_reconciliations: reconciliations,
+      identity_merge_pending: reconciliations.some(r => !r.merged_at) };
   },
   async listPatientCases(incidentId) {
     await this.getIncident(incidentId);
@@ -176,6 +178,32 @@ export const patientCaseMethods = {
       await this.audit('patient_case', id, 'reconcile_identity', meta, { patient_case_id: id, incident_id: c.incident_id, clinical_patient_id: c.openemr_patient_id }, { ...record, incident_id: c.incident_id });
       await this.event('PatientIdentityReconciled', meta.correlationId, { patient_case_id: id, incident_id: c.incident_id, administrative_merge_required: true });
       return this.getPatientCase(id);
+    });
+  },
+  // The reconciliations that still need an administrator to merge the provisional OpenEMR patient into the verified one.
+  async listPendingIdentityMerges() {
+    const rows = await this.db.queryAll(`SELECT r.reconciliation_id, r.patient_case_id, c.incident_id, r.clinical_patient_id AS provisional_patient_id,
+      r.verified_patient_id, r.reason, r.created_at FROM patient_case_identity_reconciliations r
+      JOIN patient_cases c ON c.patient_case_id = r.patient_case_id WHERE r.merged_at IS NULL ORDER BY r.created_at, r.reconciliation_id;`);
+    return rows;
+  },
+  // An administrator merged the two patients in OpenEMR (Administration > Patients > Merge Patients) and attests it here.
+  // VEMS cannot check it: OpenEMR exposes no API for the merge or its result.
+  async confirmIdentityMerge(id, payload, meta) {
+    objectPayload(payload);
+    await this.getPatientCase(id);
+    if (typeof payload.verified_patient_id !== 'string' || !payload.verified_patient_id.trim()) invalid('verified_patient_id is required');
+    if (typeof payload.note !== 'string' || !payload.note.trim()) invalid('note is required: say where and how the merge was done');
+    return this.db.withTransaction(async () => {
+      const record = await this.db.queryOne(`SELECT * FROM patient_case_identity_reconciliations WHERE patient_case_id=${sqlValue(id)} AND verified_patient_id=${sqlValue(payload.verified_patient_id)};`);
+      if (!record) throw new ApiError('NOT_FOUND', `No identity reconciliation to ${payload.verified_patient_id} exists for ${id}`, 404);
+      if (record.merged_at) return record;
+      const merged = { merged_at: new Date().toISOString(), merged_by: meta.actorId ?? null, merge_note: payload.note.trim() };
+      await this.db.execute(`UPDATE patient_case_identity_reconciliations SET merged_at=${sqlValue(merged.merged_at)},merged_by=${sqlValue(merged.merged_by)},merge_note=${sqlValue(merged.merge_note)} WHERE reconciliation_id=${sqlValue(record.reconciliation_id)};`);
+      const c = await this.getPatientCase(id);
+      await this.audit('patient_case', id, 'confirm_identity_merge', meta, { reconciliation_id: record.reconciliation_id, merged_at: null }, { reconciliation_id: record.reconciliation_id, incident_id: c.incident_id, provisional_patient_id: record.clinical_patient_id, verified_patient_id: record.verified_patient_id, ...merged });
+      await this.event('PatientIdentityMergeConfirmed', meta.correlationId, { patient_case_id: id, incident_id: c.incident_id, reconciliation_id: record.reconciliation_id });
+      return { ...record, ...merged };
     });
   },
   async createProvisionalPatientForCase(id, meta) {
