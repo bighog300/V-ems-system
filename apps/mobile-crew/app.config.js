@@ -14,7 +14,7 @@ function resolveApiBaseUrl(env) {
   return explicitUrl;
 }
 
-const enabled = process.env.EXPO_PUBLIC_ENABLE_DEVELOPMENT_TEST_AUTH === "true" && process.env.APP_ENV !== "production" && process.env.EAS_BUILD_PROFILE !== "production";
+const enabled = process.env.EXPO_PUBLIC_ENABLE_DEVELOPMENT_TEST_AUTH === "true" && process.env.NODE_ENV === "development" && process.env.APP_ENV === "development" && process.env.EAS_BUILD_PROFILE !== "production";
 
 export default ({ config }) => ({
   ...appJson.expo,

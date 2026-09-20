@@ -149,10 +149,10 @@ export default function LoginScreen({ onSignedIn, initialError = null }: LoginSc
           accessibilityState={{ disabled: developmentSubmitting || submitting }}
           onPress={handleDevelopmentTestLogin}
           accessibilityRole="button"
-          accessibilityLabel="Sign in as Stage 14 test crew"
+          accessibilityLabel="Development sign in"
           testID="development-test-login"
         >
-          {developmentSubmitting ? <ActivityIndicator color="#1a4fd6" /> : <Text style={styles.devButtonText}>Sign in as Stage 14 test crew</Text>}
+          {developmentSubmitting ? <ActivityIndicator color="#1a4fd6" /> : <Text style={styles.devButtonText}>Development sign in</Text>}
         </Pressable>
       ) : null}
     </ScrollView>

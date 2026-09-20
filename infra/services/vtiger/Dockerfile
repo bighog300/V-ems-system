@@ -1,28 +1,5 @@
-FROM vtigercrm/vtigercrm-8.3.0:latest
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-      default-mysql-client \
-      curl \
-      wget \
-      git \
-      composer \
-      rsync \
-      gettext-base \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN mkdir -p /opt/vtiger-dist /opt/vems/init-scripts /opt/vems/templates \
-    && rsync -a /var/www/html/ /opt/vtiger-dist/
-
-COPY init-scripts/ /opt/vems/init-scripts/
-COPY config/config.inc.php.tpl /opt/vems/templates/config.inc.php.tpl
-
-RUN chmod +x /opt/vems/init-scripts/*.sh \
-    && chmod +r /opt/vems/init-scripts/vtiger-install-cli.php
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -fsS http://localhost/ >/dev/null || exit 1
-
-EXPOSE 80
-
-ENTRYPOINT ["/opt/vems/init-scripts/entrypoint.sh"]
+FROM ghcr.io/bighog300/vtigercrm:8.3.0@sha256:cddc2be88eec6d766fb0462ad250aba68a2ceb49df946a6c26d855ad11327a69
+COPY development/ /opt/vems/
+# Keep the established distribution and schema; avoid passwords in mysql argv.
+RUN sed -i 's/-p"${DB_PASSWORD}"//g' /opt/vtiger/entrypoint.sh
+ENTRYPOINT ["/bin/bash", "/opt/vems/entrypoint.sh"]

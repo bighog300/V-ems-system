@@ -19,6 +19,7 @@ async function startServer() {
     orchestration,
     async close() {
       await new Promise((resolve) => server.close(resolve));
+      orchestration.db.db?.close();
       rmSync(dir, { recursive: true, force: true });
     },
     async request(path, method = "GET", payload, headers = {}) {

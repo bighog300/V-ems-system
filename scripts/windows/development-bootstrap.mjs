@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const SECRET_KEYS = [
-  "DB_ROOT_PASSWORD", "VTIGER_DB_PASSWORD", "VTIGER_ADMIN_PASSWORD",
+  "DB_ROOT_PASSWORD", "VTIGER_DB_PASSWORD", "VTIGER_ADMIN_PASSWORD", "VTIGER_PASSWORD",
   "OPENEMR_DB_PASSWORD", "OPENEMR_ADMIN_PASSWORD", "OPENEMR_PASSWORD",
   "OPENEMR_CLIENT_ID", "OPENEMR_CLIENT_SECRET", "VTIGER_ACCESS_KEY", "JWT_HS256_SECRET"
 ];
@@ -32,7 +32,7 @@ export function validateEnvValues(values, requiredKeys) {
   const placeholders = [];
   for (const key of requiredKeys) {
     const value = values.get(key);
-    if (value === undefined || value === "") missing.push(key);
+    if (value === undefined || !value.trim()) missing.push(key);
     else if (PLACEHOLDER.test(value)) placeholders.push(key);
     else if (/[\r\n]/.test(value)) throw new Error(`Invalid multiline value for ${key}`);
   }
@@ -51,12 +51,11 @@ export function generateDevelopmentIdentity(prefix) {
 export function buildDevelopmentValues(templateText, overrides = {}) {
   const values = parseEnvText(templateText, "Windows environment template");
   for (const key of SECRET_KEYS) values.set(key, generateSecret());
+  // Vtiger 8.3 stores access keys in VARCHAR(36); 24 random bytes encode to 32 characters.
+  values.set('VTIGER_ACCESS_KEY', generateSecret(24));
   values.set("OPENEMR_USERNAME", generateDevelopmentIdentity("vems_dev_openemr"));
   values.set("VTIGER_USERNAME", generateDevelopmentIdentity("vems_dev_vtiger"));
-  values.set("OPENEMR_ADMIN_USER", values.get("OPENEMR_USERNAME"));
-  values.set("OPENEMR_ADMIN_PASSWORD", values.get("OPENEMR_PASSWORD"));
-  values.set("VTIGER_ADMIN_USER", values.get("VTIGER_USERNAME"));
-  values.set("VTIGER_ADMIN_PASSWORD", values.get("VTIGER_ADMIN_PASSWORD"));
+  values.set("VEMS_ENABLE_DEVELOPMENT_TEST_AUTH", "true");
   values.set("VEMS_DB_INIT_MODE", "fresh-development");
   values.set("VEMS_REQUIRE_EXISTING_DB", "false");
   for (const [key, value] of Object.entries(overrides)) values.set(key, String(value));
@@ -110,7 +109,7 @@ export function redactText(text, sensitiveValues) {
 }
 
 export function loadTemplate(path) {
-  return readFileSync(path, "utf8");
+  return readFileSync(path, "utf8").replaceAll("\r\n", "\n");
 }
 
 export function templateDirectory(path) {
@@ -136,6 +135,15 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import
       return result;
     }, []));
     if (!options.template || !options.destination || !options["db-host-path"]) throw new Error("generate requires template, destination and db-host-path");
+    if (existsSync(options.destination)) {
+      const existing = parseEnvText(readFileSync(options.destination, 'utf8').replaceAll('\r\n', '\n'));
+      const present = SECRET_KEYS.filter(key => existing.has(key));
+      if (!present.length || !present.every(key => PLACEHOLDER.test(existing.get(key)))) {
+        throw new Error('Existing populated environment will not be replaced');
+      }
+      // Preserve the unused template for review; never back up populated secrets here.
+      writeFileSync(`${options.destination}.unconfigured`, readFileSync(options.destination), {flag:'wx', mode:0o600});
+    }
     const values = buildDevelopmentValues(loadTemplate(options.template), {
       VEMS_DB_HOST_PATH: options["db-host-path"],
       VEMS_DB_PATH: "/var/lib/vems/data/windows-development.sqlite"
@@ -157,7 +165,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import
     const values = parseEnvText(readFileSync(options.environment, "utf8"), "runtime environment");
     validateEnvValues(values, [
       "API_PORT", "API_HOST", "VEMS_DB_HOST_PATH", "VEMS_DB_PATH", "VEMS_DB_INIT_MODE", "VEMS_REQUIRE_EXISTING_DB",
-      "DB_ROOT_PASSWORD", "VTIGER_DB_PASSWORD", "VTIGER_ADMIN_USER", "VTIGER_ADMIN_PASSWORD", "VTIGER_USERNAME", "VTIGER_ACCESS_KEY",
+      "DB_ROOT_PASSWORD", "VTIGER_DB_PASSWORD", "VTIGER_PASSWORD", "VTIGER_ADMIN_USER", "VTIGER_ADMIN_PASSWORD", "VTIGER_USERNAME", "VTIGER_ACCESS_KEY",
       "OPENEMR_DB_PASSWORD", "OPENEMR_ADMIN_USER", "OPENEMR_ADMIN_PASSWORD", "OPENEMR_USERNAME", "OPENEMR_PASSWORD",
       "REDIS_URL", "REDIS_HOST", "OPENEMR_BASE_URL", "OPENEMR_TOKEN_URL", "OPENEMR_API_STYLE", "OPENEMR_GRANT_TYPE", "OPENEMR_SCOPE", "OPENEMR_USER_ROLE",
       "VTIGER_BASE_URL", "JWT_HS256_SECRET", "JWT_ISSUER", "JWT_AUDIENCE", "VEMS_ENABLE_DEVELOPMENT_TEST_AUTH", "VEMS_DEVELOPMENT_TEST_SESSION_TTL_SECONDS"

@@ -10,6 +10,33 @@ infra/.tls/
 
 # Docker volumes and data
 infra/.env
+infra/.env.*
+*.apk
+*.aab
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+development.env
+development.env.*
+*.credentials.tmp
+*.credentials.json
+*.key
+*.crt
+*.cer
+redis_data_dev/
+redis_data_staging/
+captures/
+screenshots/
+test-results/
+*.jks
+*.keystore
+*.pem
+*.p12
 mysql_data_dev/
 mysql_data_staging/
 vtiger_data_dev/

@@ -1,5 +1,5 @@
 import { readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Resolves the ordered list of migrations for a given DbClient dialect.
@@ -14,7 +14,7 @@ import { resolve } from "node:path";
  */
 export function migrationFiles(dialect = "sqlite") {
   const dir = new URL("./migrations/", import.meta.url);
-  const dirPath = resolve(dir.pathname);
+  const dirPath = fileURLToPath(dir);
   const entries = readdirSync(dirPath);
   const baseNames = entries
     .filter((name) => /^\d+_[^.]+\.sql$/.test(name))

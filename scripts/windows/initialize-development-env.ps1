@@ -1,19 +1,12 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param()
-
-$ErrorActionPreference = "Stop"
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$source = Join-Path $repoRoot "infra\env\development.windows.example.env"
-$localRoot = Join-Path $env:LOCALAPPDATA "VEMS"
-$destination = Join-Path $localRoot "development.env"
-
-if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-    throw "Runtime environment template was not found: $source"
+. (Join-Path $PSScriptRoot 'common.ps1')
+Protect-RuntimeDirectory
+try { Assert-Environment; $valid = $true } catch { $valid = $false }
+if (-not $valid) {
+    $data = Join-Path $script:RuntimeRoot 'data'
+    New-Item -ItemType Directory -Path $data -Force | Out-Null
+    Invoke-Native 'node.exe' @((Join-Path $PSScriptRoot 'development-bootstrap.mjs'), 'generate', '--template', (Join-Path $script:RepoRoot 'infra\env\development.windows.example.env'), '--destination', $script:RuntimeFile, '--db-host-path', $data.Replace('\', '/')) 'Environment generation failed' | Out-Null
 }
-New-Item -ItemType Directory -Path $localRoot -Force | Out-Null
-if (Test-Path -LiteralPath $destination) {
-    throw "Refusing to overwrite existing runtime environment file: $destination"
-}
-Copy-Item -LiteralPath $source -Destination $destination -ErrorAction Stop
-Write-Host "Created runtime environment template at: $destination"
-Write-Host "Replace its safe placeholders with local secrets. The file is outside the repository and its contents were not printed."
+Assert-Environment
+Write-Host 'Development environment validated; existing credentials were preserved.'

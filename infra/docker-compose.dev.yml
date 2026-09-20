@@ -1,38 +1,36 @@
+name: vems-dev
+
 services:
   mysql:
-    image: mysql:8.0
-    container_name: vems-mysql-dev
+    image: mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
     restart: unless-stopped
     command:
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-      - --ssl-ca=/run/vems-tls/ca.pem
-      - --ssl-cert=/run/vems-tls/server-cert.pem
-      - --ssl-key=/run/vems-tls/server-key.pem
     ports:
-      - "${MYSQL_PORT:-3306}:3306"
+      - "127.0.0.1:3307:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?required}
+      VTIGER_DB_PASSWORD: ${VTIGER_DB_PASSWORD:?required}
+      OPENEMR_DB_PASSWORD: ${OPENEMR_DB_PASSWORD:?required}
     volumes:
       - mysql_data_dev:/var/lib/mysql
-      - ./services/mysql/init-scripts:/docker-entrypoint-initdb.d:ro
-      - ./.tls/mysql:/run/vems-tls:ro
+      - ./services/mysql/development-init:/docker-entrypoint-initdb.d:ro
     networks:
       - vems-network
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysqladmin ping -h localhost -uroot --silent"]
       interval: 15s
       timeout: 10s
       retries: 10
       start_period: 40s
 
   redis:
-    image: redis:7-alpine
-    container_name: vems-redis-dev
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     restart: unless-stopped
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data_dev:/data
     networks:
@@ -45,16 +43,16 @@ services:
       start_period: 10s
 
   vtiger:
+    image: vems-dev/vtiger:development
     build:
       context: ./services/vtiger
       dockerfile: Dockerfile
-    container_name: vems-vtiger-dev
     restart: unless-stopped
     depends_on:
       mysql:
         condition: service_healthy
     ports:
-      - "${VTIGER_PORT:-8080}:80"
+      - "127.0.0.1:8080:80"
     environment:
       DB_HOST: ${DB_HOST:-mysql}
       DB_PORT: ${DB_PORT:-3306}
@@ -62,6 +60,9 @@ services:
       DB_PASSWORD: ${VTIGER_DB_PASSWORD:?VTIGER_DB_PASSWORD is required}
       DB_NAME: ${VTIGER_DB_NAME:-vtiger}
       DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
+      VEMS_DEVELOPMENT: "true"
+      VTIGER_USERNAME: ${VTIGER_USERNAME:?required}
+      VTIGER_PASSWORD: ${VTIGER_PASSWORD:?required}
       VTIGER_ADMIN_USER: ${VTIGER_ADMIN_USER:-admin}
       VTIGER_ADMIN_PASSWORD: ${VTIGER_ADMIN_PASSWORD:?VTIGER_ADMIN_PASSWORD is required}
       VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:?VTIGER_ACCESS_KEY is required}
@@ -89,10 +90,10 @@ services:
         max-file: "3"
 
   openemr:
+    image: vems-dev/openemr:development
     build:
       context: ./services/openemr
       dockerfile: Dockerfile
-    container_name: vems-openemr-dev
     restart: unless-stopped
     depends_on:
       mysql:
@@ -100,7 +101,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "${OPENEMR_PORT:-8081}:80"
+      - "127.0.0.1:8083:80"
     environment:
       MYSQL_HOST: ${DB_HOST:-mysql}
       MYSQL_PORT: 3306
@@ -110,20 +111,25 @@ services:
       MYSQL_PASS: ${OPENEMR_DB_PASSWORD:?OPENEMR_DB_PASSWORD is required}
       MYSQL_ROOT_USER: root
       MYSQL_ROOT_PASS: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD is required}
-      MYSQL_SSL_CA: /opt/vems/tls/ca.pem
+      VEMS_DEVELOPMENT: "true"
+      OPENEMR_USERNAME: ${OPENEMR_USERNAME:?required}
+      OPENEMR_PASSWORD: ${OPENEMR_PASSWORD:?required}
+      OPENEMR_CLIENT_ID: ${OPENEMR_CLIENT_ID:?required}
+      OPENEMR_CLIENT_SECRET: ${OPENEMR_CLIENT_SECRET:?required}
+      OPENEMR_SCOPE: ${OPENEMR_SCOPE:?required}
       OPENEMR_ADMIN_USER: ${OPENEMR_ADMIN_USER:-admin}
       OPENEMR_ADMIN_PASSWORD: ${OPENEMR_ADMIN_PASSWORD:?OPENEMR_ADMIN_PASSWORD is required}
       OE_USER: ${OPENEMR_ADMIN_USER:-admin}
       OE_PASS: ${OPENEMR_ADMIN_PASSWORD:?OPENEMR_ADMIN_PASSWORD is required}
       OPENEMR_SETTING_rest_api: "1"
-      OPENEMR_SETTING_rest_fhir_api: "1"
+      OPENEMR_SETTING_rest_fhir_api: "0"
+      OPENEMR_SETTING_site_addr_oath: http://openemr
+      OPENEMR_SETTING_oauth2_allow_insecure: "1"
       OPENEMR_SETTING_oauth_password_grant: "1"
       REDIS_HOST: ${REDIS_HOST:-redis}
       RBAC_ENFORCE: ${OPENEMR_RBAC_ENFORCE:-false}
     volumes:
       - openemr_data_dev:/var/www/localhost/htdocs/openemr
-      - ./.tls/mysql/ca.pem:/opt/vems/tls/ca.pem:ro
-      - ./.tls/mysql/ca.pem:/var/www/localhost/htdocs/openemr/sites/default/documents/certificates/mysql-ca:ro
     networks:
       - vems-network
     healthcheck:
@@ -139,10 +145,10 @@ services:
         max-file: "3"
 
   api:
+    image: vems-dev/api:development
     build:
       context: ..
       dockerfile: infra/services/api-gateway/Dockerfile
-    container_name: vems-api-dev
     restart: unless-stopped
     depends_on:
       redis:
@@ -185,7 +191,7 @@ services:
       VEMS_DEVELOPMENT_TEST_SESSION_TTL_SECONDS: ${VEMS_DEVELOPMENT_TEST_SESSION_TTL_SECONDS:-3600}
       AUTH_TRUST_HEADERS: "false"
     volumes:
-      - ${VEMS_DB_HOST_PATH:-../services/api-gateway/.data}:/var/lib/vems/data:rw
+      - ${VEMS_DB_HOST_PATH:?external development data path required}:/var/lib/vems/data:rw
     networks:
       - vems-network
     healthcheck:

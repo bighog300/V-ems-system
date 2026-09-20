@@ -1,3 +1,5 @@
+> Historical reference only. For current development use [Windows-native development](WINDOWS_NATIVE_DEVELOPMENT_BOOTSTRAP.md). Do not follow retained-credential, manual JWT, WSL relay, portproxy, socat, or adb reverse instructions below.
+
 # Windows-native Android development
 
 This is the normal Android development topology for VEMS:

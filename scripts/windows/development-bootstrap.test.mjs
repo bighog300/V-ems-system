@@ -20,6 +20,7 @@ test("secret generation produces non-placeholder values without logging them", (
   const values = buildDevelopmentValues(template, { VEMS_DB_HOST_PATH: "C:/Users/test/AppData/Local/VEMS/data" });
   assert.notEqual(values.get("JWT_HS256_SECRET"), undefined);
   assert.notEqual(values.get("OPENEMR_PASSWORD"), undefined);
+  assert.equal(values.get('VTIGER_ACCESS_KEY').length, 32);
   validateEnvValues(values, ["JWT_HS256_SECRET", "OPENEMR_PASSWORD", "OPENEMR_USERNAME", "VTIGER_USERNAME"]);
 });
 

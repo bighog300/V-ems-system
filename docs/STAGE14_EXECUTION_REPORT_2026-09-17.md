@@ -1,3 +1,5 @@
+> Historical reference only. For current development use [Windows-native development](WINDOWS_NATIVE_DEVELOPMENT_BOOTSTRAP.md). Do not follow retained-credential, manual JWT, WSL relay, portproxy, socat, or adb reverse instructions below.
+
 # Stage 14 Local Emulator Execution Report
 
 Status: **INCOMPLETE — emulator startup and reachable login validation demonstrated; service-backed and broader acceptance gates remain open**

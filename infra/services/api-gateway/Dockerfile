@@ -15,11 +15,12 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY services/api-gateway/package.json services/api-gateway/package.json
 COPY services/orchestration/package.json services/orchestration/package.json
 
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund --workspace=@vems/api-gateway --workspace=@vems/orchestration --workspace=@vems/shared
 
 COPY packages/shared packages/shared
 COPY services/orchestration services/orchestration
 COPY services/api-gateway services/api-gateway
+COPY scripts/windows scripts/windows
 
 RUN chown -R node:node /app
 USER node

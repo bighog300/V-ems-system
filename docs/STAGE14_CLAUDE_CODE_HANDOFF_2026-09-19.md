@@ -1,3 +1,5 @@
+> Historical reference only. For current development use [Windows-native development](WINDOWS_NATIVE_DEVELOPMENT_BOOTSTRAP.md). Do not follow retained-credential, manual JWT, WSL relay, portproxy, socat, or adb reverse instructions below.
+
 # VEMS Stage 14 Claude Code Handoff
 
 Date: 2026-09-19

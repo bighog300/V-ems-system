@@ -41,8 +41,13 @@ export class SqliteClient {
     if (initMode !== "existing" && initMode !== "fresh-development") {
       throw new Error(`Unsupported VEMS_DB_INIT_MODE: ${initMode}`);
     }
-    if (initMode === "fresh-development") assertFreshDevelopmentPath(this.dbPath);
-    const requireExisting = options.requireExisting ?? (initMode === "fresh-development" ? false : process.env.VEMS_REQUIRE_EXISTING_DB === "true");
+    if (initMode === "fresh-development") {
+      if (process.env.NODE_ENV !== "development" || process.env.APP_ENV !== "development") {
+        throw new Error("Fresh SQLite initialization requires NODE_ENV=development and APP_ENV=development");
+      }
+      assertFreshDevelopmentPath(dbPath);
+    }
+    const requireExisting = options.requireExisting ?? process.env.VEMS_REQUIRE_EXISTING_DB === "true";
     if (requireExisting) {
       let stats;
       try {
@@ -199,6 +204,7 @@ export class SqliteClient {
 }
 
 export function assertFreshDevelopmentPath(dbPath) {
+  if (!isAbsolute(dbPath)) throw new Error("Fresh development SQLite path must be absolute");
   const candidate = resolve(dbPath);
   const normalized = candidate.replaceAll("\\", "/").toLowerCase();
   if (!isAbsolute(candidate)) throw new Error("Fresh development SQLite path must be absolute");

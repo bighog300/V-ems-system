@@ -1,5 +1,7 @@
 # VEMS Monorepo
 
+For Windows-native development, use the [authoritative Windows guide](docs/WINDOWS_NATIVE_DEVELOPMENT_BOOTSTRAP.md). The Bash commands below are historical workflows and must not be used to start the canonical Windows development environment.
+
 VEMS is a JavaScript monorepo for an EMS dispatch + clinical workflow prototype.
 
 ## What is in this repo

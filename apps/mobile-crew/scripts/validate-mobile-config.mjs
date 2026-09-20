@@ -130,7 +130,7 @@ async function main() {
   await expectConfigFailure(productionEnv({ EXPO_PUBLIC_API_PROFILE: "android-emulator-development" }), "release configuration accepted the emulator API profile", "10.0.2.2:3001");
   await expectConfigFailure(productionEnv({ EXPO_PUBLIC_API_PROFILE: "explicit" }), "release configuration accepted an omitted explicit API URL");
 
-  const explicitReleaseConfig = await expoConfig(productionEnv({ EXPO_PUBLIC_API_URL: "https://api.example.test" }));
+  const explicitReleaseConfig = await expoConfig(productionEnv({ EXPO_PUBLIC_API_URL: "https://api.example.test", EXPO_PUBLIC_ENABLE_DEVELOPMENT_TEST_AUTH: "true" }));
   assert(explicitReleaseConfig.extra?.apiBaseUrl === "https://api.example.test", "explicit release API URL mismatch");
   assert(explicitReleaseConfig.extra?.enableDevelopmentTestAuth === false, "release config exposed development test auth");
   validateNoSecretLikeMobileSource();
