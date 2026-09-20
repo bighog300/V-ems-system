@@ -105,3 +105,32 @@ npm.cmd run test:config -w @vems/mobile-crew
 Use the supported OpenEMR installer and client repository, and the pinned project
 Vtiger distribution with vtlib module provisioning. Do not read or reuse
 `infra/.env.development`, its backup, or the authoritative WSL Stage 14 database.
+
+## Operational notes
+
+- The API is published on `127.0.0.1:3001` only. The development test-session
+  endpoint mints a token without credentials, so it must never be reachable from
+  the LAN. The emulator reaches it through `10.0.2.2`.
+- OpenEMR 8.3.0 does not compare the client secret for the OAuth password grant
+  (upstream only does so for `authorization_code`). Service validation therefore
+  proves rejection with an unregistered client id and an invalid user password,
+  not a wrong secret. Do not weaken this to make a check pass.
+- Vtiger provisioning creates each VEMS module's `modules/<Name>/<Name>.php`
+  CRMEntity class, its language file and its entity identifier
+  (`vems_external_key`). Without the class file Vtiger's webservice answers
+  "Attempt to access restricted file" for every VEMS module. Provisioning is
+  idempotent and safe to repeat.
+- `/api/support/readiness` checks OpenEMR and Vtiger reachability
+  (`UPSTREAM_CONNECTIVITY_CHECKS_ENABLED`). Vtiger's `/` redirects to its
+  host-only site URL, so readiness pings the webservice endpoint (Vtiger) and the
+  OAuth discovery document (OpenEMR) instead.
+- Every bootstrap or start rebuilds the api, openemr and vtiger images and
+  recreates those containers. Volumes, credentials, accounts, clients, modules
+  and the SQLite database are unchanged; no duplicates are created.
+- Shell tests under `infra/**/test` need LF line endings, GNU `grep`/`rg`, and a
+  working OpenSSL. On a Windows checkout with CRLF working files, run them from a
+  `git archive` export or a Linux container. PHP lint can use the local
+  `vems-dev/openemr:development` image: `docker run --rm --network none
+  --entrypoint php -v <export>:/w:ro vems-dev/openemr:development -l /w/<file>`.
+- `test:config` runs `expo prebuild` in place. Back up `apps/mobile-crew/android`
+  before running it on a checkout with a native directory you care about.

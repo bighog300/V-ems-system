@@ -6,7 +6,7 @@ COMPOSE="$ROOT_DIR/infra/docker-compose.dev.yml"
 DOCKERFILE="$ROOT_DIR/infra/services/api-gateway/Dockerfile"
 
 rg -q '^  api:$' "$COMPOSE"
-rg -q '"\$\{API_PORT:-3001\}:3001"' "$COMPOSE"
+rg -q '"127\.0\.0\.1:\$\{API_PORT:-3001\}:3001"' "$COMPOSE"
 rg -q 'VEMS_DB_PATH: \$\{VEMS_DB_PATH:-/var/lib/vems/data/platform.sqlite\}' "$COMPOSE"
 rg -q 'VEMS_DB_INIT_MODE: \$\{VEMS_DB_INIT_MODE:-existing\}' "$COMPOSE"
 rg -q 'VEMS_DB_HOST_PATH:\?external development data path required' "$COMPOSE"

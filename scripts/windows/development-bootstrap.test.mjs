@@ -55,3 +55,32 @@ test("fresh database guard rejects retained paths", () => {
   assert.throws(() => freshDatabasePathGuard(join(dir, "platform.sqlite")), /reserved/);
   assert.throws(() => freshDatabasePathGuard(join(process.cwd(), "services/api-gateway/.data/fresh.sqlite")), /outside/);
 });
+
+test("Vtiger provisioner creates module classes, language files and entity identifiers", () => {
+  const source = readFileSync(new URL("../../infra/services/vtiger/development/provision-development.php", import.meta.url), "utf8");
+  assert.match(source, /function vemsEnsureModuleFiles/);
+  assert.match(source, /modules\/\$module\/\$module\.php|"\$directory\/\$module\.php"/);
+  assert.match(source, /setEntityIdentifier\(\$identifier\)/);
+  const modules = JSON.parse(readFileSync(new URL("../../infra/services/vtiger/development/modules.json", import.meta.url), "utf8"));
+  for (const [name, fields] of Object.entries(modules)) assert.ok(fields.includes("vems_external_key"), `${name} needs an entity identifier field`);
+});
+
+test("API port is published on loopback only", () => {
+  const compose = readFileSync(new URL("../../infra/docker-compose.dev.yml", import.meta.url), "utf8");
+  assert.match(compose, /"127\.0\.0\.1:\$\{API_PORT:-3001\}:3001"/);
+});
+
+test("service validator rejects an unregistered OpenEMR client id, not a password-grant secret", () => {
+  const source = readFileSync(new URL("./validate-services.mjs", import.meta.url), "utf8");
+  assert.match(source, /deliberately-unregistered-client-id/);
+  assert.doesNotMatch(source, /deliberately-invalid-client-secret/);
+});
+test("development API readiness exercises OpenEMR and Vtiger reachability", () => {
+  const compose = readFileSync(new URL("../../infra/docker-compose.dev.yml", import.meta.url), "utf8");
+  assert.match(compose, /UPSTREAM_CONNECTIVITY_CHECKS_ENABLED: "true"/);
+});
+test("development readiness pings service endpoints that do not redirect to the host-only site URL", () => {
+  const compose = readFileSync(new URL("../../infra/docker-compose.dev.yml", import.meta.url), "utf8");
+  assert.match(compose, /VTIGER_CONNECTIVITY_PING_PATH: \/webservice\.php\?operation=getchallenge/);
+  assert.match(compose, /OPENEMR_CONNECTIVITY_PING_PATH: \/oauth2\/default\/\.well-known\/openid-configuration/);
+});

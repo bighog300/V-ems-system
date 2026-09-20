@@ -3,38 +3,33 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 CONFIG="$ROOT_DIR/infra/services/openemr/config/openemr.conf.php"
+COMPOSE="$ROOT_DIR/infra/docker-compose.dev.yml"
+DOCKERFILE="$ROOT_DIR/infra/services/openemr/Dockerfile"
 
 grep -F '$sqlconf = [' "$CONFIG" >/dev/null
 grep -F '$config = 0;' "$CONFIG" >/dev/null
 grep -F "required('MYSQL_USER')" "$CONFIG" >/dev/null
 grep -F "required('MYSQL_PASSWORD')" "$CONFIG" >/dev/null
 grep -F "'host' => getenv('MYSQL_HOST') ?: 'mysql'" "$CONFIG" >/dev/null
-grep -F 'OPENEMR_SETTING_rest_api: "1"' "$ROOT_DIR/infra/docker-compose.dev.yml" >/dev/null
-grep -F 'OPENEMR_SETTING_rest_fhir_api: "1"' "$ROOT_DIR/infra/docker-compose.dev.yml" >/dev/null
-grep -F 'OPENEMR_SETTING_oauth_password_grant: "1"' "$ROOT_DIR/infra/docker-compose.dev.yml" >/dev/null
-grep -F 'chown apache:apache /var/www/localhost/htdocs/openemr/sites/default/sqlconf.php' "$ROOT_DIR/infra/services/openemr/Dockerfile" >/dev/null
-SQLCONF_PATH='/var/www/localhost/htdocs/openemr/sites/default/sqlconf.php'
-mode_line="$(grep -E "chmod [0-7]{3,4} ${SQLCONF_PATH//\//\\/}" "$ROOT_DIR/infra/services/openemr/Dockerfile")"
-secure_mode="$(printf '%s\n' "$mode_line" | sed -E 's/.*chmod ([0-7]{3,4}).*/\1/')"
-case "$secure_mode" in
-  0600|600|0660|660) ;;
-  *)
-    echo "sqlconf.php requires owner-only or owner/group mode, got $secure_mode" >&2
-    exit 1
-    ;;
-esac
-mode3="${secure_mode: -3}"
-other_bits="${mode3:2:1}"
-case "$other_bits" in
-  2|3|6|7)
-    echo "sqlconf.php must not be world-writable (mode $secure_mode)" >&2
-    exit 1
-    ;;
-esac
-if grep -F 'chmod 0666 /var/www/localhost/htdocs/openemr/sites/default/sqlconf.php' "$ROOT_DIR/infra/services/openemr/Dockerfile" >/dev/null; then
-  echo 'world-writable sqlconf.php mode remains' >&2
+
+# The development bootstrap needs REST + OAuth password grant only; FHIR stays disabled.
+grep -F 'OPENEMR_SETTING_rest_api: "1"' "$COMPOSE" >/dev/null
+grep -F 'OPENEMR_SETTING_rest_fhir_api: "0"' "$COMPOSE" >/dev/null
+grep -F 'OPENEMR_SETTING_oauth_password_grant: "1"' "$COMPOSE" >/dev/null
+
+# The development image preserves the upstream auto-installer, which writes sqlconf.php
+# itself with the ownership and mode the upstream entrypoint expects. The image must
+# neither ship a static sqlconf.php nor loosen its permissions.
+if grep -E 'COPY[[:space:]].*sqlconf' "$DOCKERFILE" >/dev/null; then
+  echo 'a static sqlconf.php must not be copied into the development image' >&2
   exit 1
 fi
+if grep -E 'chmod[[:space:]]+(-R[[:space:]]+)?0?[0-7]*[2367][[:space:]].*sqlconf' "$DOCKERFILE" >/dev/null; then
+  echo 'sqlconf.php must not be made world-writable' >&2
+  exit 1
+fi
+grep -E '^FROM openemr/openemr:[0-9.]+@sha256:[0-9a-f]{64}' "$DOCKERFILE" >/dev/null
+
 if grep -F 'Placeholder OpenEMR SQL configuration' "$CONFIG" >/dev/null; then
   echo 'placeholder OpenEMR SQL configuration remains' >&2
   exit 1
