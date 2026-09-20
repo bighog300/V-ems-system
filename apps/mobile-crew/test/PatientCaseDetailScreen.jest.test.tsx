@@ -214,3 +214,64 @@ describe("PatientCaseDetailScreen — on-device patient history", () => {
     expect(callsAfterRemount.some((call: unknown[]) => (call[0] as string).endsWith("/history"))).toBe(false);
   });
 });
+
+describe("PatientCaseDetailScreen — weight and guardian", () => {
+  const originalFetch = global.fetch;
+  let saved: Record<string, unknown> | null = null;
+
+  beforeEach(() => {
+    saved = null;
+    __resetOfflineDatabaseCacheForTests();
+    jest.mocked(ExpoSQLite.openDatabaseAsync).mockResolvedValueOnce(createNodeSqliteAdapter() as never);
+    global.fetch = jest.fn(async (url: string, options?: RequestInit) => {
+      if (url.endsWith("/demographics") && options?.method === "PUT") {
+        saved = JSON.parse(options.body as string);
+        return new Response(JSON.stringify({ patient_case_id: "case-1", ...saved, updated_at: "2026-09-20T10:00:00.000Z" }), { status: 200 });
+      }
+      if (url.endsWith("/demographics")) return new Response("null", { status: 200 });
+      if (url.endsWith("/encounter")) return new Response(null, { status: 404 });
+      return new Response(JSON.stringify(patientCase), { status: 200 });
+    }) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    jest.restoreAllMocks();
+    __resetOfflineDatabaseCacheForTests();
+  });
+
+  it("captures weight, minor status and the guardian, and sends them with the demographics", async () => {
+    const { getByTestId, queryByTestId } = await renderScreen();
+    await waitFor(() => expect(getByTestId("weight-input")).toBeTruthy());
+    expect(queryByTestId("guardian-name-input")).toBeNull();
+
+    await fireEvent.changeText(getByTestId("weight-input"), "14.5");
+    await fireEvent(getByTestId("minor-switch"), "valueChange", true);
+    await fireEvent.changeText(getByTestId("guardian-name-input"), "Pat Small");
+    await fireEvent.changeText(getByTestId("guardian-relationship-input"), "Parent");
+    await fireEvent.changeText(getByTestId("guardian-phone-input"), "555-0100");
+    await fireEvent.press(getByTestId("save-demographics"));
+
+    await waitFor(() => expect(getByTestId("demographics-saved")).toBeTruthy());
+    expect(saved).toMatchObject({ weight_kg: 14.5, minor_context: true, guardian_name: "Pat Small", guardian_relationship: "Parent", guardian_phone: "555-0100" });
+  });
+
+  it("rejects an impossible weight before anything is sent", async () => {
+    const { getByTestId, findByText } = await renderScreen();
+    await waitFor(() => expect(getByTestId("weight-input")).toBeTruthy());
+    await fireEvent.changeText(getByTestId("weight-input"), "900");
+    await fireEvent.press(getByTestId("save-demographics"));
+    expect(await findByText("Weight must be between 0.2 and 500 kg.")).toBeTruthy();
+    expect(saved).toBeNull();
+  });
+
+  it("does not send a weight or guardian for an adult, and says the patient is not a minor", async () => {
+    const { getByTestId } = await renderScreen();
+    await waitFor(() => expect(getByTestId("weight-input")).toBeTruthy());
+    await fireEvent.press(getByTestId("save-demographics"));
+    await waitFor(() => expect(getByTestId("demographics-saved")).toBeTruthy());
+    expect(saved).toMatchObject({ minor_context: false });
+    expect(saved).not.toHaveProperty("weight_kg");
+    expect(saved).not.toHaveProperty("guardian_name");
+  });
+});

@@ -3322,9 +3322,19 @@ Nothing below is a pass for the full scenario unless it says so.
 - **D12, medium.** Termination of resuscitation and death on scene raise no QA flag (only refusals, stock discrepancies
   and safeguarding notes do). A stock discrepancy (`INSUFFICIENT_STOCK`, high-severity `medication_discrepancy` flag
   raised at completion) is never shown to the crew at entry: the response carries no indication and the app has no stock field.
+  **Fixed (D12).** Finalizing a version now raises a high-severity QA flag for `resuscitation_terminated`
+  (`termination_of_resuscitation`) and `death_on_scene`, the same visible-for-review mechanism refusals use; it is not a
+  hard gate. A medication or procedure whose stock use is short now returns `stock_discrepancy` (e.g. `INSUFFICIENT_STOCK`)
+  in the entry response; it is not stored, the QA flag at versioning is unchanged. Not done: the app still has no stock
+  field, so no crew-facing notice exists yet (nothing in the app can trigger one); that needs stock entry first.
 - **D13, medium.** No weight capture or weight-based dosing anywhere (dose is free text). The API accepts guardian and
   minor fields and a `guardian` signer role; the app's demographics form has no guardian fields, and the signed PDF
   omits guardian name, relationship and minor context (it prints only name, date of birth and sex).
+  **Fixed (D13, partly).** Migration `024_demographics_weight` adds `weight_kg` (validated 0.2 to 500); the demographics
+  form gains weight, a minor switch and guardian name, relationship and phone; export format 3 prints weight, minor status
+  and guardian (the hashed content already held them), golden hash re-pinned. Live: a 14.5 kg minor's exported PDF shows
+  all four lines. Deliberately not done: weight-based dose calculation or checking (a clinical-governance decision; dose
+  stays free text), and PDFs signed before format 3 still lack these lines.
 - **D14, low, offline and display UX.** The queue needed a second manual Sync now to finish (the first delivered two of
   four); delivered items stay listed as failed on the Sync status screen until the app restarts; queued and synced rows
   look identical in history; a screen first opened while offline shows only queued items, not earlier charting; each

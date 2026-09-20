@@ -88,12 +88,13 @@ export const clinicalRecordMethods = {
     await this.assertPatientCaseClinicalMutable(patientCaseId);
     const before = await this.clinicalDemographics.find(patientCaseId);
     object(payload);
-    const allowed = ["first_name", "middle_name", "last_name", "preferred_name", "dob", "dob_unknown", "estimated_age_years", "sex", "gender_identity", "address_line1", "address_line2", "city", "region", "postal_code", "country_code", "phone", "identity_document_type", "identity_document_value", "identity_source", "identity_confidence", "next_of_kin_name", "next_of_kin_relationship", "next_of_kin_phone", "guardian_name", "guardian_relationship", "guardian_phone", "minor_context", "unidentified"];
+    const allowed = ["first_name", "middle_name", "last_name", "preferred_name", "dob", "dob_unknown", "estimated_age_years", "sex", "gender_identity", "address_line1", "address_line2", "city", "region", "postal_code", "country_code", "phone", "identity_document_type", "identity_document_value", "identity_source", "identity_confidence", "next_of_kin_name", "next_of_kin_relationship", "next_of_kin_phone", "guardian_name", "guardian_relationship", "guardian_phone", "minor_context", "weight_kg", "unidentified"];
     const unknown = Object.keys(payload).filter(key => !allowed.includes(key));
     if (unknown.length) throw new ApiError("INVALID_PAYLOAD", `Unknown demographics fields: ${unknown.join(", ")}`, 400);
     if (payload.dob_unknown && payload.dob) throw new ApiError("INVALID_PAYLOAD", "dob must be omitted when dob_unknown is true", 400);
     if (payload.dob && payload.dob === "1900-01-01") throw new ApiError("INVALID_PAYLOAD", "Technical provisional DOB cannot be stored as a verified DOB", 400);
     if (payload.estimated_age_years !== undefined && (!Number.isInteger(payload.estimated_age_years) || payload.estimated_age_years < 0 || payload.estimated_age_years > 130)) throw new ApiError("INVALID_PAYLOAD", "estimated_age_years must be between 0 and 130", 400);
+    if (payload.weight_kg !== undefined && payload.weight_kg !== null && (typeof payload.weight_kg !== "number" || !Number.isFinite(payload.weight_kg) || payload.weight_kg < 0.2 || payload.weight_kg > 500)) throw new ApiError("INVALID_PAYLOAD", "weight_kg must be a number of kilograms between 0.2 and 500", 400);
     const now = new Date().toISOString();
     const record = { patient_case_id: patientCaseId, ...payload, created_at: before?.created_at ?? now, updated_at: now, correlation_id: meta.correlationId };
     await this.clinicalDemographics.save(record);
@@ -203,12 +204,13 @@ export const clinicalRecordMethods = {
     await this.clinicalMedications.create(record);
     try { const downstream = await this.openemr.createIntervention({ encounter_id: record.encounter_id, incident_id: current.incident_id, patient_case_id: patientCaseId, patient_id: current.openemr_patient_id, type: "medication", name: record.medication_name, dose: record.dose, route: record.route, performed_at: record.performed_at, response: record.response, stock_item_id: record.stock_item_id }); record.openemr_reference_id = downstream.intervention_id ?? null; record.downstream_status = "created"; } catch (error) { record.downstream_status = failureStatus(error); }
     await this.db.execute(`UPDATE medication_administrations SET openemr_reference_id=${sqlValue(record.openemr_reference_id)},downstream_status=${sqlValue(record.downstream_status)} WHERE medication_administration_id=${sqlValue(record.medication_administration_id)};`);
-    if (record.stock_item_id) await this.recordClinicalStockUsage({ ...record, intervention_id: record.medication_administration_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "medication", name: record.medication_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta);
+    const stockUsage = record.stock_item_id ? await this.recordClinicalStockUsage({ ...record, intervention_id: record.medication_administration_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "medication", name: record.medication_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta) : null;
     if (meta.idempotencyKey) await this.idempotency.save("medication", meta.idempotencyKey, record.medication_administration_id, record.created_at, fingerprint);
     await this.audit("medication_administration", record.medication_administration_id, "create_medication", meta, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, medication_name: record.medication_name, downstream_status: record.downstream_status });
     await this.event("MedicationAdministrationCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, medication_administration_id: record.medication_administration_id });
     await appendTimeline(this, { ...record, event_type: "medication_administered", source_entity_type: "medication", source_entity_id: record.medication_administration_id }, meta);
-    return this.clinicalMedications.find(record.medication_administration_id);
+    // Not stored: shown to the crew at entry, and raised as a QA flag when the record is versioned.
+    return { ...(await this.clinicalMedications.find(record.medication_administration_id)), stock_discrepancy: stockUsage?.discrepancy_status ?? null };
   },
   async listPatientCaseProcedures(patientCaseId) { await requiredCase.call(this, patientCaseId); return this.clinicalProcedures.list(patientCaseId); },
   async createPatientCaseProcedure(patientCaseId, payload, meta) {
@@ -222,12 +224,13 @@ export const clinicalRecordMethods = {
     await this.clinicalProcedures.create(record);
     try { const downstream = await this.openemr.createIntervention({ encounter_id: record.encounter_id, incident_id: current.incident_id, patient_case_id: patientCaseId, patient_id: current.openemr_patient_id, type: "procedure", name: record.procedure_name, performed_at: record.performed_at, response: record.response }); record.openemr_reference_id = downstream.intervention_id ?? null; record.downstream_status = "created"; } catch (error) { record.downstream_status = failureStatus(error); }
     await this.db.execute(`UPDATE clinical_procedures SET openemr_reference_id=${sqlValue(record.openemr_reference_id)},downstream_status=${sqlValue(record.downstream_status)} WHERE procedure_id=${sqlValue(record.procedure_id)};`);
-    if (record.stock_item_id) await this.recordClinicalStockUsage({ ...record, intervention_id: record.procedure_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "procedure", name: record.procedure_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta);
+    const stockUsage = record.stock_item_id ? await this.recordClinicalStockUsage({ ...record, intervention_id: record.procedure_id, incident_id: current.incident_id, encounter_id: record.encounter_id, type: "procedure", name: record.procedure_name, quantity_used: record.quantity_used ?? "1", patient_case_id: patientCaseId }, meta) : null;
     if (meta.idempotencyKey) await this.idempotency.save("procedure", meta.idempotencyKey, record.procedure_id, record.created_at, fingerprint);
     await this.audit("clinical_procedure", record.procedure_id, "create_procedure", meta, undefined, { patient_case_id: patientCaseId, incident_id: current.incident_id, procedure_name: record.procedure_name, downstream_status: record.downstream_status });
     await this.event("ClinicalProcedureCreated", meta.correlationId, { patient_case_id: patientCaseId, incident_id: current.incident_id, procedure_id: record.procedure_id });
     await appendTimeline(this, { ...record, event_type: "procedure_performed", source_entity_type: "procedure", source_entity_id: record.procedure_id }, meta);
-    return this.clinicalProcedures.find(record.procedure_id);
+    // Not stored: shown to the crew at entry, and raised as a QA flag when the record is versioned.
+    return { ...(await this.clinicalProcedures.find(record.procedure_id)), stock_discrepancy: stockUsage?.discrepancy_status ?? null };
   },
   async listPatientCaseNotes(patientCaseId) { await requiredCase.call(this, patientCaseId); return this.clinicalNotes.list(patientCaseId); },
   async createPatientCaseNote(patientCaseId, payload, meta) {

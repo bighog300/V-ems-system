@@ -28,7 +28,10 @@ import PDFDocument from "pdfkit";
 // procedure detail, the full disposition, the handover and crew notes. Format 1
 // printed only an assessment's type and time and omitted vitals, the handover
 // and notes entirely, so a signed record did not show what the signature covered.
-export const EXPORT_FORMAT_VERSION = 2;
+//
+// Format 3 (Stage 14, D13): the demographics section also prints the patient's weight, whether the patient is a minor, and
+// the guardian's name, relationship and phone, all of which the hashed content already held but the PDF left out.
+export const EXPORT_FORMAT_VERSION = 3;
 
 function collectPdfBuffer(doc) {
   return new Promise((resolve, reject) => {
@@ -150,6 +153,12 @@ export async function renderPcrDocument({ version, signatures }) {
     field(doc, "Name:", [demographics.first_name, demographics.last_name].filter(Boolean).join(" ") || null);
     field(doc, "Date of birth:", demographics.dob);
     field(doc, "Sex:", demographics.sex);
+    if (demographics.weight_kg !== undefined && demographics.weight_kg !== null) field(doc, "Weight:", `${demographics.weight_kg} kg`);
+    if (demographics.minor_context) field(doc, "Minor:", "Yes");
+    if (demographics.guardian_name || demographics.guardian_relationship || demographics.guardian_phone) {
+      field(doc, "Guardian:", [demographics.guardian_name, demographics.guardian_relationship ? `(${demographics.guardian_relationship})` : null].filter(Boolean).join(" ") || null);
+      field(doc, "Guardian phone:", demographics.guardian_phone);
+    }
   }
 
   heading(doc, "Assessments");

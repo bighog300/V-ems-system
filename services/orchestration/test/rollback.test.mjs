@@ -44,12 +44,15 @@ maybeTest("consecutive migrations can each be rolled back in turn, until one wit
     // reapplies anything missing before any assertion here.
     await db.execute("SELECT 1;");
 
-    // 023 (identity_merge_tracking), 022 (clinical_observations_device_pairing), 021 (device_pairings),
+    // 024 (demographics_weight), 023 (identity_merge_tracking), 022 (clinical_observations_device_pairing), 021 (device_pairings),
     // 020 (patient_case_notes), 019 (retention_and_legal_hold), 018
     // (audit_log_actor), 017 (clinical_terminology_codes), 016
     // (access_revocations), 015 (patient_case_attachments) and 014
     // (event_outbox_sequence) all ship rollback scripts; roll each back in
     // turn.
+    const rolledBack024 = await rollbackLastMigration(db);
+    assert.equal(rolledBack024, "024_demographics_weight");
+
     const rolledBack023 = await rollbackLastMigration(db);
     assert.equal(rolledBack023, "023_identity_merge_tracking");
 

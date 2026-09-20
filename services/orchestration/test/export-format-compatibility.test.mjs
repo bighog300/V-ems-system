@@ -10,7 +10,7 @@ function fakeVersion(overrides = {}) {
   return {
     version_id: "EPV-1",
     patient_case_id: "PCR-000001",
-    version_number: 3,
+    version_number: 5,
     lifecycle_state: "final",
     content_hash: "abc123",
     hash_algorithm: "sha256",
@@ -31,7 +31,7 @@ function fakeVersion(overrides = {}) {
 }
 
 test("EXPORT_FORMAT_VERSION is a stable, independent number -- not tied to epcr_versions.version_number", () => {
-  assert.equal(EXPORT_FORMAT_VERSION, 2);
+  assert.equal(EXPORT_FORMAT_VERSION, 3);
   assert.notEqual(EXPORT_FORMAT_VERSION, fakeVersion().version_number);
 });
 
@@ -91,19 +91,19 @@ test("the renderer tolerates a future content shape with unknown extra fields, i
   assert.equal(extractExportFormatVersion(pdf), String(EXPORT_FORMAT_VERSION));
 });
 
-test("golden regression: format v2's exact byte output for a fixed input is pinned -- a change here means the v2 contract itself changed", async () => {
+test("golden regression: format v3's exact byte output for a fixed input is pinned -- a change here means the v3 contract itself changed", async () => {
   // Unlike the determinism test in pcr-document.test.mjs (which only
   // proves *this* build renders the *same* version identically twice),
   // this pins the actual bytes against a hash captured when
-  // EXPORT_FORMAT_VERSION was 2 (format 2 renders vitals, assessment findings, handover and notes). If a future schema/layout change to the
+  // EXPORT_FORMAT_VERSION was 3 (format 3 adds weight, minor status and guardian to the demographics section; format 2 renders vitals, assessment findings, handover and notes). If a future schema/layout change to the
   // renderer changes this hash without also bumping EXPORT_FORMAT_VERSION,
   // that's exactly the failure this milestone exists to catch: the pinned
   // format silently changing shape out from under anything that depends
   // on it.
   const pdf = await renderPcrDocument({ version: fakeVersion(), signatures: [{ signature_id: "SIG-1", version_id: "EPV-1", record_hash: "abc123", signer_role: "treating_clinician", signer_identity: "STAFF-001", signed_at: "2026-04-16T10:01:00Z" }] });
   const { createHash } = await import("node:crypto");
-  assert.equal(createHash("sha256").update(pdf).digest("hex"), "5219b44226fc895f646f079cbca6189f4e50831baf7202207d4c490facaa2245");
-  assert.equal(extractExportFormatVersion(pdf), "2");
+  assert.equal(createHash("sha256").update(pdf).digest("hex"), "3fa2e2cc8081c52115517ad02c735854aae2fd253ac5635015ffcd44b734eae3");
+  assert.equal(extractExportFormatVersion(pdf), "3");
 });
 
 test("getEpcrExport's JSON metadata reports export_format_version alongside the clinical version_number", async () => {

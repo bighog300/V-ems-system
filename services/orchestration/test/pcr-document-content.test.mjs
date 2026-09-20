@@ -95,3 +95,11 @@ test("a refusal case exported through the service shows its refusal documentatio
     assert.ok(text.includes(expected), `PDF is missing: ${expected}`);
   }
 });
+
+test("the PDF shows a minor's weight, minor status and guardian, and nothing extra for an adult", async () => {
+  const withDemographics = (demographics) => ({ ...richVersion(), content: { ...richVersion().content, demographics } });
+  const child = pdfLines(await renderPcrDocument({ version: withDemographics({ first_name: "Sam", last_name: "Small", dob: "2020-05-05", sex: "male", weight_kg: 14.5, minor_context: true, guardian_name: "Pat Small", guardian_relationship: "Parent", guardian_phone: "555-0100" }), signatures: [] }));
+  for (const expected of ["Weight: 14.5 kg", "Minor: Yes", "Guardian: Pat Small (Parent)", "Guardian phone: 555-0100"]) assert.ok(child.includes(expected), `PDF is missing: ${expected}`);
+  const adult = pdfLines(await renderPcrDocument({ version: withDemographics({ first_name: "Ada", last_name: "Lovelace", dob: "1990-01-01", sex: "female" }), signatures: [] }));
+  for (const absent of ["Weight:", "Minor:", "Guardian"]) assert.ok(!adult.includes(absent), `adult PDF should not print: ${absent}`);
+});
