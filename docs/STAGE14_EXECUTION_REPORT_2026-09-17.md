@@ -3123,7 +3123,7 @@ Not a pass: the plan's PDF criterion fails for both dispositions.
   the transported PDF: both vitals sets, the assessment findings, the receiving provider, the handover, and the
   stock-linked medication. Missing from the refusal PDF: the capacity and refusal documentation and the disposition
   notes. For a signed legal record this is the most important open item from this run.
-- **D3, open (medium):** `GET /api/patient-cases/{id}/history` returns 500 for every case because the OpenEMR
+- **D3, fixed 2026-09-20 (see the section below) (medium):** `GET /api/patient-cases/{id}/history` returns 500 for every case because the OpenEMR
   standard-API transport has no `getPatientHistory` route; the app shows `history-error` on each case.
 - **D4, workflow gaps:** (a) the handover has no mobile screen, recording a disposition closes the case, and a
   handover recorded after that is rejected (`Closed` to `Handover Completed`), so a transported case cannot be
@@ -3154,3 +3154,28 @@ Not a pass: the plan's PDF criterion fails for both dispositions.
   `/api/encounters/{id}/interventions` route, and its handover-audit companions. Charting medications through the
   patient-case medications route puts them in the record.
 - This re-check covers the PDF-content criterion only; Scenario 1 as a whole has not been re-run end to end.
+### D3 fixed: patient history (OpenEMR standard-API transport) — 2026-09-20
+- Cause: `getPatientHistory` had no route in the standard-API transport, so `GET /api/patient-cases/{id}/history`
+  returned 500 for every case. `services/orchestration/src/adapters/transports.mjs` now reads encounters
+  (`GET /patient/{uuid}/encounter`) and medications, and maps them to the existing contract
+  (`encounters[{encounter_date, reason, facility}]`, `medications[{medication_name, dose, frequency, status}]`).
+- Three OpenEMR behaviours had to be handled, found by running against the real service, not from the docs:
+  the medication list is keyed by the numeric **pid**, not the uuid VEMS stores, so the pid is resolved from the
+  patient record first; the list returns a **bare array** while encounters return `{ data: [...] }`; and an
+  **empty** medication list is answered with **404 and an empty body** (`RestControllerHelper::responseHandler`),
+  so only a 404 on that one call is read as "no medications". Any other failure, and a missing pid, fails
+  visibly rather than showing an empty list that could mislead a crew.
+- The medication list carries a title and dates only, so `dose` and `frequency` are null and `status` is
+  `active` or `inactive`.
+- Scope: the development client now also requests `user/medication.read` (template, bootstrap sync and client
+  provisioning as before; credentials untouched).
+- Verified live: all four cases return 200; PCR-000003 returns its encounter and the synthetic medication, the
+  others return their encounter and an empty medication list; the app's Patient history card renders both and
+  no longer shows `history-error`. Regression tests in `services/orchestration/test/transports.test.mjs`.
+- Test-data note: one synthetic medication ("Synthetic Metoprolol 50mg", pid 3) exists in the development OpenEMR.
+  It was added with OpenEMR's `ListService::insert`, which stores a NULL `uuid` that makes OpenEMR's own
+  `getAll` throw; the row was repaired by assigning a UUID. Rows created through OpenEMR's own UI or API are not affected.
+
+### Metro (recurring)
+Metro ran out of its 4 GB heap a second time (after about 74 minutes; the first was about 22). It was restarted.
+The cause is not yet diagnosed.

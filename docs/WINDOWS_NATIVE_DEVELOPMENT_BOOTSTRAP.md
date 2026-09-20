@@ -145,7 +145,7 @@ a fresh database; the same keys make a repeat run a no-op. Pending Vtiger sync i
 because no sync worker runs in the development stack; the mobile app reads from the VEMS API.
 
 - The development OpenEMR client is registered with read and write scopes for `patient`, `encounter`,
-  `vital` and `soap_note` (`OPENEMR_SCOPE`). Bootstrap syncs that key into an existing runtime file
+  `vital` and `soap_note`, plus read for `medication` (`OPENEMR_SCOPE`). Bootstrap syncs that key into an existing runtime file
   and updates the registered client; credentials are never rotated.
 - The integration user belongs to OpenEMR's `Physicians` ACL group: the encounter-create route needs
   `encounters:auth_a`, which `Clinicians` lack (HTTP 403 "Organization policy does not have permit
