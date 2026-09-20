@@ -35,7 +35,7 @@ export function useSyncTriggers(session: Session | null): UseSyncTriggersResult 
     if (!coordinator) return;
     setSyncing(true);
     try {
-      setLastResult(await coordinator.syncNow());
+      setLastResult(await coordinator.syncNow({ force: true }));
     } finally {
       setSyncing(false);
     }

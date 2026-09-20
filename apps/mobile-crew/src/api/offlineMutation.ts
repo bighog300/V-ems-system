@@ -50,12 +50,21 @@ export function isQueueableFailure(error: unknown): boolean {
   return true;
 }
 
+/**
+ * How long a submit waits for the server before queueing instead. A crew member charting with no signal should not stare at a
+ * spinner for the default request timeout; the idempotency key reused by the queued retry makes it safe to give up early on a
+ * request that may in fact have reached a slow server.
+ */
+export const LIVE_ATTEMPT_TIMEOUT_MS = 4_000;
+
 export interface OfflineMutationArgs<T> {
   fetchImpl: typeof fetch;
   url: string;
   method: string;
   payload: unknown;
   config: RequestConfig;
+  /** Overrides {@link LIVE_ATTEMPT_TIMEOUT_MS}. */
+  timeoutMs?: number;
   scope: string;
   patientCaseId: string;
   /** Builds the client-side optimistic result shown immediately when the mutation is queued instead of sent. */
@@ -94,7 +103,8 @@ export async function requestOrQueue<T>(args: OfflineMutationArgs<T>, deps: Offl
       method: args.method,
       payload: args.payload,
       config: args.config,
-      headers: { "idempotency-key": entryId }
+      headers: { "idempotency-key": entryId },
+      timeoutMs: args.timeoutMs ?? LIVE_ATTEMPT_TIMEOUT_MS
     });
     if (!result.data) throw new ApiError("Request returned no data", { code: "EMPTY_RESPONSE" });
     return result.data;

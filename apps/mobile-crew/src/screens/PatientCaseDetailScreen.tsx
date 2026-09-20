@@ -15,6 +15,7 @@ import { getOrCreateEncryptionKey } from "../offline/crypto.ts";
 import { getOfflineDatabase } from "../offline/db.ts";
 import { enqueueAttachment, listAttachments, type AttachmentMetadata } from "../offline/attachmentStore.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
 
 export interface PatientCaseDetailScreenProps {
   patientCase: PatientCase;
@@ -502,7 +503,7 @@ export default function PatientCaseDetailScreen({
                 <Text style={styles.identityStatus}>
                   {encounter.encounter_id} · {encounter.status}
                 </Text>
-                <Text style={styles.hint}>Started {encounter.care_started_at}</Text>
+                <Text style={styles.hint}>Started {formatLocalDateTime(encounter.care_started_at)}</Text>
                 <Pressable
                   style={[styles.button, styles.spacedButton]}
                   onPress={() => onOpenVitals(caseState.patient_case_id)}

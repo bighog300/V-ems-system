@@ -29,7 +29,7 @@ export function backoffMs(attemptCount: number): number {
   return Math.min(BASE_BACKOFF_MS * 2 ** attemptCount, MAX_BACKOFF_MS);
 }
 
-export function isEntryDueForRetry(entry: Pick<OutboxEntry, "status" | "attemptCount" | "lastAttemptedAt">, now: number): boolean {
+export function isEntryDueForRetry(entry: Pick<OutboxEntry, "status" | "attemptCount" | "lastAttemptedAt">, now: number, force = false): boolean {
   // `sending` only ever means "a runSync pass had claimed this entry". Within
   // a single process that's transient — the coordinator never lets two
   // passes overlap — so a `sending` row still on disk when a new pass starts
@@ -39,7 +39,9 @@ export function isEntryDueForRetry(entry: Pick<OutboxEntry, "status" | "attemptC
   // idempotency key.
   if (entry.status === "queued" || entry.status === "sending") return true;
   if (entry.status !== "retrying") return false;
-  if (!entry.lastAttemptedAt) return true;
+  // A forced pass (crew tapped Sync now, the network came back, the app returned to the foreground) is itself the signal
+  // that conditions changed, so the backoff meant for unattended retries does not apply.
+  if (force || !entry.lastAttemptedAt) return true;
   return now - new Date(entry.lastAttemptedAt).getTime() >= backoffMs(entry.attemptCount);
 }
 
@@ -83,6 +85,12 @@ export interface SyncResult {
 export interface SyncDeps {
   fetchImpl?: typeof fetch;
   now?: () => number;
+  /**
+   * Set by every user- or event-triggered pass. Skips the retry backoff, and does not spend an attempt on a connectivity
+   * failure: only unattended background retries should run an entry out of attempts, otherwise tapping Sync now while
+   * offline would abandon charting that is perfectly deliverable later.
+   */
+  force?: boolean;
 }
 
 /**
@@ -100,7 +108,7 @@ export async function runSync(db: OfflineSqliteLike, key: Uint8Array, session: S
 
   const entries = await listMutations(db, key, { status: ["queued", "retrying", "sending"] });
   const due = entries
-    .filter((entry) => isEntryDueForRetry(entry, now()))
+    .filter((entry) => isEntryDueForRetry(entry, now(), deps.force))
     .sort((a, b) => a.patientCaseId.localeCompare(b.patientCaseId) || a.createdAt.localeCompare(b.createdAt));
 
   const result: SyncResult = { attempted: 0, acknowledged: 0, retrying: 0, failed: 0, conflicted: 0 };
@@ -164,7 +172,7 @@ export async function runSync(db: OfflineSqliteLike, key: Uint8Array, session: S
         result.attempted -= 1;
         break;
       }
-      const attemptCount = entry.attemptCount + 1;
+      const attemptCount = deps.force && isQueueableFailure(error) ? entry.attemptCount : entry.attemptCount + 1;
       const lastAttemptedAt = new Date(now()).toISOString();
       const lastError = errorMessage(error);
 

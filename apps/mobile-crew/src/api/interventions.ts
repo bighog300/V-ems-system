@@ -1,5 +1,6 @@
 import { requestJson } from "./httpClient.ts";
 import { requestOrQueue } from "./offlineMutation.ts";
+import { listWithQueued } from "../offline/queuedItems.ts";
 import type { ApiConfig } from "./patientCases.ts";
 
 export interface MedicationAdministration {
@@ -51,31 +52,16 @@ export async function createPatientCaseMedication({
   payload
 }: ApiConfig & { patientCaseId: string; payload: CreateMedicationPayload }): Promise<MedicationAdministration> {
   const performedAt = new Date().toISOString();
+  const body = { performed_at: performedAt, ...payload };
   return requestOrQueue<MedicationAdministration>({
     fetchImpl,
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/medications`,
     method: "POST",
-    payload: { performed_at: performedAt, ...payload },
+    payload: body,
     config: { authToken, deviceId },
     scope: "medication",
     patientCaseId,
-    buildOptimisticResult: (entryId) => ({
-      medication_administration_id: `LOCAL-${entryId}`,
-      patient_case_id: patientCaseId,
-      encounter_id: "",
-      medication_name: payload.medication_name,
-      formulation: null,
-      dose: payload.dose,
-      dose_unit: payload.dose_unit,
-      route: payload.route,
-      indication: payload.indication ?? null,
-      performed_at: performedAt,
-      clinician_id: null,
-      response: payload.response ?? null,
-      adverse_reaction: null,
-      downstream_status: "pending",
-      created_at: performedAt
-    })
+    buildOptimisticResult: (entryId) => medicationFromRequest(entryId, patientCaseId, body)
   });
 }
 
@@ -126,28 +112,80 @@ export async function createPatientCaseProcedure({
   payload
 }: ApiConfig & { patientCaseId: string; payload: CreateProcedurePayload }): Promise<ClinicalProcedure> {
   const performedAt = new Date().toISOString();
+  const body = { performed_at: performedAt, ...payload };
   return requestOrQueue<ClinicalProcedure>({
     fetchImpl,
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/procedures`,
     method: "POST",
-    payload: { performed_at: performedAt, ...payload },
+    payload: body,
     config: { authToken, deviceId },
     scope: "procedure",
     patientCaseId,
-    buildOptimisticResult: (entryId) => ({
-      procedure_id: `LOCAL-${entryId}`,
-      patient_case_id: patientCaseId,
-      encounter_id: "",
-      procedure_type: payload.procedure_type,
-      procedure_name: payload.procedure_name,
-      performed_at: performedAt,
-      clinician_id: null,
-      attempts: payload.attempts ?? null,
-      success: payload.success ?? null,
-      complications: payload.complications ?? null,
-      response: payload.response ?? null,
-      downstream_status: "pending",
-      created_at: performedAt
-    })
+    buildOptimisticResult: (entryId) => procedureFromRequest(entryId, patientCaseId, body)
+  });
+}
+
+type MedicationRequest = CreateMedicationPayload & { performed_at: string };
+type ProcedureRequest = CreateProcedurePayload & { performed_at: string };
+
+/** The list entry shown for a medication that is still waiting to sync. */
+export function medicationFromRequest(entryId: string, patientCaseId: string, body: MedicationRequest): MedicationAdministration {
+  return {
+    medication_administration_id: `LOCAL-${entryId}`,
+    patient_case_id: patientCaseId,
+    encounter_id: "",
+    medication_name: body.medication_name,
+    formulation: null,
+    dose: body.dose,
+    dose_unit: body.dose_unit,
+    route: body.route,
+    indication: body.indication ?? null,
+    performed_at: body.performed_at,
+    clinician_id: null,
+    response: body.response ?? null,
+    adverse_reaction: null,
+    downstream_status: "pending",
+    created_at: body.performed_at
+  };
+}
+
+/** The list entry shown for a procedure that is still waiting to sync. */
+export function procedureFromRequest(entryId: string, patientCaseId: string, body: ProcedureRequest): ClinicalProcedure {
+  return {
+    procedure_id: `LOCAL-${entryId}`,
+    patient_case_id: patientCaseId,
+    encounter_id: "",
+    procedure_type: body.procedure_type,
+    procedure_name: body.procedure_name,
+    performed_at: body.performed_at,
+    clinician_id: null,
+    attempts: body.attempts ?? null,
+    success: body.success ?? null,
+    complications: body.complications ?? null,
+    response: body.response ?? null,
+    downstream_status: "pending",
+    created_at: body.performed_at
+  };
+}
+
+export function listPatientCaseMedicationsWithQueued(args: ApiConfig & { patientCaseId: string }) {
+  return listWithQueued<MedicationAdministration>({
+    cacheKey: `patient-case-medications:${args.patientCaseId}`,
+    fetchFresh: () => listPatientCaseMedications(args),
+    scope: "medication",
+    patientCaseId: args.patientCaseId,
+    idOf: (item) => item.medication_administration_id,
+    fromQueued: (entry) => medicationFromRequest(entry.entryId, entry.patientCaseId, entry.payload as MedicationRequest)
+  });
+}
+
+export function listPatientCaseProceduresWithQueued(args: ApiConfig & { patientCaseId: string }) {
+  return listWithQueued<ClinicalProcedure>({
+    cacheKey: `patient-case-procedures:${args.patientCaseId}`,
+    fetchFresh: () => listPatientCaseProcedures(args),
+    scope: "procedure",
+    patientCaseId: args.patientCaseId,
+    idOf: (item) => item.procedure_id,
+    fromQueued: (entry) => procedureFromRequest(entry.entryId, entry.patientCaseId, entry.payload as ProcedureRequest)
   });
 }

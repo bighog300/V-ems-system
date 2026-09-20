@@ -2,9 +2,11 @@ import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { createPatientCaseObservation, listPatientCaseObservations, type PatientCaseObservation, type VitalSigns } from "../api/observations.ts";
+import { createPatientCaseObservation, listPatientCaseObservationsWithQueued, type PatientCaseObservation, type VitalSigns } from "../api/observations.ts";
 import type { Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
+import { OfflineListNotice, WaitingToSyncBadge, type ListNotice } from "../components/SyncMarkers.tsx";
 
 export interface VitalsScreenProps {
   patientCaseId: string;
@@ -57,6 +59,7 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
   const [observations, setObservations] = useState<PatientCaseObservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [listNotice, setListNotice] = useState<ListNotice | null>(null);
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
@@ -70,8 +73,9 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
     setLoading(true);
     setError(null);
     try {
-      const result = await listPatientCaseObservations({ ...config, patientCaseId });
-      setObservations([...result].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
+      const merged = await listPatientCaseObservationsWithQueued({ ...config, patientCaseId });
+      setListNotice(merged);
+      setObservations([...merged.items].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load vitals.");
     } finally {
@@ -181,13 +185,15 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
       </View>
 
       <Text style={styles.sectionTitle}>History</Text>
+      <OfflineListNotice notice={listNotice} testID="vitals-offline-notice" />
       {loading ? (
         <ActivityIndicator testID="vitals-loading" />
       ) : (
         observations.length === 0 ? <Text style={styles.hint} testID="vitals-empty">No vitals recorded yet.</Text> : observations.map((item) => (
           <View style={styles.row} testID={`observation-entry-${item.observation_event_id}`} key={item.observation_event_id}>
-            <Text style={styles.rowTime}>{item.performed_at}</Text>
+            <Text style={styles.rowTime}>{formatLocalDateTime(item.performed_at)}</Text>
             <Text style={styles.rowSummary}>{summarizeVitals(item.observations)}</Text>
+            <WaitingToSyncBadge id={item.observation_event_id} />
             {item.notes ? <Text style={styles.rowNotes}>{item.notes}</Text> : null}
           </View>
         ))

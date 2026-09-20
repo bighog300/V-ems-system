@@ -118,4 +118,23 @@ describe("SyncStatusScreen", () => {
     await fireEvent.press(getByTestId("back-from-sync-status"));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+
+  it("refreshes the list when a sync finishes while the screen is open, so delivered entries stop showing as failed", async () => {
+    let rows: unknown[] = [makeRow()];
+    jest.mocked(ExpoSQLite.openDatabaseAsync).mockResolvedValueOnce(fakeDb(async () => rows) as never);
+    const noop = jest.fn(async () => {});
+    const result = { attempted: 1, acknowledged: 1, retrying: 0, failed: 0, conflicted: 0 };
+
+    const { getByTestId, queryByTestId, rerender } = await renderScreen({ sync: { syncing: false, lastResult: null, syncNow: noop }, onBack: jest.fn() });
+    await waitFor(() => expect(getByTestId("sync-entry-entry-1")).toBeTruthy());
+
+    rows = []; // a background sync delivered it
+    await rerender(
+      <NavigationContainer>
+        <SyncStatusScreen sync={{ syncing: false, lastResult: result, syncNow: noop }} onBack={jest.fn()} />
+      </NavigationContainer>
+    );
+    await waitFor(() => expect(queryByTestId("sync-entry-entry-1")).toBeNull());
+    expect(getByTestId("sync-status-empty")).toBeTruthy();
+  });
 });

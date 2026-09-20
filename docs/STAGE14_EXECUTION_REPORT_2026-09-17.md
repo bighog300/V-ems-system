@@ -3340,6 +3340,32 @@ Nothing below is a pass for the full scenario unless it says so.
   look identical in history; a screen first opened while offline shows only queued items, not earlier charting; each
   offline submit took 5 to 15 s to register; timestamps are raw UTC ISO strings everywhere (no local time in the app,
   PDF or API).
+  **Fixed (D14), app only (JS, no rebuild).**
+  - *Second Sync now needed:* entries that had failed while offline were still inside their retry backoff, so the first pass
+    skipped them. Passes started by Sync now, a reconnect or the app returning to the foreground now skip the backoff, and
+    do not spend an attempt on a connectivity failure, so tapping Sync now offline cannot run charting out of attempts
+    (a definite server rejection still fails the entry). Unattended retries are unchanged.
+  - *Delivered items still listed as failed:* the Sync status list only reloaded on focus or pull-to-refresh; it now reloads
+    whenever a sync finishes, whoever started it.
+  - *Queued and synced rows identical, and empty history when first opened offline:* vitals, medications, procedures,
+    assessments and notes now show the server list (or the copy saved by the last online visit, with a notice giving its
+    time) plus this device's unsynced entries rebuilt from the encrypted outbox, each marked "Waiting to sync"; before,
+    an entry vanished from the list on reload and an unopened screen showed nothing earlier. A screen never opened online
+    still cannot show earlier entries and says so.
+  - *Slow offline submit:* the live attempt before queueing is capped at 4 s (was the 10 s request timeout); the queued
+    retry reuses the idempotency key. Measured on the emulator with the API stopped: the entry registered in about 4 to 5 s
+    (was 5 to 15 s). It is not instant: only a connection that fails at once, not one that hangs, is faster.
+  - *Raw UTC strings:* the history rows, encounter start, incident updated time and signature time show the device time
+    zone with the zone named (e.g. Sep 20, 2026, 5:52 PM GMT+1). Deliberately unchanged: the API, the stored record and the
+    signed PDF stay in UTC ISO, which is unambiguous for an audit record.
+  Device drill: charted vitals offline (API stopped), reopened the screen offline (saved-copy notice, earlier entry and the
+  waiting entry, marked), restarted the API and tapped Sync now once: the server had the entry with its 16:52Z charting time
+  and it was delivered downstream. Not covered: cached lists hold patient clinical data on the device (encrypted, like the
+  existing caches); the marker cannot distinguish a queued entry from one whose sync has failed (it shows on the Sync
+  status screen).
+  Environment note: after about 9 hours the emulator's network path stopped delivering large responses (the dev client
+  died on a chunked-transfer error loading the bundle; the committed baseline failed identically). Metro was restarted and
+  the emulator restarted before the drill; neither is a product defect.
 
 ### Results
 - **2 Multi-patient.** Four cases on one incident across two assignments (crews STAFF-001 and STAFF-002/003, three
