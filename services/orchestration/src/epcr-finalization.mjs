@@ -52,6 +52,7 @@ async function snapshot(service, patientCaseId) {
 async function requirements(service, patientCaseId) {
   const c = await requireCase(service, patientCaseId), d = await service.clinicalDemographics.find(patientCaseId), a = await service.clinicalAssessments.list(patientCaseId);
   const observations = await service.clinicalObservations.list(patientCaseId), disposition = await service.clinicalDispositions.find(patientCaseId), outcome = disposition?.outcome;
+  const encounterLink = (await service.encounterLinks.findByPatientCaseId(patientCaseId)) ?? null;
   const missing = [], warnings = [], reqs = [];
   const identity = Boolean(d?.unidentified || d?.first_name || d?.last_name || c.temporary_label || c.verification_status !== "unknown");
   reqs.push({ id: "patient_identity", required: true, conditional: "all", satisfied: identity }); if (!identity) missing.push({ id: "patient_identity", message: "Patient identity or provisional/unknown identity documentation is required" });
