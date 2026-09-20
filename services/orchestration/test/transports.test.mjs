@@ -255,3 +255,49 @@ test("native OpenEMR patient history treats OpenEMR's 404 for an empty medicatio
     });
   }
 });
+function standardTransport(port, extra = {}) {
+  return createOpenEmrTransportFromEnv({
+    OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+    OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users",
+    ...extra
+  });
+}
+
+test("patient and encounter creation probe OpenEMR first and send nothing when it does not answer", async () => {
+  const requests = [];
+  // Accepts connections but never answers, like a stopped container whose packets are dropped.
+  await withServer((req) => { requests.push(`${req.method} ${req.url}`); }, async (port) => {
+    const transport = standardTransport(port, { OPENEMR_PROBE_TIMEOUT_MS: "200" });
+    for (const [method, payload] of [["createEncounter", { patient_id: "p1", care_started_at: "2026-09-20T10:00:00Z", presenting_complaint: "x" }], ["createPatient", { first_name: "A", last_name: "B", dob: "1990-01-01", sex: "male" }]]) {
+      await assert.rejects(() => transport({ method, payload }), (error) => error.notSent === true && error.code === "DOWNSTREAM_UNAVAILABLE" && /not attempted/.test(error.message));
+    }
+    assert.ok(requests.every((request) => request === "GET /"), `only probes may reach the server, saw: ${requests}`);
+    assert.ok(!requests.some((request) => request.startsWith("POST")), "no write, and no token request, may be sent");
+  });
+});
+
+test("a refused connection is also reported as not sent", async () => {
+  const { createServer: create } = await import("node:http");
+  const server = create(); await new Promise((r) => server.listen(0, r)); const port = server.address().port; await new Promise((r) => server.close(r));
+  const transport = standardTransport(port, { OPENEMR_PROBE_TIMEOUT_MS: "500" });
+  await assert.rejects(() => transport({ method: "createEncounter", payload: { patient_id: "p1", care_started_at: "2026-09-20T10:00:00Z", presenting_complaint: "x" } }), (error) => error.notSent === true);
+});
+
+test("a reachable OpenEMR is probed once and then written to, even when the probe answers with an error status", async () => {
+  for (const probeStatus of [302, 500]) {
+    const requests = [];
+    await withServer(async (req, res) => {
+      let body = ""; for await (const chunk of req) body += chunk;
+      requests.push(`${req.method} ${req.url}`);
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/") { res.writeHead(probeStatus); return res.end(); }
+      if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token" }));
+      if (req.url === "/apis/default/api/patient/p1/encounter") return res.end(JSON.stringify({ data: { euuid: "enc-9" } }));
+      res.writeHead(404); res.end("{}");
+    }, async (port) => {
+      const result = await standardTransport(port)({ method: "createEncounter", payload: { patient_id: "p1", care_started_at: "2026-09-20T10:00:00Z", presenting_complaint: "x" } });
+      assert.equal(result.encounter_id, "enc-9");
+      assert.deepEqual(requests, ["GET /", "POST /oauth/token", "POST /apis/default/api/patient/p1/encounter"]);
+    });
+  }
+});

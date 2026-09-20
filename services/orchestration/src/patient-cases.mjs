@@ -22,6 +22,19 @@ function parseLocation(payload) {
   return { location_lat, location_lng, location_accuracy_m: location_accuracy_m ?? null };
 }
 
+// A downstream failure proves OpenEMR never processed a write when the transport says it never sent one (notSent, after a
+// failed reachability probe), it was an HTTP 4xx denial, or the connection was refused or the host could not be resolved.
+// Timeouts, resets and lost responses on the write itself are unknown outcomes. For a multi-address AggregateError every
+// attempt must qualify.
+const PRE_WRITE_HTTP_STATUS = [400, 401, 403, 404, 422];
+const PRE_WRITE_NETWORK_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
+function provenPreWriteFailure(error, depth = 0) {
+  if (!error || typeof error !== 'object' || depth > 8) return false;
+  if (error.notSent === true || PRE_WRITE_HTTP_STATUS.includes(error.status) || PRE_WRITE_NETWORK_CODES.has(error.code)) return true;
+  if (Array.isArray(error.errors) && error.errors.length) return error.errors.every(inner => provenPreWriteFailure(inner, depth + 1));
+  return provenPreWriteFailure(error.cause, depth + 1);
+}
+
 const active = a => ['Assigned', 'Accepted', 'Mobilised', 'Active'].includes(a.status);
 
 export const patientCaseMethods = {
@@ -188,7 +201,7 @@ export const patientCaseMethods = {
       // create handler accepted the request. Mark only that deterministic
       // pre-resource failure retryable; unknown outcomes remain pending and
       // require reconciliation rather than a blind replay.
-      if (error?.status === 404 || error?.cause?.status === 404) {
+      if (provenPreWriteFailure(error)) {
         await this.db.execute(`UPDATE patient_case_provisional_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
       }
       throw error;
@@ -254,9 +267,9 @@ export const patientCaseMethods = {
     const created = await this.openemr.createEncounter({ incident_id: c.incident_id, patient_case_id: id,
       patient_id: c.openemr_patient_id, assignment_id: c.assignment_id, vehicle_id: c.vehicle_id,
       crew_ids: meta.legacy && !c.assignment_id ? (payload.crew_ids ?? []) : c.crew_ids, care_started_at: payload.care_started_at, presenting_complaint: payload.presenting_complaint }).catch(async (error) => {
-      // An HTTP 4xx from OpenEMR is a proven pre-write denial (nothing was created), so the reservation is released for a
-      // retry. Errors without a status (lost responses, timeouts) stay pending: their outcome is unknown.
-      if ([400, 401, 403, 404, 422].includes(error?.status ?? error?.cause?.status)) await this.db.execute(`UPDATE patient_case_encounter_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
+      // A proven pre-write failure (an HTTP 4xx denial, or a refused / unresolvable connection) means nothing was created,
+      // so the reservation is released for a retry. Timeouts, resets and lost responses stay pending: outcome unknown.
+      if (provenPreWriteFailure(error)) await this.db.execute(`UPDATE patient_case_encounter_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
       throw error;
     });
     if (!created.encounter_id) conflict('OpenEMR returned no encounter ID; reconciliation required');

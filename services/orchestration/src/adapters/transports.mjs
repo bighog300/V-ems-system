@@ -111,10 +111,24 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
       return requestJson(`${apiBase}${path}`, options, "openemr", method, timeoutMs);
     };
     const standardData = (response) => response?.data ?? response;
+    // A write sent to an unreachable OpenEMR ends in a timeout whose outcome cannot be known (the record may or may not
+    // exist), which blocks a retry. Probing first turns the common outage case into a proven "nothing was sent". Any HTTP
+    // response, whatever its status, means OpenEMR is reachable; only a network-level failure counts as unreachable.
+    const probeTimeoutMs = Number(env.OPENEMR_PROBE_TIMEOUT_MS ?? 2000);
+    const assertReachable = async (method) => {
+      try {
+        await fetch(`${baseUrl.replace(/\/$/, "")}/`, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(probeTimeoutMs) });
+      } catch (cause) {
+        const error = new Error(`openemr.${method} not attempted: OpenEMR is unreachable`);
+        error.code = "DOWNSTREAM_UNAVAILABLE"; error.classification = "DOWNSTREAM_UNAVAILABLE"; error.notSent = true; error.cause = cause;
+        throw error;
+      }
+    };
     const patientId = (data) => data?.uuid ?? data?.id ?? data?.pid ?? null;
     return async ({ method, payload }) => {
       const patient = encodeURIComponent(payload?.patient_id ?? "");
       const encounter = encodeURIComponent(payload?.encounter_id ?? "");
+      if (method === "createPatient" || method === "createEncounter") await assertReachable(method);
       if (method === "searchPatient") {
         const query = new URLSearchParams(); if (payload?.first_name) query.set("fname", payload.first_name); if (payload?.last_name) query.set("lname", payload.last_name); if (payload?.dob) query.set("DOB", payload.dob); if (payload?.phone) query.set("phone", payload.phone);
         const response = await call(method, `/patient?${query}`, undefined, "GET");

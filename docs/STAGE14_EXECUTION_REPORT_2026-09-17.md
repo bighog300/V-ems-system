@@ -3223,10 +3223,22 @@ Nothing below is a pass for the full scenario unless it says so.
   (`api/observations.ts:50`, `assessments.ts:38`, `interventions.ts:53`) but the queued payload omits it
   (`observations.ts:55`, `assessments.ts:43`), and the server defaults to receipt time. The server already accepts
   `performed_at` / `recorded_at`. Every offline clinical timestamp is wrong by the length of the offline period.
+  **Fixed:** the screens' API modules now send the charting time (`recorded_at`, `performed_at`, `authored_at`,
+  `decision_at`) in the queued payload; unit tests assert the field is sent and recent (they fail against the old code),
+  and the device drill stored HR 77 with its charting time. JS-only, so a dev client needs no APK rebuild. Residual
+  risk: the time is the device clock, also on online submits, and the server applies no skew or future-time clamp.
 - **D6, high — an encounter created during an OpenEMR outage blocks the case permanently.** The API answers `500
   DOWNSTREAM_UNAVAILABLE, retryable: true`, but every retry, including after OpenEMR is healthy, returns `409
   reconciliation required`, because the reservation stays `pending` when the failure carries no HTTP status. A refused
   connection is a proven non-write; only timeouts and resets are unknown outcomes.
+  *Correction found in the live drill:* with the container stopped the failure is a 5 s `DOWNSTREAM_TIMEOUT` (packets
+  dropped), not a refused socket, so classifying by error code alone did not help. **Fixed:** before `createPatient` /
+  `createEncounter` the transport does a short reachability probe (`GET /`, `OPENEMR_PROBE_TIMEOUT_MS`, default 2000);
+  if it fails nothing was sent, the error is marked `notSent`, and the reservation is released (also for 400/401/403/404/422
+  and all-refused/unresolved errors). Timeouts and resets after a write was sent still stay `pending`. Live: during the
+  outage the request fails in about 2 s with `500 retryable`; the same request after recovery returns `201`, and charting
+  works. Not covered: the probe does not protect other writes, and a `pending` reservation left from before the fix
+  (PCR-000017, PCR-000018) still needs manual reconciliation.
 - **D7, high — OpenEMR write failures are never retried.** Vitals charted during the outage stayed
   `failed:DOWNSTREAM_UNAVAILABLE` 60 s after recovery with no OpenEMR id, so VEMS and OpenEMR silently diverge.
 - **D8, high (configuration) — the Vtiger mirror cannot work in the development stack.** The sync worker is not part of

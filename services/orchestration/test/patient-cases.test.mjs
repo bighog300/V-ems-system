@@ -260,3 +260,66 @@ test('a proven OpenEMR denial releases the encounter reservation so the request 
   assert.equal((await s.db.queryOne(`SELECT status FROM patient_case_encounter_requests WHERE patient_case_id='${c.patient_case_id}'`)).status, 'completed');
   assert.equal(writes, 2);
 });
+// The shape the OpenEMR adapter produces for a network failure: a wrapped DOWNSTREAM_UNAVAILABLE whose cause chain ends in
+// the socket error (undici reports it as TypeError "fetch failed" with the real error as its cause).
+function networkFailure(inner, message = 'OpenEMR adapter call failed: fetch failed') {
+  return Object.assign(new Error(message), { code: 'DOWNSTREAM_UNAVAILABLE', cause: Object.assign(new TypeError('fetch failed'), { cause: inner }) });
+}
+const socketError = code => Object.assign(new Error(`connect ${code}`), { code });
+
+async function linkedCase(t) {
+  const { service: s, incident: i } = await fixture(t);
+  const c = await s.createPatientCase(i.incident_id, { temporary_label: 'Outage' }, meta);
+  await s.linkPatientToPatientCase(c.patient_case_id, { verification_status: 'provisional', openemr_patient_id: 'native-provisional' }, meta);
+  return { s, id: c.patient_case_id };
+}
+const encounterRequest = { care_started_at: '2026-09-06T10:00:00Z', presenting_complaint: 'Exercise' };
+
+for (const [label, failure] of [
+  ['a refused connection', () => networkFailure(socketError('ECONNREFUSED'))],
+  ['an unresolvable host', () => networkFailure(socketError('ENOTFOUND'))],
+  ['a temporary resolver failure', () => networkFailure(socketError('EAI_AGAIN'))],
+  ['every address refused', () => networkFailure(Object.assign(new AggregateError([socketError('ECONNREFUSED'), socketError('ECONNREFUSED')]), {}))],
+  ['a failed reachability probe (nothing was sent)', () => Object.assign(new Error('openemr.createEncounter not attempted: OpenEMR is unreachable'), { code: 'DOWNSTREAM_UNAVAILABLE', notSent: true, cause: Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' }) })]
+]) test(`encounter creation is retryable after ${label} (nothing was written)`, async t => {
+  const { s, id } = await linkedCase(t);
+  let writes = 0;
+  s.openemr.createEncounter = async () => { writes++; throw failure(); };
+  await assert.rejects(() => s.createEncounterForPatientCase(id, encounterRequest, meta), /failed|not attempted/);
+  assert.equal((await s.db.queryOne(`SELECT status FROM patient_case_encounter_requests WHERE patient_case_id='${id}'`)).status, 'failed');
+  s.openemr.createEncounter = async () => { writes++; return { encounter_id: 'encounter-after-outage', status: 'Open' }; };
+  assert.equal((await s.createEncounterForPatientCase(id, encounterRequest, meta)).encounter_id, 'encounter-after-outage');
+  assert.equal(writes, 2);
+});
+
+for (const [label, failure] of [
+  ['a connection reset', () => networkFailure(socketError('ECONNRESET'))],
+  ['a connection timeout', () => networkFailure(socketError('ETIMEDOUT'))],
+  ['a request timeout', () => Object.assign(new Error('openemr.createEncounter timed out after 5000ms'), { code: 'DOWNSTREAM_TIMEOUT' })],
+  ['a mixed refused and timed-out attempt', () => networkFailure(Object.assign(new AggregateError([socketError('ECONNREFUSED'), socketError('ETIMEDOUT')]), {}))]
+]) test(`encounter creation stays pending after ${label} (the write may have happened)`, async t => {
+  const { s, id } = await linkedCase(t);
+  let writes = 0;
+  s.openemr.createEncounter = async () => { writes++; throw failure(); };
+  await assert.rejects(() => s.createEncounterForPatientCase(id, encounterRequest, meta), /timed out|failed/);
+  await assert.rejects(() => s.createEncounterForPatientCase(id, encounterRequest, meta), /reconciliation required/);
+  assert.equal(writes, 1);
+});
+
+test('provisional patient creation is retryable after a refused connection but not after a reset', async t => {
+  for (const [code, retryable] of [['ECONNREFUSED', true], ['ECONNRESET', false]]) {
+    const { service: s, incident: i } = await fixture(t);
+    const c = await s.createPatientCase(i.incident_id, { temporary_label: `Unknown ${code}` }, meta);
+    let writes = 0;
+    s.openemr.createPatient = async () => { writes++; throw networkFailure(socketError(code)); };
+    await assert.rejects(() => s.createProvisionalPatientForCase(c.patient_case_id, meta), /failed/);
+    if (retryable) {
+      s.openemr.createPatient = async () => { writes++; return { patient_id: 'provisional-after-outage' }; };
+      assert.equal((await s.createProvisionalPatientForCase(c.patient_case_id, meta)).openemr_patient_id, 'provisional-after-outage');
+      assert.equal(writes, 2);
+    } else {
+      await assert.rejects(() => s.createProvisionalPatientForCase(c.patient_case_id, meta), /reconciliation required/);
+      assert.equal(writes, 1);
+    }
+  }
+});
