@@ -3197,6 +3197,13 @@ its CPU. Findings, measured with Node's inspector attached to the running proces
   that function is not the sole cause. What keeps the event backlog from draining is not yet established.
 - **Not tested:** whether installing Watchman avoids the watcher, and whether excluding the Gradle output
   directories from Metro's watch list reduces it.
-- **Practical rule until fixed:** do not run `bootstrap-development.ps1`, `npm ci` or a Gradle build while Metro is
-  running; stop Metro first and start it again afterwards. Restart Metro if `http://127.0.0.1:8081/status` stops
-  answering.
+- **Practical rule:** a routine bootstrap is now safe while Metro runs (see "Bootstrap guard" below). Stop Metro before a reinstall\n  that the bootstrap asks for, and before a Gradle build (untested); restart Metro if `http://127.0.0.1:8081/status` stops\n  answering.
+### Bootstrap guard for the Metro finding — 2026-09-20
+`bootstrap-development.ps1` now installs locked dependencies through `Invoke-LockedInstall`
+(`scripts/windows/common.ps1`), with the decision in `scripts/windows/development-bootstrap.mjs`
+(`installDecision`, `lockfileHash`): it skips `npm ci` when `package-lock.json` is unchanged since the last install,
+and refuses, before changing anything, when a reinstall is needed while port 8081 is in use. Verified live: with Metro
+running and no install stamp the bootstrap stopped in 3 seconds with `node_modules`, Metro and the containers
+untouched; with Metro stopped it reinstalled once and wrote the stamp (147 s); with Metro running and the lockfile
+unchanged it succeeded in 51 s, skipped the reinstall, and Metro used 0.1 CPU-seconds and kept answering. This removes
+the trigger that was found; it does not fix the watcher, and Gradle builds while Metro runs remain untested.

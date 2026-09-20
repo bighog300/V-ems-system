@@ -12,6 +12,8 @@ import {
   redactText,
   serializeEnv,
   syncTemplateScope,
+  installDecision,
+  lockfileHash,
   validateEnvValues
 } from "./development-bootstrap.mjs";
 
@@ -148,4 +150,48 @@ test("workflow seed replays idempotently and only advances dispatch state once",
     assert.equal(state.calls.filter((c) => c.startsWith("PATCH")).length, 3);
     assert.equal(state.incident, "Assigned");
   } finally { server.close(); }
+});
+test("dependency reinstall is skipped when the lockfile is unchanged, even while Metro is running", () => {
+  assert.equal(installDecision({ lockHash: "a", stampHash: "a", installed: true, metroRunning: true }), "skip");
+  assert.equal(installDecision({ lockHash: "a", stampHash: "a", installed: true, metroRunning: false }), "skip");
+});
+
+test("dependency reinstall runs when needed and Metro is stopped, and is refused while Metro is running", () => {
+  for (const state of [{ stampHash: "old", installed: true }, { stampHash: null, installed: true }, { stampHash: "a", installed: false }]) {
+    assert.equal(installDecision({ lockHash: "a", metroRunning: false, ...state }), "install");
+    assert.throws(() => installDecision({ lockHash: "a", metroRunning: true, ...state }), /listening on port 8081.*Nothing was changed/s);
+  }
+});
+
+test("lockfile hashing ignores CRLF checkouts", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vems-lock-hash-"));
+  writeFileSync(join(dir, "lf.json"), '{\n  "a": 1\n}\n');
+  writeFileSync(join(dir, "crlf.json"), '{\r\n  "a": 1\r\n}\r\n');
+  assert.equal(lockfileHash(join(dir, "lf.json")), lockfileHash(join(dir, "crlf.json")));
+});
+
+test("install-decision CLI reports skip or install, refuses with exit 3 while Metro runs, and writes the stamp", async () => {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const script = new URL("./development-bootstrap.mjs", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+  const dir = mkdtempSync(join(tmpdir(), "vems-install-cli-"));
+  const lock = join(dir, "package-lock.json"); const stamp = join(dir, ".stamp");
+  writeFileSync(lock, '{"lockfileVersion":3}\n');
+  const decide = (installed, metro) => run(process.execPath, [script, "install-decision", "--lock", lock, "--stamp", stamp, "--installed", String(installed), "--metro", String(metro)]);
+  assert.equal((await decide(true, false)).stdout.trim(), "install");
+  await assert.rejects(() => decide(true, true), (error) => error.code === 3 && /Nothing was changed/.test(error.stderr));
+  await run(process.execPath, [script, "write-install-stamp", "--lock", lock, "--stamp", stamp]);
+  assert.equal((await decide(true, true)).stdout.trim(), "skip");
+  writeFileSync(lock, '{"lockfileVersion":3,"changed":true}\n');
+  assert.equal((await decide(true, false)).stdout.trim(), "install");
+});
+
+test("bootstrap installs dependencies only through the guarded helper", () => {
+  const bootstrap = readFileSync(new URL("./bootstrap-development.ps1", import.meta.url), "utf8");
+  assert.match(bootstrap, /Invoke-LockedInstall/);
+  assert.doesNotMatch(bootstrap, /npm\.cmd'\s*@\('ci'/);
+  const common = readFileSync(new URL("./common.ps1", import.meta.url), "utf8");
+  assert.match(common, /function Invoke-LockedInstall/);
+  assert.match(common, /LocalPort 8081/);
 });

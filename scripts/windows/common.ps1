@@ -93,3 +93,26 @@ function Get-AndroidDevice([string]$Device) {
     if ($reverse) { throw 'ADB reverse rules are present. Remove them explicitly before validation.' }
     return $Device
 }
+
+# Reinstall locked dependencies only when the lockfile changed, and never while Metro's port is in use: npm ci rewrites
+# node_modules, which floods Metro's file watcher (see docs/WINDOWS_NATIVE_DEVELOPMENT_BOOTSTRAP.md).
+function Invoke-LockedInstall {
+    $lock = Join-Path $script:RepoRoot 'package-lock.json'
+    $stamp = Join-Path $script:RepoRoot 'node_modules\.vems-install-stamp'
+    $helper = Join-Path $PSScriptRoot 'development-bootstrap.mjs'
+    $installed = Test-Path -LiteralPath (Join-Path $script:RepoRoot 'node_modules\.package-lock.json')
+    $metro = @(Get-NetTCPConnection -State Listen -LocalPort 8081 -ErrorAction SilentlyContinue).Count -gt 0
+    $previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $output = & node.exe $helper 'install-decision' '--lock' $lock '--stamp' $stamp '--installed' "$installed".ToLower() '--metro' "$metro".ToLower() 2>&1
+        $code = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previous }
+    if ($code -ne 0) { throw ((@($output | ForEach-Object { "$_" }) -join ' ').Trim()) }
+    if ((@($output | ForEach-Object { "$_" }) -join ' ').Trim() -eq 'skip') { Write-Host 'Locked dependencies are unchanged; npm ci skipped.'; return }
+    Push-Location -LiteralPath $script:RepoRoot
+    try {
+        Invoke-Native 'npm.cmd' @('ci', '--no-audit', '--no-fund') 'Locked dependency installation failed' | Out-Null
+        Invoke-Native 'node.exe' @($helper, 'write-install-stamp', '--lock', $lock, '--stamp', $stamp) 'Writing the install stamp failed' | Out-Null
+    } finally { Pop-Location }
+}

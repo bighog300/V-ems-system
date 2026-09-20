@@ -154,8 +154,11 @@ because no sync worker runs in the development stack; the mobile app reads from 
   released for a retry. A failure with no HTTP status (lost response, timeout) still leaves the
   reservation pending and requires reconciliation.
 - Metro (`start-mobile-metro.ps1`) is a long-running Node process, and bulk file changes inside the tree it watches
-  can pin it at 100% CPU and end in a 4 GB out-of-memory crash (measured; see the Stage 14 execution report). Every
-  `bootstrap-development.ps1` runs `npm ci`, and a Gradle build rewrites thousands of files. **Stop Metro before
-  running either, and start it again afterwards.** If the app shows a blank screen, check
+  can pin it at 100% CPU and end in a 4 GB out-of-memory crash (measured; see the Stage 14 execution report).
+  `bootstrap-development.ps1` therefore reinstalls locked dependencies (`npm ci`, which rewrites `node_modules`)
+  only when `package-lock.json` changed since the last install (recorded in `node_modules\.vems-install-stamp`), so a
+  routine bootstrap or start is safe while Metro runs. When a reinstall *is* needed and something is listening on
+  port 8081, the bootstrap stops before changing anything: stop Metro, run the bootstrap, start Metro again. Stop Metro
+  before a Gradle build as well (not yet measured). If the app shows a blank screen, check
   `http://127.0.0.1:8081/status` and restart Metro. The job list loads on app start and on pull to refresh, so restart
   the app (data is kept) after changing server-side records.

@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync, chmodSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -108,6 +108,23 @@ export function redactText(text, sensitiveValues) {
   return result;
 }
 
+// `npm ci` deletes and recreates node_modules. While Metro watches that tree it pins Metro's main thread and grows its
+// heap toward an out-of-memory crash (see the Stage 14 execution report), so a reinstall is skipped when the lockfile is
+// unchanged and refused while something listens on the Metro port. Line endings are normalized so a CRLF checkout of the
+// same lockfile hashes identically.
+export function lockfileHash(path) {
+  return createHash("sha256").update(readFileSync(path, "utf8").replaceAll("\r\n", "\n"), "utf8").digest("hex");
+}
+
+export function installDecision({ lockHash, stampHash, installed, metroRunning }) {
+  if (installed && stampHash === lockHash) return "skip";
+  if (metroRunning) {
+    throw new Error("Dependencies need to be reinstalled, but Metro (or another process) is listening on port 8081. "
+      + "A reinstall floods Metro's file watcher and can crash it. Stop Metro, run the bootstrap again, then start Metro. Nothing was changed.");
+  }
+  return "install";
+}
+
 export function loadTemplate(path) {
   return readFileSync(path, "utf8").replaceAll("\r\n", "\n");
 }
@@ -168,6 +185,24 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import
     }, []));
     mergeOAuthCapture(options.environment, options.capture);
     console.log("OpenEMR OAuth credentials merged");
+  } else if (command === "install-decision" || command === "write-install-stamp") {
+    const options = Object.fromEntries(args.reduce((result, value, index) => {
+      if (value.startsWith("--")) result.push([value.slice(2), args[index + 1]]);
+      return result;
+    }, []));
+    const lockHash = lockfileHash(options.lock);
+    if (command === "write-install-stamp") {
+      writeFileSync(options.stamp, `${lockHash}\n`, "utf8");
+      console.log("install stamp written");
+    } else {
+      const stampHash = existsSync(options.stamp) ? readFileSync(options.stamp, "utf8").trim() : null;
+      try {
+        console.log(installDecision({ lockHash, stampHash, installed: options.installed === "true", metroRunning: options.metro === "true" }));
+      } catch (error) {
+        console.error(error.message);
+        process.exitCode = 3;
+      }
+    }
   } else if (command === "sync-scope") {
     const options = Object.fromEntries(args.reduce((result, value, index) => {
       if (value.startsWith("--")) result.push([value.slice(2), args[index + 1]]);
