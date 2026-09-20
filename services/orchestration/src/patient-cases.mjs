@@ -246,12 +246,19 @@ export const patientCaseMethods = {
     // Durable reservation prevents duplicate remote writes across workers/restarts.
     // Unknown outcomes require administrative reconciliation, never blind replay.
     await this.db.withTransaction(async () => {
-      if (await this.db.queryOne(`SELECT * FROM patient_case_encounter_requests WHERE patient_case_id=${sqlValue(id)};`)) conflict('Encounter creation is pending or outcome unknown; reconciliation required');
-      await this.db.execute(`INSERT INTO patient_case_encounter_requests VALUES (${sqlValue(id)},${sqlValue(fingerprint)},'pending',${sqlValue(new Date().toISOString())});`);
+      const reservation = await this.db.queryOne(`SELECT * FROM patient_case_encounter_requests WHERE patient_case_id=${sqlValue(id)};`);
+      if (reservation && reservation.status !== 'failed') conflict('Encounter creation is pending or outcome unknown; reconciliation required');
+      if (reservation) await this.db.execute(`UPDATE patient_case_encounter_requests SET request_fingerprint=${sqlValue(fingerprint)},status='pending',created_at=${sqlValue(new Date().toISOString())} WHERE patient_case_id=${sqlValue(id)};`);
+      else await this.db.execute(`INSERT INTO patient_case_encounter_requests VALUES (${sqlValue(id)},${sqlValue(fingerprint)},'pending',${sqlValue(new Date().toISOString())});`);
     });
     const created = await this.openemr.createEncounter({ incident_id: c.incident_id, patient_case_id: id,
       patient_id: c.openemr_patient_id, assignment_id: c.assignment_id, vehicle_id: c.vehicle_id,
-      crew_ids: meta.legacy && !c.assignment_id ? (payload.crew_ids ?? []) : c.crew_ids, care_started_at: payload.care_started_at, presenting_complaint: payload.presenting_complaint });
+      crew_ids: meta.legacy && !c.assignment_id ? (payload.crew_ids ?? []) : c.crew_ids, care_started_at: payload.care_started_at, presenting_complaint: payload.presenting_complaint }).catch(async (error) => {
+      // An HTTP 4xx from OpenEMR is a proven pre-write denial (nothing was created), so the reservation is released for a
+      // retry. Errors without a status (lost responses, timeouts) stay pending: their outcome is unknown.
+      if ([400, 401, 403, 404, 422].includes(error?.status ?? error?.cause?.status)) await this.db.execute(`UPDATE patient_case_encounter_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
+      throw error;
+    });
     if (!created.encounter_id) conflict('OpenEMR returned no encounter ID; reconciliation required');
     return this.db.withTransaction(async () => {
       const now = new Date().toISOString();

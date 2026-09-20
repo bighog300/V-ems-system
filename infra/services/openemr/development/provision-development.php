@@ -25,7 +25,10 @@ try {
         if (!$auth->updatePassword($admin['id'], 0, $adminPassword, $password, true, $data, $username)) { throw new RuntimeException('User creation failed'); }
         $uuid = OpenEMR\Common\Uuid\UuidRegistry::getRegistryForTable('users')->createUuid();
         sqlStatement('UPDATE users SET uuid = ? WHERE username = ?', [$uuid, $username]);
-        if (!OpenEMR\Common\Acl\AclExtended::setUserAro(['Clinicians'], $username, 'VEMS', '', 'Development Integration')) { throw new RuntimeException('ACL creation failed'); }
+    }
+    // The standard API's encounter-create route requires encounters:auth_a, which Clinicians lack but Physicians hold.
+    if (!in_array('Physicians', OpenEMR\Common\Acl\AclExtended::aclGetGroupTitles($username), true)) {
+        if (!OpenEMR\Common\Acl\AclExtended::setUserAro(['Physicians'], $username, 'VEMS', '', 'Development Integration')) { throw new RuntimeException('ACL creation failed'); }
     }
     // Match the upstream usergroup_admin.php account-creation flow, including login group membership.
     if (!sqlQuery('SELECT name FROM `groups` WHERE user = ?', [$username])) {
@@ -45,6 +48,9 @@ try {
         if (!$repository->insertNewClient($id, $info, 'default')) { throw new RuntimeException('Client creation failed'); }
         $repository->saveIsEnabled($repository->getClientEntity($id), true);
     }
+    // Keep an already-registered client's scope in step with the configured scope; identity and secret are untouched.
+    $scope = getenv('OPENEMR_SCOPE');
+    sqlStatement('UPDATE oauth_clients SET scope = ? WHERE client_id = ? AND scope <> ?', [$scope, $id, $scope]);
     if (!$repository->validateClient($id, getenv('OPENEMR_CLIENT_SECRET'), 'password')) { throw new RuntimeException('Existing client credentials mismatch'); }
     echo "OpenEMR development identity and client ready; credentials preserved.\n";
 } catch (Throwable $e) {

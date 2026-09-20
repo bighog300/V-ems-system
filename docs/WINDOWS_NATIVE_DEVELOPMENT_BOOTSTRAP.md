@@ -134,3 +134,26 @@ Vtiger distribution with vtlib module provisioning. Do not read or reuse
   --entrypoint php -v <export>:/w:ro vems-dev/openemr:development -l /w/<file>`.
 - `test:config` runs `expo prebuild` in place. Back up `apps/mobile-crew/android`
   before running it on a checkout with a native directory you care about.
+## Synthetic clinical workflow data
+
+`node scripts/windows/seed-development-workflow.mjs` (host, API on 3001, stack running) creates the
+records the mobile app needs: vehicle AMB-001, incident INC-000001 assigned to STAFF-001, a patient
+case linked to one synthetic OpenEMR patient, an open encounter, a primary-survey assessment and one
+set of vitals. It signs in through the development test session and uses fixed idempotency keys and
+values; dispatch status changes are applied only once. It creates no real patient data. Run it once on
+a fresh database; the same keys make a repeat run a no-op. Pending Vtiger sync intents stay pending
+because no sync worker runs in the development stack; the mobile app reads from the VEMS API.
+
+- The development OpenEMR client is registered with read and write scopes for `patient`, `encounter`,
+  `vital` and `soap_note` (`OPENEMR_SCOPE`). Bootstrap syncs that key into an existing runtime file
+  and updates the registered client; credentials are never rotated.
+- The integration user belongs to OpenEMR's `Physicians` ACL group: the encounter-create route needs
+  `encounters:auth_a`, which `Clinicians` lack (HTTP 403 "Organization policy does not have permit
+  access resource").
+- An HTTP 4xx from OpenEMR on encounter creation is a proven pre-write denial, so the reservation is
+  released for a retry. A failure with no HTTP status (lost response, timeout) still leaves the
+  reservation pending and requires reconciliation.
+- Metro (`start-mobile-metro.ps1`) is a long-running Node process; it exhausted its 4 GB heap after
+  about 20 minutes once. If the app shows a blank screen, check
+  `http://127.0.0.1:8081/status` and restart Metro. The job list loads on app start and on pull to
+  refresh, so restart the app (data is kept) after changing server-side records.

@@ -116,6 +116,17 @@ export function templateDirectory(path) {
   return dirname(resolve(path));
 }
 
+// Non-secret configuration that must follow the template in an existing runtime environment.
+// Credentials are never touched.
+export function syncTemplateScope(templatePath, environmentPath) {
+  const wanted = parseEnvText(loadTemplate(templatePath), "Windows environment template").get("OPENEMR_SCOPE");
+  const values = parseEnvText(readFileSync(environmentPath, "utf8").replaceAll("\r\n", "\n"), "runtime environment");
+  if (!wanted || values.get("OPENEMR_SCOPE") === wanted) return false;
+  values.set("OPENEMR_SCOPE", wanted);
+  atomicWriteEnvFile(environmentPath, values, ["OPENEMR_SCOPE"]);
+  return true;
+}
+
 export function mergeOAuthCapture(environmentPath, capturePath) {
   const values = parseEnvText(readFileSync(environmentPath, "utf8"), "runtime environment");
   const capture = readFileSync(capturePath, "utf8");
@@ -157,6 +168,12 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import
     }, []));
     mergeOAuthCapture(options.environment, options.capture);
     console.log("OpenEMR OAuth credentials merged");
+  } else if (command === "sync-scope") {
+    const options = Object.fromEntries(args.reduce((result, value, index) => {
+      if (value.startsWith("--")) result.push([value.slice(2), args[index + 1]]);
+      return result;
+    }, []));
+    console.log(syncTemplateScope(options.template, options.environment) ? "OpenEMR client scope updated" : "OpenEMR client scope already current");
   } else if (command === "validate") {
     const options = Object.fromEntries(args.reduce((result, value, index) => {
       if (value.startsWith("--")) result.push([value.slice(2), args[index + 1]]);

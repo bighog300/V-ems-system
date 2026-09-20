@@ -245,3 +245,18 @@ test('provisional reconciliation marks the existing pending reservation retryabl
   assert.equal((await s.listPatientCases(i.incident_id)).length, 1);
   await assert.rejects(() => s.reconcileProvisionalPatientFailure(c.patient_case_id, { outcome: 'unknown', downstream_status: 404 }, meta), /proven downstream_not_created/);
 });
+
+test('a proven OpenEMR denial releases the encounter reservation so the request can be retried', async t => {
+  const { service: s, incident: i } = await fixture(t);
+  const c = await s.createPatientCase(i.incident_id, { temporary_label: 'Denied' }, meta);
+  await s.linkPatientToPatientCase(c.patient_case_id, { verification_status: 'provisional', openemr_patient_id: 'native-provisional' }, meta);
+  const p = { care_started_at: '2026-09-06T10:00:00Z', presenting_complaint: 'Exercise' };
+  let writes = 0;
+  s.openemr.createEncounter = async () => { writes++; const denied = new Error('OpenEMR adapter createEncounter failed'); denied.cause = { status: 403 }; throw denied; };
+  await assert.rejects(() => s.createEncounterForPatientCase(c.patient_case_id, p, meta), /createEncounter failed/);
+  assert.equal((await s.db.queryOne(`SELECT status FROM patient_case_encounter_requests WHERE patient_case_id='${c.patient_case_id}'`)).status, 'failed');
+  s.openemr.createEncounter = async () => { writes++; return { encounter_id: 'encounter-after-fix', status: 'Open' }; };
+  assert.equal((await s.createEncounterForPatientCase(c.patient_case_id, p, meta)).encounter_id, 'encounter-after-fix');
+  assert.equal((await s.db.queryOne(`SELECT status FROM patient_case_encounter_requests WHERE patient_case_id='${c.patient_case_id}'`)).status, 'completed');
+  assert.equal(writes, 2);
+});

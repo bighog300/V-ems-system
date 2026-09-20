@@ -11,6 +11,7 @@ import {
   provisioningDecision,
   redactText,
   serializeEnv,
+  syncTemplateScope,
   validateEnvValues
 } from "./development-bootstrap.mjs";
 
@@ -83,4 +84,66 @@ test("development readiness pings service endpoints that do not redirect to the 
   const compose = readFileSync(new URL("../../infra/docker-compose.dev.yml", import.meta.url), "utf8");
   assert.match(compose, /VTIGER_CONNECTIVITY_PING_PATH: \/webservice\.php\?operation=getchallenge/);
   assert.match(compose, /OPENEMR_CONNECTIVITY_PING_PATH: \/oauth2\/default\/\.well-known\/openid-configuration/);
+});
+test("scope synchronization updates only OPENEMR_SCOPE and preserves credentials", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vems-scope-sync-"));
+  const templatePath = join(dir, "template.env");
+  const environmentPath = join(dir, "development.env");
+  writeFileSync(templatePath, "OPENEMR_SCOPE=openid user/patient.read user/patient.write\nOPENEMR_PASSWORD=placeholder\n");
+  writeFileSync(environmentPath, "OPENEMR_SCOPE=openid user/patient.read\nOPENEMR_PASSWORD=keep-this-secret\n");
+  assert.equal(syncTemplateScope(templatePath, environmentPath), true);
+  const values = parseEnvText(readFileSync(environmentPath, "utf8"));
+  assert.equal(values.get("OPENEMR_SCOPE"), "openid user/patient.read user/patient.write");
+  assert.equal(values.get("OPENEMR_PASSWORD"), "keep-this-secret");
+  assert.equal(syncTemplateScope(templatePath, environmentPath), false);
+});
+
+test("development OpenEMR client scope covers the adapter's write routes and provisioning syncs it", () => {
+  const template = readFileSync(new URL("../../infra/env/development.windows.example.env", import.meta.url), "utf8");
+  for (const scope of ["patient", "encounter", "vital", "soap_note"]) {
+    assert.match(template, new RegExp(`user/${scope}\\.read`));
+    assert.match(template, new RegExp(`user/${scope}\\.write`));
+  }
+  const provisioner = readFileSync(new URL("../../infra/services/openemr/development/provision-development.php", import.meta.url), "utf8");
+  assert.match(provisioner, /UPDATE oauth_clients SET scope/);
+});
+test("OpenEMR integration user is provisioned into the Physicians ACL group", () => {
+  const provisioner = readFileSync(new URL("../../infra/services/openemr/development/provision-development.php", import.meta.url), "utf8");
+  assert.match(provisioner, /setUserAro\(\['Physicians'\]/);
+  assert.doesNotMatch(provisioner, /setUserAro\(\['Clinicians'\]/);
+});
+
+test("workflow seed replays idempotently and only advances dispatch state once", async () => {
+  const { createServer } = await import("node:http");
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const state = { incident: "New", assignment: "Proposed", calls: [] };
+  const server = createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      const path = req.url;
+      state.calls.push(`${req.method} ${path}`);
+      const send = (code, body) => { res.writeHead(code, { "content-type": "application/json" }); res.end(JSON.stringify(body)); };
+      if (path === "/api/development/test-session") return send(200, { token: "t" });
+      if (path === "/api/incidents" && req.method === "POST") return send(201, { incident_id: "INC-000001" });
+      if (path === "/api/incidents/INC-000001/assignments") return send(201, { assignment_id: "ASN-000001", status: state.assignment });
+      if (path === "/api/assignments/ASN-000001" && req.method === "PATCH") { state.assignment = "Assigned"; return send(200, {}); }
+      if (path === "/api/incidents/INC-000001" && req.method === "PATCH") { state.incident = state.incident === "New" ? "Awaiting Dispatch" : "Assigned"; return send(200, {}); }
+      if (path === "/api/incidents/INC-000001") return send(200, { status: state.incident });
+      if (path === "/api/incidents/INC-000001/patient-cases") return send(201, { patient_case_id: "PCR-000001" });
+      if (path === "/api/patients") return send(201, { patient_id: "patient-1" });
+      return send(201, {});
+    });
+  });
+  await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  try {
+    const env = { ...process.env, VEMS_API_URL: `http://127.0.0.1:${server.address().port}` };
+    const script = new URL("./seed-development-workflow.mjs", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+    await run(process.execPath, [script], { env });
+    await run(process.execPath, [script], { env });
+    assert.equal(state.calls.filter((c) => c.startsWith("PATCH")).length, 3);
+    assert.equal(state.incident, "Assigned");
+  } finally { server.close(); }
 });
