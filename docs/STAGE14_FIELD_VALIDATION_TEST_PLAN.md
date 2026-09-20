@@ -307,6 +307,19 @@ this log in the same repository (a simple table or linked spreadsheet is fine) s
 sign-off can point at it directly rather than relying on memory. A scenario is not
 "done" until it has a passing row on **both** platforms at minimum once.
 
+All rows below are Android emulator runs on the Windows-native topology, synthetic data only,
+by Claude Code under user direction. No iOS run exists yet, so no scenario is complete.
+Evidence detail: `docs/STAGE14_EXECUTION_REPORT_2026-09-17.md`, section "Windows-native
+environment and C2 acceptance — 2026-09-20".
+
+| Scenario | Device / OS / network | Date | Tester | Commit under test | Result | Defect |
+|---|---|---|---|---|---|---|
+| Environment: Windows bootstrap, `vems-dev` stack, adapters, idempotent rerun | Windows 11, Docker Desktop, loopback | 2026-09-20 | Claude Code | `52a4dd8`, then `48529e4` | PASS | Fixed in `52a4dd8`, `48529e4` |
+| Android debug build, install, non-mutating smoke (sign-in to jobs list) | Pixel_Tablet AVD, Android 15 (API 35), x86_64, `10.0.2.2` to host | 2026-09-20 | Claude Code | `52a4dd8` (APK) | PASS | none |
+| Section A navigation: jobs list, incident workspace, patient case, vitals form | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | `48529e4` (API), `52a4dd8` (APK) | PASS | none |
+| C2: vitals recorded through the rendered UI (one tap, PCR-000002) | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | `48529e4` (API), `52a4dd8` (APK) | PASS | none |
+| Scenarios 1 to 10 (full catalog) | not executed | | | | NOT RUN | |
+
 ## Exit gate
 
 Per issue #71, restated as checkable conditions:

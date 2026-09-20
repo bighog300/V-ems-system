@@ -3037,3 +3037,57 @@ SQLite integrity remained `ok`. The flow was not rerun. C2 remains
 race despite successful preflight hierarchy inspection. Temporary API, Metro,
 ADB bridge, captures, token, and clipboard contents were cleaned; reusable
 OAuth/JWT credentials and retained infrastructure were preserved.
+
+## Windows-native environment and C2 acceptance — 2026-09-20
+
+Synthetic data only. Branch `stage14/field-validation-release-readiness`. This supersedes the WSL
+relay topology for all further runs; it does not retract the earlier findings above.
+
+### Environment
+- `bootstrap-development.ps1` builds and starts the `vems-dev` project (API 3001, Vtiger 8080,
+  OpenEMR 8083, MySQL 3307, Redis 6380) with an external environment file, a fresh external SQLite
+  database (22 migrations, integrity `ok`) and dedicated integration identities. A rerun preserved
+  secrets, volumes, accounts, clients and modules; the api, openemr and vtiger images rebuild and
+  their containers are recreated on every run.
+- Defects found and fixed while proving it (commits `52a4dd8`, `48529e4`): Vtiger custom modules
+  had no CRMEntity class files (webservice "restricted file"); API published on all interfaces;
+  readiness never probed upstreams and Vtiger's `/` redirects to a host-only URL; the service
+  validator asserted a client-secret check OpenEMR does not perform for the password grant; the
+  OpenEMR client had read-only scope; the integration user lacked `encounters:auth_a` (403 on
+  encounter create); an HTTP 4xx left the encounter reservation `pending` permanently.
+- Android: debug APK `org.vems.mobilecrew` 1.0.0 built with JDK 17, installed on the Pixel_Tablet
+  AVD (Android 15, API 35), no ADB reverse rules, Windows Metro on 8081. Smoke test passed.
+
+### C2 through the rendered UI
+- Baseline for PCR-000002 (verified before any UI step): encounter Open, 1 primary-survey
+  assessment, 0 observations, linked to a synthetic OpenEMR patient. PCR-000001 (created through the
+  API by the seed, so not UI evidence) was untouched.
+- Path exercised: jobs list, `job-ASN-000001`, incident workspace, `patient-case-PCR-000002`,
+  patient case detail, `open-vitals`, vitals form. Values entered: HR 80, BP 120/80, RR 16, SpO2 98,
+  temperature 37.0, GCS 15; glucose left blank. The submit control was disabled until the form was
+  valid, and all values were read back from the UI hierarchy before submitting.
+- Exactly one tap on `observation-submit`, no retry. The UI reached `observation-submit-succeeded`
+  and the form reset.
+- Server evidence: exactly one `POST /api/patient-cases/PCR-000002/observations` in the API log
+  (HTTP success, 847 ms); 1 observation on PCR-000002 with `downstream_status=created` and an
+  OpenEMR observation id; timeline `assessment_recorded`, `observation_recorded`; OpenEMR
+  `form_vitals` rows 2 (one per case); `create_observation` audit rows 2 (one per case); SQLite
+  integrity `ok`. No medications, procedures, disposition, handover or signatures were started.
+- Result: **C2 PASS** on Android emulator. Not yet run on iOS or physical hardware.
+
+### Observations (not classified as defects)
+- The patient case detail for the linked case showed "Unidentified patient". VEMS stores no
+  demographics for a case created through the API, so this may be expected; confirm against the
+  intended identity flow.
+- A retained session token from an earlier environment produced "Your session is no longer valid"
+  after the first install; development sign-in recovered it.
+- The jobs list loads on app start and pull to refresh only; the workspace also caches its case list.
+  After server-side changes, restart the app process (data is kept).
+- Metro exhausted its 4 GB heap once after about 20 minutes and left the app blank until restarted.
+  Cause not yet diagnosed.
+- Eight Vtiger sync intents remain `pending`: no sync worker runs in the development stack.
+
+### Remaining
+Stage 14 is not complete. Scenarios 1 to 10, iOS coverage, per-vendor device pairing, the security and
+clinical-safety reviews, the field-scale DR drill and release readiness remain open. See the exit gate
+in `docs/STAGE14_FIELD_VALIDATION_TEST_PLAN.md`.
