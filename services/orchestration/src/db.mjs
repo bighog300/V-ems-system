@@ -60,6 +60,9 @@ export class SqliteClient {
     mkdirSync(dirname(this.dbPath), { recursive: true });
     this.db = DatabaseSync ? new DatabaseSync(this.dbPath, { timeout: 5000 }) : null;
     if (this.db) {
+      // Older Node releases (22.14) ignore the constructor's timeout option and leave the busy timeout at 0, so a second
+      // process on this file (a seed script, an ops task) fails at once with "database is locked". Set it explicitly.
+      this.db.exec("PRAGMA busy_timeout = 5000;");
       this.db.exec("PRAGMA foreign_keys = ON;");
       this.db.exec("PRAGMA journal_mode = WAL;");
     }
