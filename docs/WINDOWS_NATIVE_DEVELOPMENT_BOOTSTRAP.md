@@ -153,7 +153,9 @@ because no sync worker runs in the development stack; the mobile app reads from 
 - An HTTP 4xx from OpenEMR on encounter creation is a proven pre-write denial, so the reservation is
   released for a retry. A failure with no HTTP status (lost response, timeout) still leaves the
   reservation pending and requires reconciliation.
-- Metro (`start-mobile-metro.ps1`) is a long-running Node process; it exhausted its 4 GB heap after
-  about 20 minutes once. If the app shows a blank screen, check
-  `http://127.0.0.1:8081/status` and restart Metro. The job list loads on app start and on pull to
-  refresh, so restart the app (data is kept) after changing server-side records.
+- Metro (`start-mobile-metro.ps1`) is a long-running Node process, and bulk file changes inside the tree it watches
+  can pin it at 100% CPU and end in a 4 GB out-of-memory crash (measured; see the Stage 14 execution report). Every
+  `bootstrap-development.ps1` runs `npm ci`, and a Gradle build rewrites thousands of files. **Stop Metro before
+  running either, and start it again afterwards.** If the app shows a blank screen, check
+  `http://127.0.0.1:8081/status` and restart Metro. The job list loads on app start and on pull to refresh, so restart
+  the app (data is kept) after changing server-side records.

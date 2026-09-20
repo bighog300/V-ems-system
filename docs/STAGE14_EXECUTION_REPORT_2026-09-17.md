@@ -3082,8 +3082,8 @@ relay topology for all further runs; it does not retract the earlier findings ab
   after the first install; development sign-in recovered it.
 - The jobs list loads on app start and pull to refresh only; the workspace also caches its case list.
   After server-side changes, restart the app process (data is kept).
-- Metro exhausted its 4 GB heap once after about 20 minutes and left the app blank until restarted.
-  Cause not yet diagnosed.
+- Metro exhausted its 4 GB heap after about 20 minutes and left the app blank until restarted. Investigated later the same day;
+  see "Metro memory exhaustion" below.
 - Eight Vtiger sync intents remain `pending`: no sync worker runs in the development stack.
 
 ### Remaining
@@ -3176,6 +3176,27 @@ Not a pass: the plan's PDF criterion fails for both dispositions.
   It was added with OpenEMR's `ListService::insert`, which stores a NULL `uuid` that makes OpenEMR's own
   `getAll` throw; the row was repaired by assigning a UUID. Rows created through OpenEMR's own UI or API are not affected.
 
-### Metro (recurring)
-Metro ran out of its 4 GB heap a second time (after about 74 minutes; the first was about 22). It was restarted.
-The cause is not yet diagnosed.
+### Metro memory exhaustion — investigation, 2026-09-20
+Metro (Expo dev server) ran out of its 4 GB JS heap twice (after about 22 and 74 minutes) and once more pinned
+its CPU. Findings, measured with Node's inspector attached to the running process:
+- **Not a steady-state leak.** Retained heap after GC is 139 to 154 MB at rest and stayed flat over 3 minutes idle and
+  across repeated app relaunches.
+- **Trigger: bulk file changes inside the watched tree.** Every `bootstrap-development.ps1` runs `npm ci`, which
+  deletes and recreates `node_modules` (12,350 directories, 67,107 files). Run while Metro was up, it left Metro's main
+  thread at about 100% CPU, its HTTP server unresponsive, RSS above 2 GB and the JS heap climbing about 1 MB/s
+  (188 MB to over 1.1 GB in 17 minutes), on course for the same 4 GB crash. Both earlier crashes followed
+  bootstraps run while Metro was up.
+- **Where the time goes.** This host has no Watchman, so Metro uses Expo's fallback `fs.watch` watcher
+  (`@expo/metro-file-map` `FallbackWatcher`). A CPU profile during the storm put 97.7% of the time in
+  `FallbackWatcher.#unregisterDir`, which scans every watched directory for each deleted path.
+- **Reproduced at small scale.** Creating and deleting 1,000 directories (3,000 files) inside `node_modules` kept Metro
+  pinned for more than 4 minutes (278 CPU-seconds); 300 directories had not settled after 15 minutes (about 1,000
+  CPU-seconds). The same kind of churn in `.data` and `packages/` produced no load.
+- **First hypothesis disproved.** Skipping `#unregisterDir` for deleted files (temporary local patch, reverted and
+  verified by hash) did not stop the storm (300 directories: still unsettled after 15 minutes, 1,449 CPU-seconds), so
+  that function is not the sole cause. What keeps the event backlog from draining is not yet established.
+- **Not tested:** whether installing Watchman avoids the watcher, and whether excluding the Gradle output
+  directories from Metro's watch list reduces it.
+- **Practical rule until fixed:** do not run `bootstrap-development.ps1`, `npm ci` or a Gradle build while Metro is
+  running; stop Metro first and start it again afterwards. Restart Metro if `http://127.0.0.1:8081/status` stops
+  answering.
