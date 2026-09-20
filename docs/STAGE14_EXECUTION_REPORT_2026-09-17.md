@@ -3207,3 +3207,82 @@ running and no install stamp the bootstrap stopped in 3 seconds with `node_modul
 untouched; with Metro stopped it reinstalled once and wrote the stamp (147 s); with Metro running and the lockfile
 unchanged it succeeded in 51 s, skipped the reinstall, and Metro used 0.1 CPU-seconds and kept answering. This removes
 the trigger that was found; it does not fix the watcher, and Gradle builds while Metro runs remain untested.
+## Scenarios 2 to 8 on the Windows-native topology — 2026-09-20
+
+Synthetic data only, on `ee40082`. Environment limits that shape every result: one Pixel_Tablet emulator and one
+development identity (STAFF-001, whose token is the only one the development sign-in can mint, and RBAC is not enforced
+in this profile); a `user`/`release-keys` build where `adb root` is refused, so the device clock cannot be changed;
+a development client that loads its JavaScript from Metro on every launch, so radio-off offline testing would test the
+environment; no iOS; no waiting periods of hours. Driver scripts were run from a scratch directory and are not committed.
+Nothing below is a pass for the full scenario unless it says so.
+
+### Defects and gaps (new)
+- **D5, high — offline entries are stored with the sync time, not the charting time.** Vitals charted at `12:51:56Z`,
+  an assessment at `12:54:25Z` and a medication at `12:56:44Z` (all shown on the device) were stored as `13:04:06Z`,
+  `13:04:07Z` and `13:07:32Z`. Cause: each mobile screen computes `performedAt` for its on-screen entry
+  (`api/observations.ts:50`, `assessments.ts:38`, `interventions.ts:53`) but the queued payload omits it
+  (`observations.ts:55`, `assessments.ts:43`), and the server defaults to receipt time. The server already accepts
+  `performed_at` / `recorded_at`. Every offline clinical timestamp is wrong by the length of the offline period.
+- **D6, high — an encounter created during an OpenEMR outage blocks the case permanently.** The API answers `500
+  DOWNSTREAM_UNAVAILABLE, retryable: true`, but every retry, including after OpenEMR is healthy, returns `409
+  reconciliation required`, because the reservation stays `pending` when the failure carries no HTTP status. A refused
+  connection is a proven non-write; only timeouts and resets are unknown outcomes.
+- **D7, high — OpenEMR write failures are never retried.** Vitals charted during the outage stayed
+  `failed:DOWNSTREAM_UNAVAILABLE` 60 s after recovery with no OpenEMR id, so VEMS and OpenEMR silently diverge.
+- **D8, high (configuration) — the Vtiger mirror cannot work in the development stack.** The sync worker is not part of
+  the stack, and when run it logs `vtiger_owner_set=false`. Creates fail with `assigned_user_id does not have a value` /
+  `requires VTIGER_ASSIGNED_USER_ID…`, and dependent updates then fail with `REMOTE_NOT_FOUND`: 13 of 27 intents were
+  dead-lettered with Vtiger healthy, 8 stayed pending, 6 succeeded.
+- **D9, medium — parallel patient creation races in OpenEMR.** Four parallel `POST /patient` calls: one 201 and three
+  `HTTP 200` HTML "Query Error: insert failed: INSERT INTO patient_data" responses (nothing created); VEMS surfaces
+  `500 DOWNSTREAM_UNAVAILABLE`. Sequential creates all succeed. Reproduced directly against OpenEMR.
+- **D10, medium — revoked-session behaviour.** The API denies the next request with `401 SESSION_REVOKED`. The app shows
+  only the raw string "This session or device has been revoked" in the patient-cases card, reports "No patient cases
+  yet." (false), leaves "New patient case" and "Arrived at destination" active, does not sign out and never mentions a
+  supervisor. Device-scope revocation only applies to requests that send `x-device-id`. Revocations are permanent: there is
+  no lift endpoint (test rows were removed directly from the development database).
+- **D11, medium — reconciliation does not merge downstream.** After `identity-reconciliation` the case stays linked to
+  the provisional patient with `verification_status: provisional`; OpenEMR keeps the provisional "Unidentified PCR-…"
+  records (three, for the two-crew variant) beside the verified patient. An administrator must merge them.
+- **D12, medium.** Termination of resuscitation and death on scene raise no QA flag (only refusals, stock discrepancies
+  and safeguarding notes do). A stock discrepancy (`INSUFFICIENT_STOCK`, high-severity `medication_discrepancy` flag
+  raised at completion) is never shown to the crew at entry: the response carries no indication and the app has no stock field.
+- **D13, medium.** No weight capture or weight-based dosing anywhere (dose is free text). The API accepts guardian and
+  minor fields and a `guardian` signer role; the app's demographics form has no guardian fields, and the signed PDF
+  omits guardian name, relationship and minor context (it prints only name, date of birth and sex).
+- **D14, low, offline and display UX.** The queue needed a second manual Sync now to finish (the first delivered two of
+  four); delivered items stay listed as failed on the Sync status screen until the app restarts; queued and synced rows
+  look identical in history; a screen first opened while offline shows only queued items, not earlier charting; each
+  offline submit took 5 to 15 s to register; timestamps are raw UTC ISO strings everywhere (no local time in the app,
+  PDF or API).
+
+### Results
+- **2 Multi-patient.** Four cases on one incident across two assignments (crews STAFF-001 and STAFF-002/003, three
+  different lead clinicians) charted concurrently in 2.7 s. No case's demographics, assessment, vitals, medication or
+  PDF contained another case's data; each case had 8 audit entries attributed to itself; QA flags were attributed to
+  exactly the two refusal cases. STAFF-001 can list, and write a note into, the other crew's case (`HTTP 201`): access is
+  incident-level. Untested: two real devices, and what a second device shows.
+- **3 Offline.** With the API stopped, vitals, assessment, medication and procedure were accepted and queued; all four
+  survived a force-kill mid-charting and a full emulator reboot (same queue entries, session kept); an unsubmitted draft
+  was not sent, as expected. After restart the server had exactly one of each (no duplicates), but see D5 and D14.
+  Not run: 4 hours offline, and replay with an expired token (the development token lives 1 h).
+- **4 Identity.** Provisional identity then reconciliation to a verified patient, and two crews' provisional cases
+  reconciled to one verified patient. Recorded and audited (`reconcile_identity`, actor STAFF-001); no VEMS data lost; see D11.
+- **5 Clinical drills.** API level, plus what the app UI exposes. Trauma: three procedures against 9 units of stock
+  consumed 4, 4 and then requested 4 with 1 on hand; the discrepancy row and the flag were created. Paediatric: guardian
+  signature accepted and shown in the PDF. Cardiac arrest and death on scene: outcomes exist in the app, no QA flag. Time to
+  chart was not measured: automation-driven timing is not a clinical usability signal.
+- **6 Outages.** *API stopped:* see scenario 3. *OpenEMR stopped:* readiness went to `503` and recovered; vitals and an
+  assessment were accepted; patient creation failed retryably and succeeded on retry; see D6 and D7. *Vtiger stopped 45 s:*
+  nothing lost, retries continued, 0 dead-lettered; recovery could not be assessed because of D8.
+- **7 Revocation.** See D10. In-flight request timing was not tested; the real device id was not retrievable (random
+  id in encrypted storage), so device scope was tested at the API with a stand-in id.
+- **8 Timezone.** One vitals set charted through the UI under Asia/Kolkata (+5:30), Pacific/Auckland (+12) and
+  America/St_Johns (-2:30): each stored `performed_at` fell inside its tap window, and the case timeline stayed
+  chronological with nothing before the encounter start. Device and host clocks agreed within 1 s. Not run: a DST
+  transition (the clock cannot be changed).
+
+### Synthetic data left in the development stack
+Cases PCR-000005 to PCR-000017 on INC-000001, a second assignment ASN-000002 with STAFF-002 and STAFF-003, OpenEMR
+patients from the drills (including a few "Concur" and "Outage" probe patients), and ITEM-001 stock on AMB-001 reduced by
+the trauma drill. PCR-000017 cannot get an encounter (D6). Finalized cases remain locked.
