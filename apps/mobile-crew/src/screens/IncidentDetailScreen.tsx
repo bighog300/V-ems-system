@@ -10,6 +10,7 @@ import IncidentStatusStepper from "../components/IncidentStatusStepper.tsx";
 import NavigateButton from "../components/NavigateButton.tsx";
 import { purgePatientHistoryForCases } from "../history/patientHistoryStore.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
 
 // Incident statuses at which every patient case under this incident has
 // been delivered -- the point past which on-device history for any of
@@ -147,7 +148,7 @@ export default function IncidentDetailScreen({ job, session, onBack, onSelectPat
         <Row label="Vehicle" value={job.vehicle_id} />
         <Row label="Vehicle status" value={job.vehicle_status} />
         <Row label="Crew" value={job.crew_ids.join(", ")} />
-        <Row label="Updated" value={job.updated_at} />
+        <Row label="Updated" value={formatLocalDateTime(job.updated_at)} />
       </View>
 
       <View style={styles.card}>

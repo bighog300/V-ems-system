@@ -1,13 +1,15 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { OrchestrationService } from "@vems/orchestration";
+import { runSyncWorkerService } from "@vems/orchestration/src/sync-worker-service.mjs";
 import { ApiError, CALL_SOURCES, INCIDENT_CATEGORIES, INCIDENT_PRIORITIES, INCIDENT_STATUSES, createLogger, isInsecureSecret, isProductionEnv } from "@vems/shared";
-import { authenticateRequest } from "./auth.mjs";
+import { authenticateRequest, issueHs256Token } from "./auth.mjs";
 import { RBAC_POLICIES } from "./authorization-policy.mjs";
 import { checkDependencies } from "./dependency-health.mjs";
 import { createRateLimiter } from "./rate-limiter.mjs";
+import { DEVELOPMENT_TEST_ACTOR, developmentTestSessionClaims, isSuitableTestCrew, validateDevelopmentTestAuthConfig } from "./development-test-auth.mjs";
 
-const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown"];
+const PATIENT_SEX_VALUES = ["male", "female", "other", "unknown", "X"];
 const PATIENT_LINK_VERIFICATION_STATUSES = ["unknown", "provisional", "matched_existing", "created_new", "verified", "duplicate_suspected"];
 const ENCOUNTER_STATUSES = ["Not Started", "Open", "Assessment In Progress", "Treatment In Progress", "Ready for Handover", "Handover Completed", "Closed", "Cancelled"];
 const VEHICLE_OPERATIONAL_STATUSES = ["Available", "Reserved", "Assigned", "En Route", "On Scene", "Transporting", "At Destination", "Returning to Base", "Restocking"];
@@ -618,6 +620,7 @@ function validateCreateHandover(payload) {
 
 export function createApp(orchestration = new OrchestrationService()) {
   const appEnv = process.env.APP_ENV ?? "development";
+  const developmentTestAuth = validateDevelopmentTestAuthConfig(process.env);
   // Stage 12 milestone 12i: RBAC_ENFORCE is opt-in everywhere except
   // production, where enforcement is non-optional -- an explicit
   // RBAC_ENFORCE=false is overridden (fail-safe, not fail-open) rather
@@ -655,6 +658,7 @@ export function createApp(orchestration = new OrchestrationService()) {
   const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS ?? 60000);
   const rateLimitMaxRequests = Number(process.env.RATE_LIMIT_MAX_REQUESTS ?? 120);
   const rateLimiter = createRateLimiter({ windowMs: rateLimitWindowMs, maxRequests: rateLimitMaxRequests });
+  const developmentTestSessionLimiter = createRateLimiter({ windowMs: 60000, maxRequests: 5 });
 
   const diagnostics = {
     appEnv,
@@ -708,6 +712,59 @@ export function createApp(orchestration = new OrchestrationService()) {
     if (method === "GET" && url.pathname === "/health") {
       const context = buildRequestContext(req, { role: "system", actorId: "health-check" });
       return okJson(res, 200, { status: "ok" }, context);
+    }
+
+    if (url.pathname === "/api/development/test-session") {
+      if (!developmentTestAuth.enabled || method !== "POST") {
+        return okJson(res, 404, { error: { code: "NOT_FOUND", message: "Route not found", retryable: false } }, buildRequestContext(req));
+      }
+
+      const context = buildRequestContext(req, { actorId: DEVELOPMENT_TEST_ACTOR.actorId, role: DEVELOPMENT_TEST_ACTOR.role });
+      const personnel = await orchestration.personnel?.findById?.(DEVELOPMENT_TEST_ACTOR.actorId);
+      if (!isSuitableTestCrew(personnel)) {
+        await orchestration.audit?.("authentication", DEVELOPMENT_TEST_ACTOR.actorId, "development_test_session", {
+          correlationId: context.correlationId,
+          actorId: DEVELOPMENT_TEST_ACTOR.actorId
+        }, undefined, { authentication_method: "development_test_session", synthetic_test_session: true, purpose: DEVELOPMENT_TEST_ACTOR.purpose, outcome: "fixture_unavailable" });
+        return okJson(res, 503, errorEnvelope("TEST_FIXTURE_UNAVAILABLE", "The synthetic Stage 14 test crew is unavailable.", false, context), context);
+      }
+
+      const limit = developmentTestSessionLimiter.check(req.socket.remoteAddress ?? "unknown");
+      if (!limit.allowed) {
+        await orchestration.audit?.("authentication", DEVELOPMENT_TEST_ACTOR.actorId, "development_test_session", {
+          correlationId: context.correlationId,
+          actorId: DEVELOPMENT_TEST_ACTOR.actorId
+        }, undefined, { authentication_method: "development_test_session", synthetic_test_session: true, purpose: DEVELOPMENT_TEST_ACTOR.purpose, outcome: "rate_limited" });
+        return okJson(res, 429, errorEnvelope("RATE_LIMITED", "Too many development test sessions; retry shortly.", true, context), context, {
+          "retry-after": "60"
+        });
+      }
+
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const expiresAt = issuedAt + developmentTestAuth.ttlSeconds;
+      const claims = developmentTestSessionClaims({ issuedAt, expiresAt });
+      const token = issueHs256Token(claims, authConfig.jwtSecret, { issuer: authConfig.issuer, audience: authConfig.audience });
+      await orchestration.audit?.("authentication", DEVELOPMENT_TEST_ACTOR.actorId, "development_test_session", {
+        correlationId: context.correlationId,
+        actorId: DEVELOPMENT_TEST_ACTOR.actorId
+      }, undefined, { authentication_method: "development_test_session", synthetic_test_session: true, purpose: DEVELOPMENT_TEST_ACTOR.purpose, issued_at: new Date(issuedAt * 1000).toISOString(), expires_at: new Date(expiresAt * 1000).toISOString(), outcome: "issued" });
+      logger.info("development_test_session_issued", {
+        correlation_id: context.correlationId,
+        actor_id: DEVELOPMENT_TEST_ACTOR.actorId,
+        actor_role: DEVELOPMENT_TEST_ACTOR.role,
+        authentication_method: "development_test_session",
+        synthetic_test_session: true,
+        purpose: DEVELOPMENT_TEST_ACTOR.purpose,
+        expires_at: new Date(expiresAt * 1000).toISOString()
+      });
+      return okJson(res, 200, {
+        token,
+        token_type: "Bearer",
+        expires_at: new Date(expiresAt * 1000).toISOString(),
+        actor_id: DEVELOPMENT_TEST_ACTOR.actorId,
+        role: DEVELOPMENT_TEST_ACTOR.role,
+        synthetic_test_session: true
+      }, context);
     }
 
     let actor;
@@ -803,6 +860,9 @@ export function createApp(orchestration = new OrchestrationService()) {
         }, context);
       }
 
+      if (method === "GET" && url.pathname === "/api/support/pending-identity-merges") {
+        return okJson(res, 200, { pending_merges: await orchestration.listPendingIdentityMerges() }, context);
+      }
       if (method === "GET" && url.pathname === "/api/support/diagnostics") {
         return okJson(res, 200, await supportDiagnosticsReport(orchestration, diagnostics, metrics, alertThresholds), context);
       }
@@ -989,7 +1049,7 @@ export function createApp(orchestration = new OrchestrationService()) {
       }
 
       const caseListMatch = url.pathname.match(/^\/api\/incidents\/(INC-[0-9]{6})\/patient-cases$/);
-      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|provisional-patient|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history|lifenet-import)(?:\/([^/]+))?)?$/);
+      const caseMatch = url.pathname.match(/^\/api\/patient-cases\/(PCR-[0-9]{6,})(?:\/(patient-link|encounters|encounter|assignment|status|identity-reconciliation|identity-merge|provisional-patient|provisional-patient-reconciliation|demographics|assessments|observations|medications|procedures|disposition|notes|timeline|attachments|legal-hold|history|lifenet-import)(?:\/([^/]+))?)?$/);
       if (caseListMatch || caseMatch) {
         const id = caseMatch?.[1];
         const incidentId = caseListMatch?.[1] ?? (await orchestration.getPatientCase(id)).incident_id;
@@ -1010,9 +1070,11 @@ export function createApp(orchestration = new OrchestrationService()) {
           return okJson(res, 200, await orchestration.linkPatientToPatientCase(id, payload, meta), context);
         }
         if (method === 'POST' && action === 'provisional-patient') return okJson(res, 201, await orchestration.createProvisionalPatientForCase(id, meta), context);
+        if (method === 'POST' && action === 'provisional-patient-reconciliation') return okJson(res, 200, await orchestration.reconcileProvisionalPatientFailure(id, await parseJson(req), meta), context);
         if (method === 'POST' && action === 'encounters') return okJson(res, 201, await orchestration.createEncounterForPatientCase(id, await parseJson(req), meta), context);
         if (method === 'PATCH' && action === 'assignment') return okJson(res, 200, await orchestration.changePatientCaseAssignment(id, await parseJson(req), meta), context);
         if (method === 'PATCH' && action === 'status') return okJson(res, 200, await orchestration.setPatientCaseStatus(id, (await parseJson(req)).status, meta), context);
+        if (method === 'POST' && action === 'identity-merge') return okJson(res, 200, await orchestration.confirmIdentityMerge(id, await parseJson(req), meta), context);
         if (method === 'POST' && action === 'identity-reconciliation') return okJson(res, 200, await orchestration.reconcilePatientCaseIdentity(id, await parseJson(req), meta), context);
         if (method === 'GET' && action === 'demographics') return okJson(res, 200, await orchestration.getPatientCaseDemographics(id), context);
         if (method === 'PUT' && action === 'demographics') return okJson(res, 200, await orchestration.savePatientCaseDemographics(id, await parseJson(req), meta), context);
@@ -1217,9 +1279,25 @@ export function createApp(orchestration = new OrchestrationService()) {
 
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const server = createApp();
+  const orchestration = new OrchestrationService();
+  const server = createApp(orchestration);
+  // D7: re-send clinical entries whose OpenEMR write never left VEMS while OpenEMR was unreachable (0 disables).
+  const retryEveryMs = Number(process.env.DOWNSTREAM_RETRY_INTERVAL_MS ?? 30000);
+  // The Vtiger mirror worker runs in this process, sharing the API's database handle: two containers cannot safely share
+  // a SQLite file on a bind mount.
+  const stopWorker = new AbortController();
+  if (process.env.SYNC_WORKER_ENABLED === "true") {
+    runSyncWorkerService({ db: orchestration.db, stopSignal: stopWorker.signal }).catch((error) => console.error("[sync-worker] stopped:", error?.message));
+  }
+  for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => { stopWorker.abort(); server.close(); setTimeout(() => process.exit(0), 500).unref(); });
+  if (retryEveryMs > 0) {
+    setInterval(() => {
+      orchestration.retryFailedClinicalDownstream().then((r) => { if (r.retried) console.log(`downstream retry: ${r.created}/${r.retried} created`); }, (error) => console.error(`downstream retry failed: ${error?.message}`));
+    }, retryEveryMs).unref();
+  }
   const port = Number(process.env.PORT ?? 8080);
-  server.listen(port, () => {
-    console.log(`api-gateway listening on ${port}`);
+  const host = process.env.HOST ?? "0.0.0.0";
+  server.listen(port, host, () => {
+    console.log(`api-gateway listening on ${host}:${port}`);
   });
 }

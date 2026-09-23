@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { withoutChartingTime } from "./timeAssert.ts";
 
 import { createPatientCaseNote, listPatientCaseNotes } from "../src/api/patientCaseNotes.ts";
 
@@ -45,6 +46,6 @@ test("createPatientCaseNote posts tags and text", async () => {
   });
 
   assert.equal(capturedUrl, "https://api.example.test/api/patient-cases/PCR-000001/notes");
-  assert.deepEqual(capturedBody, { tags: ["scene_safety"], text: "Unstable structure near the patient." });
+  assert.deepEqual(withoutChartingTime(capturedBody, "authored_at"), { tags: ["scene_safety"], text: "Unstable structure near the patient." });
   assert.equal(created.note_id, "NOTE-000001");
 });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import {
@@ -48,6 +48,10 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
   const [result, setResult] = useState<PatientSearchResult | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [createSubmitState, setCreateSubmitState] = useState<"idle" | "pending" | "succeeded" | "error">("idle");
+  const createSubmitAttempted = useRef(false);
+  const identityScrollViewRef = useRef<ScrollView>(null);
+  const createFormRevealPending = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
@@ -83,12 +87,28 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
               };
       const searchResult = await searchPatients({ ...config, criteria });
       setResult(searchResult);
-      setShowCreateForm(searchResult.match_status === "no_match");
+      // Keep the non-mutating choice explicit: the create form is revealed by
+      // the rendered "None of these" action, not implicitly by search.
+      setShowCreateForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Patient search failed.");
     } finally {
       setSearching(false);
     }
+  }
+
+  function handleShowCreateForm() {
+    if (!showCreateForm) createFormRevealPending.current = true;
+    setShowCreateForm(true);
+  }
+
+  function handleCreateFormLayout() {
+    if (!createFormRevealPending.current) return;
+    createFormRevealPending.current = false;
+    // The form is laid out only after the closed -> open transition. A single
+    // layout-driven scroll keeps the first control visible without focusing an
+    // input or opening the keyboard, and never re-applies after interaction.
+    identityScrollViewRef.current?.scrollToEnd({ animated: true });
   }
 
   async function handleLinkCandidate(candidate: PatientCandidate) {
@@ -110,7 +130,10 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
   }
 
   async function handleCreateAndLink() {
+    if (createSubmitAttempted.current || busy) return;
+    createSubmitAttempted.current = true;
     setBusy(true);
+    setCreateSubmitState("pending");
     setError(null);
     try {
       const created = await createPatient({
@@ -123,9 +146,11 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
         verificationStatus: "verified",
         openemrPatientId: created.patient_id
       });
+      setCreateSubmitState("succeeded");
       onLinked();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create and link patient.");
+      setError("Failed to create and link patient. No automatic retry was attempted.");
+      setCreateSubmitState("error");
     } finally {
       setBusy(false);
     }
@@ -163,11 +188,11 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
   }
 
   return (
-    <ScrollView style={styles.container} testID="patient-identity-screen">
+    <ScrollView ref={identityScrollViewRef} style={styles.container} keyboardShouldPersistTaps="handled" testID="patient-identity-screen">
       <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to patient case" style={styles.backLink} testID="back-to-case">
         <Text style={styles.back}>‹ Patient case</Text>
       </Pressable>
-      <Text style={styles.title} accessibilityRole="header">
+      <Text style={styles.title} accessibilityRole="header" accessibilityLabel={`Patient identity, ${patientCase.patient_case_id}`}>
         Patient identity
       </Text>
 
@@ -310,11 +335,12 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
             ))
           )}
           <Pressable
-            onPress={() => setShowCreateForm(true)}
+            onPress={handleShowCreateForm}
             accessibilityRole="button"
             accessibilityLabel="None of these — create a new patient"
+            accessibilityState={{ disabled: false }}
             style={styles.linkButton}
-            testID="show-create-form"
+            testID="patient-create-new-option"
           >
             <Text style={styles.linkText}>None of these — create a new patient</Text>
           </Pressable>
@@ -322,16 +348,32 @@ export default function PatientIdentityScreen({ patientCase, session, onBack, on
       ) : null}
 
       {showCreateForm ? (
-        <View style={styles.card}>
+        <View style={styles.card} testID="patient-create-form" onLayout={handleCreateFormLayout}>
           <Text style={styles.cardTitle}>Create new patient</Text>
-          <TextInput style={styles.input} placeholder="Sex" accessibilityLabel="Sex" value={sex} onChangeText={setSex} testID="create-sex" />
+          <Text style={styles.hint} accessibilityLabel={patientCase.patient_case_id} testID="patient-create-case-context">
+            {patientCase.patient_case_id}
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Sex"
+            accessibilityLabel="Sex"
+            accessibilityHint="Enter sex; X is supported"
+            value={sex}
+            onChangeText={setSex}
+            testID="create-sex"
+          />
+          {createSubmitState === "idle" ? <View testID="patient-create-submit-idle" /> : null}
+          {createSubmitState === "pending" ? <View testID="patient-create-submit-pending" /> : null}
+          {createSubmitState === "succeeded" ? <View testID="patient-create-submit-succeeded" /> : null}
+          {createSubmitState === "error" ? <View testID="patient-create-submit-error" /> : null}
           <Pressable
             style={[styles.button, busy && styles.buttonDisabled]}
             onPress={handleCreateAndLink}
-            disabled={busy || !firstName.trim() || !lastName.trim() || !dob.trim()}
+            disabled={busy || createSubmitState !== "idle" || !firstName.trim() || !lastName.trim() || !dob.trim() || !["male", "female", "other", "unknown", "x"].includes(sex.trim().toLowerCase())}
             accessibilityRole="button"
             accessibilityLabel="Create and link"
-            testID="create-and-link"
+            accessibilityState={{ disabled: busy || createSubmitState !== "idle" || !firstName.trim() || !lastName.trim() || !dob.trim() || !["male", "female", "other", "unknown", "x"].includes(sex.trim().toLowerCase()) }}
+            testID="patient-create-and-link"
           >
             {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create and link</Text>}
           </Pressable>

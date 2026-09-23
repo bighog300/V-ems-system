@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, type AppStateStatus, Platform, StyleSheet, View } from "react-native";
 
 import { listMyAssignmentsCached, type AssignedJob } from "../api/assignments.ts";
+import { UnauthorizedError } from "../api/apiError.ts";
+import { verifySession } from "../api/verifySession.ts";
 import type { PatientCase } from "../api/patientCases.ts";
 import { registerPushToken } from "../api/pushTokens.ts";
 import { getOrCreateDeviceId } from "../auth/deviceIdentity.ts";
-import { loadSession, type Session } from "../auth/session.ts";
+import { clearSession, loadSession, type Session } from "../auth/session.ts";
 import {
   configureForegroundNotificationHandler,
   getLaunchDeepLink,
@@ -24,7 +26,8 @@ import IncidentDetailScreen from "../screens/IncidentDetailScreen.tsx";
 import IncidentWorkspaceScreen from "../screens/IncidentWorkspaceScreen.tsx";
 import InterventionsScreen from "../screens/InterventionsScreen.tsx";
 import JobsListScreen from "../screens/JobsListScreen.tsx";
-import LoginScreen from "../screens/LoginScreen.tsx";
+import LoginScreen, { INVALID_SESSION_MESSAGE, REVOKED_SESSION_MESSAGE } from "../screens/LoginScreen.tsx";
+import { onSessionRejected } from "../auth/sessionEvents.ts";
 import NotesScreen from "../screens/NotesScreen.tsx";
 import PatientCaseDetailScreen from "../screens/PatientCaseDetailScreen.tsx";
 import PatientIdentityScreen from "../screens/PatientIdentityScreen.tsx";
@@ -55,9 +58,12 @@ type BootState = "loading" | "signed-out" | "locked" | "signed-in";
 export default function RootNavigator() {
   const [state, setState] = useState<BootState>("loading");
   const [session, setSession] = useState<Session | null>(null);
+  const [loginNotice, setLoginNotice] = useState<string | null>(null);
   const [navigatorReady, setNavigatorReady] = useState(false);
   const [pendingDeepLink, setPendingDeepLink] = useState<AssignmentDeepLink | null>(null);
   const appStateRef = useRef(AppState.currentState);
+  const sessionRef = useRef<Session | null>(null);
+  sessionRef.current = session;
   const sync = useSyncTriggers(state === "signed-in" ? session : null);
   const isTabletLayout = useIsTabletLayout();
 
@@ -132,11 +138,29 @@ export default function RootNavigator() {
 
   useEffect(() => {
     let cancelled = false;
-    loadSession().then((restored) => {
+    loadSession().then(async (restored) => {
       if (cancelled) return;
       if (restored) {
-        setSession(restored);
-        setState("locked");
+        try {
+          await verifySession({ apiBaseUrl: restored.apiBaseUrl, authToken: restored.authToken });
+          if (cancelled) return;
+          setSession(restored);
+          setState("locked");
+        } catch (error) {
+          if (cancelled) return;
+          if (error instanceof UnauthorizedError) {
+            await clearSession();
+            if (cancelled) return;
+            setSession(null);
+            setLoginNotice(error.code === "SESSION_REVOKED" ? REVOKED_SESSION_MESSAGE : INVALID_SESSION_MESSAGE);
+            setState("signed-out");
+            return;
+          }
+          // Connectivity, server, and downstream failures do not invalidate a
+          // persisted session; preserve it for the normal lock/unlock path.
+          setSession(restored);
+          setState("locked");
+        }
       } else {
         setState("signed-out");
       }
@@ -145,6 +169,17 @@ export default function RootNavigator() {
       cancelled = true;
     };
   }, []);
+
+  // Any request, on any screen or in the background sync, that learns the server no longer accepts this session ends it
+  // here, once, with a message that says why. The offline outbox is left alone: queued charting is kept, not discarded.
+  useEffect(() => onSessionRejected((rejection) => {
+    if (!sessionRef.current) return;
+    sessionRef.current = null;
+    clearSession().catch(() => {});
+    setSession(null);
+    setLoginNotice(rejection === "revoked" ? REVOKED_SESSION_MESSAGE : INVALID_SESSION_MESSAGE);
+    setState("signed-out");
+  }), []);
 
   // Re-lock whenever the app returns to the foreground from the background,
   // so a crew member's session isn't left exposed if the device changes hands.
@@ -162,11 +197,13 @@ export default function RootNavigator() {
 
   const handleSignedIn = useCallback((next: Session) => {
     setSession(next);
+    setLoginNotice(null);
     setState("signed-in");
   }, []);
 
   const handleSignedOut = useCallback(() => {
     setSession(null);
+    setLoginNotice(null);
     setState("signed-out");
   }, []);
 
@@ -283,7 +320,7 @@ export default function RootNavigator() {
             </Stack.Screen>
           </>
         ) : (
-          <Stack.Screen name="Login">{() => <LoginScreen onSignedIn={handleSignedIn} />}</Stack.Screen>
+          <Stack.Screen name="Login">{() => <LoginScreen onSignedIn={handleSignedIn} initialError={loginNotice} />}</Stack.Screen>
         )}
       </Stack.Navigator>
     </NavigationContainer>

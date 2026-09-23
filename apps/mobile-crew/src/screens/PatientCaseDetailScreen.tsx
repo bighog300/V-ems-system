@@ -15,6 +15,7 @@ import { getOrCreateEncryptionKey } from "../offline/crypto.ts";
 import { getOfflineDatabase } from "../offline/db.ts";
 import { enqueueAttachment, listAttachments, type AttachmentMetadata } from "../offline/attachmentStore.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
 
 export interface PatientCaseDetailScreenProps {
   patientCase: PatientCase;
@@ -48,6 +49,11 @@ export default function PatientCaseDetailScreen({
   const [dob, setDob] = useState("");
   const [dobUnknown, setDobUnknown] = useState(false);
   const [sex, setSex] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [isMinor, setIsMinor] = useState(false);
+  const [guardianName, setGuardianName] = useState("");
+  const [guardianRelationship, setGuardianRelationship] = useState("");
+  const [guardianPhone, setGuardianPhone] = useState("");
   const [unidentified, setUnidentified] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -138,6 +144,11 @@ export default function PatientCaseDetailScreen({
     setDob(demographics?.dob ?? "");
     setDobUnknown(demographics?.dob_unknown ?? false);
     setSex(demographics?.sex ?? "");
+    setWeightKg(demographics?.weight_kg != null ? String(demographics.weight_kg) : "");
+    setIsMinor(Boolean(demographics?.minor_context));
+    setGuardianName(demographics?.guardian_name ?? "");
+    setGuardianRelationship(demographics?.guardian_relationship ?? "");
+    setGuardianPhone(demographics?.guardian_phone ?? "");
     setUnidentified(demographics?.unidentified ?? false);
   };
 
@@ -245,6 +256,19 @@ export default function PatientCaseDetailScreen({
       if (lastName.trim()) payload.last_name = lastName.trim();
       if (sex.trim()) payload.sex = sex.trim();
       if (!dobUnknown && dob.trim()) payload.dob = dob.trim();
+      if (weightKg.trim()) {
+        const weight = Number(weightKg.trim());
+        if (!Number.isFinite(weight) || weight < 0.2 || weight > 500) {
+          setError("Weight must be between 0.2 and 500 kg.");
+          setSaving(false);
+          return;
+        }
+        payload.weight_kg = weight;
+      }
+      payload.minor_context = isMinor;
+      if (guardianName.trim()) payload.guardian_name = guardianName.trim();
+      if (guardianRelationship.trim()) payload.guardian_relationship = guardianRelationship.trim();
+      if (guardianPhone.trim()) payload.guardian_phone = guardianPhone.trim();
 
       const saved = await savePatientCaseDemographics({
         apiBaseUrl: session.apiBaseUrl,
@@ -426,6 +450,27 @@ export default function PatientCaseDetailScreen({
             ) : null}
 
             <TextInput style={styles.input} placeholder="Sex" accessibilityLabel="Sex" value={sex} onChangeText={setSex} testID="sex-input" />
+            <TextInput
+              style={styles.input}
+              placeholder="Weight (kg)"
+              accessibilityLabel="Weight in kilograms"
+              value={weightKg}
+              onChangeText={setWeightKg}
+              keyboardType="decimal-pad"
+              testID="weight-input"
+            />
+
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Patient is a minor</Text>
+              <Switch value={isMinor} onValueChange={setIsMinor} testID="minor-switch" />
+            </View>
+            {isMinor ? (
+              <>
+                <TextInput style={styles.input} placeholder="Guardian name" accessibilityLabel="Guardian name" value={guardianName} onChangeText={setGuardianName} testID="guardian-name-input" />
+                <TextInput style={styles.input} placeholder="Guardian relationship" accessibilityLabel="Guardian relationship" value={guardianRelationship} onChangeText={setGuardianRelationship} testID="guardian-relationship-input" />
+                <TextInput style={styles.input} placeholder="Guardian phone" accessibilityLabel="Guardian phone" value={guardianPhone} onChangeText={setGuardianPhone} keyboardType="phone-pad" testID="guardian-phone-input" />
+              </>
+            ) : null}
 
             {savedAt ? (
               <Text style={styles.savedNote} accessibilityLiveRegion="polite" testID="demographics-saved">
@@ -458,7 +503,7 @@ export default function PatientCaseDetailScreen({
                 <Text style={styles.identityStatus}>
                   {encounter.encounter_id} · {encounter.status}
                 </Text>
-                <Text style={styles.hint}>Started {encounter.care_started_at}</Text>
+                <Text style={styles.hint}>Started {formatLocalDateTime(encounter.care_started_at)}</Text>
                 <Pressable
                   style={[styles.button, styles.spacedButton]}
                   onPress={() => onOpenVitals(caseState.patient_case_id)}

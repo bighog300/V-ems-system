@@ -18,6 +18,7 @@ import {
 import type { Session } from "../auth/session.ts";
 import SignaturePad, { type SignaturePadHandle } from "../components/SignaturePad.tsx";
 import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
 
 export interface EpcrScreenProps {
   patientCaseId: string;
@@ -267,7 +268,7 @@ export default function EpcrScreen({ patientCaseId, session, onBack }: EpcrScree
                 {stateLabel(signature.signer_role)} · {signature.signer_identity}
                 {signature.signature_method === "drawn" ? " · drawn" : ""}
               </Text>
-              <Text style={styles.rowTime}>{signature.signed_at}</Text>
+              <Text style={styles.rowTime}>{formatLocalDateTime(signature.signed_at)}</Text>
             </View>
           ))
         )}

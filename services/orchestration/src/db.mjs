@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { migrationFiles } from "./migration-files.mjs";
 import { PostgresClient } from "./postgres-client.mjs";
@@ -35,11 +35,34 @@ function runSqlite(dbPath, args, input = undefined) {
 export class SqliteClient {
   dialect = "sqlite";
 
-  constructor(dbPath = process.env.VEMS_DB_PATH ?? ".data/platform.sqlite") {
+  constructor(dbPath = process.env.VEMS_DB_PATH ?? ".data/platform.sqlite", options = {}) {
     this.dbPath = resolve(dbPath);
+    const initMode = options.initMode ?? process.env.VEMS_DB_INIT_MODE ?? "existing";
+    if (initMode !== "existing" && initMode !== "fresh-development") {
+      throw new Error(`Unsupported VEMS_DB_INIT_MODE: ${initMode}`);
+    }
+    if (initMode === "fresh-development") {
+      if (process.env.NODE_ENV !== "development" || process.env.APP_ENV !== "development") {
+        throw new Error("Fresh SQLite initialization requires NODE_ENV=development and APP_ENV=development");
+      }
+      assertFreshDevelopmentPath(dbPath);
+    }
+    const requireExisting = options.requireExisting ?? process.env.VEMS_REQUIRE_EXISTING_DB === "true";
+    if (requireExisting) {
+      let stats;
+      try {
+        stats = statSync(this.dbPath);
+      } catch (error) {
+        throw new Error(`Configured SQLite database is missing: ${this.dbPath}`, { cause: error });
+      }
+      if (!stats.isFile()) throw new Error(`Configured SQLite database is not a regular file: ${this.dbPath}`);
+    }
     mkdirSync(dirname(this.dbPath), { recursive: true });
     this.db = DatabaseSync ? new DatabaseSync(this.dbPath, { timeout: 5000 }) : null;
     if (this.db) {
+      // Older Node releases (22.14) ignore the constructor's timeout option and leave the busy timeout at 0, so a second
+      // process on this file (a seed script, an ops task) fails at once with "database is locked". Set it explicitly.
+      this.db.exec("PRAGMA busy_timeout = 5000;");
       this.db.exec("PRAGMA foreign_keys = ON;");
       this.db.exec("PRAGMA journal_mode = WAL;");
     }
@@ -183,6 +206,21 @@ export class SqliteClient {
   }
 }
 
+export function assertFreshDevelopmentPath(dbPath) {
+  if (!isAbsolute(dbPath)) throw new Error("Fresh development SQLite path must be absolute");
+  const candidate = resolve(dbPath);
+  const normalized = candidate.replaceAll("\\", "/").toLowerCase();
+  if (!isAbsolute(candidate)) throw new Error("Fresh development SQLite path must be absolute");
+  if (normalized.endsWith("/platform.sqlite") || normalized.endsWith("/platform.development.sqlite")) {
+    throw new Error("Fresh development SQLite path must not use a retained or production-style database filename");
+  }
+  if (normalized.includes("/services/api-gateway/.data/") || normalized.includes("/services/orchestration/.data/")) {
+    throw new Error("Fresh development SQLite path must be outside the repository runtime data directories");
+  }
+  if (!normalized.endsWith(".sqlite")) throw new Error("Fresh development SQLite path must end in .sqlite");
+  return candidate;
+}
+
 export function hasEmbeddedSqliteRuntime() {
   return Boolean(DatabaseSync);
 }
@@ -201,7 +239,7 @@ export function createDbClient(options = {}) {
   const driver = options.driver ?? process.env.VEMS_DB_DRIVER ?? "sqlite";
   if (driver === "postgres") return new PostgresClient(options);
   if (driver !== "sqlite") throw new Error(`Unknown VEMS_DB_DRIVER: ${driver}`);
-  return new SqliteClient(options.dbPath);
+  return new SqliteClient(options.dbPath, { requireExisting: options.requireExisting, initMode: options.initMode });
 }
 
 export { sqlValue };

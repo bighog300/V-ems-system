@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { withoutChartingTime } from "./timeAssert.ts";
 
 import { getPatientCaseDisposition, setPatientCaseDisposition } from "../src/api/disposition.ts";
 
@@ -57,7 +58,7 @@ test("setPatientCaseDisposition posts the outcome and optional fields", async ()
   });
 
   assert.equal(capturedUrl, "https://api.example.test/api/patient-cases/PCR-000001/disposition");
-  assert.deepEqual(capturedBody, { outcome: "transported", destination_facility: "General Hospital", receiving_provider: "Dr. Smith" });
+  assert.deepEqual(withoutChartingTime(capturedBody, "decision_at"), { outcome: "transported", destination_facility: "General Hospital", receiving_provider: "Dr. Smith" });
   assert.equal(saved.disposition_id, "DISP-000001");
 });
 
@@ -75,7 +76,7 @@ test("setPatientCaseDisposition forwards optional location fields, and omits the
     payload: { outcome: "transported", location_lat: 40.7128, location_lng: -74.006, location_accuracy_m: 8 },
     fetchImpl: fetchImpl as typeof fetch
   });
-  assert.deepEqual(capturedBody, { outcome: "transported", location_lat: 40.7128, location_lng: -74.006, location_accuracy_m: 8 });
+  assert.deepEqual(withoutChartingTime(capturedBody, "decision_at"), { outcome: "transported", location_lat: 40.7128, location_lng: -74.006, location_accuracy_m: 8 });
 
   await setPatientCaseDisposition({
     apiBaseUrl: "https://api.example.test",
@@ -84,5 +85,5 @@ test("setPatientCaseDisposition forwards optional location fields, and omits the
     payload: { outcome: "transported" },
     fetchImpl: fetchImpl as typeof fetch
   });
-  assert.deepEqual(capturedBody, { outcome: "transported" });
+  assert.deepEqual(withoutChartingTime(capturedBody, "decision_at"), { outcome: "transported" });
 });

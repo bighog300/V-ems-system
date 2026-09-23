@@ -3,39 +3,47 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput }
 
 import { verifySession } from "../api/verifySession.ts";
 import { ApiError, UnauthorizedError } from "../api/apiError.ts";
+import { developmentTestAuthEnabled, requestDevelopmentTestSession, STAGE14_TEST_ACTOR, normalizeApiBaseUrl } from "../auth/developmentTestSession.ts";
 import { getOrCreateDeviceId } from "../auth/deviceIdentity.ts";
 import { saveSession, type Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
 import { recordTelemetryEvent } from "../telemetry/telemetry.ts";
+import { resolveApiBaseUrl } from "../config/apiProfile.ts";
 
 export interface LoginScreenProps {
   onSignedIn: (session: Session) => void;
+  initialError?: string | null;
 }
 
-export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
-  const [apiBaseUrl, setApiBaseUrl] = useState("");
+export const INVALID_SESSION_MESSAGE = "Your session is no longer valid. Please sign in again.";
+export const REVOKED_SESSION_MESSAGE = "Your access to this device has been revoked. Contact your supervisor.";
+
+export default function LoginScreen({ onSignedIn, initialError = null }: LoginScreenProps) {
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => resolveApiBaseUrl());
   const [authToken, setAuthToken] = useState("");
   const [actorId, setActorId] = useState("");
   const [actorRole, setActorRole] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [submitting, setSubmitting] = useState(false);
+  const [developmentSubmitting, setDevelopmentSubmitting] = useState(false);
 
   const canSubmit = apiBaseUrl.trim() && authToken.trim() && actorId.trim() && actorRole.trim() && !submitting;
+  const showDevelopmentTestLogin = developmentTestAuthEnabled();
+
+  async function persistVerifiedSession(token: string, nextActorId: string, nextActorRole: string, syntheticTestSession = false, validateApiUrl = false) {
+    const normalizedApiBaseUrl = validateApiUrl ? normalizeApiBaseUrl(apiBaseUrl) : apiBaseUrl.trim().replace(/\/$/, "");
+    await verifySession({ apiBaseUrl: normalizedApiBaseUrl, authToken: token });
+    const deviceId = await getOrCreateDeviceId();
+    const session: Session = { apiBaseUrl: normalizedApiBaseUrl, authToken: token.trim(), actorId: nextActorId.trim(), actorRole: nextActorRole.trim(), deviceId, ...(syntheticTestSession ? { syntheticTestSession: true } : {}) };
+    await saveSession(session);
+    return session;
+  }
 
   async function handleSignIn() {
     setError(null);
     setSubmitting(true);
     try {
-      await verifySession({ apiBaseUrl, authToken });
-      const deviceId = await getOrCreateDeviceId();
-      const session: Session = {
-        apiBaseUrl: apiBaseUrl.trim().replace(/\/$/, ""),
-        authToken: authToken.trim(),
-        actorId: actorId.trim(),
-        actorRole: actorRole.trim(),
-        deviceId
-      };
-      await saveSession(session);
+      const session = await persistVerifiedSession(authToken, actorId, actorRole);
       recordTelemetryEvent({ name: "sign_in_succeeded", role: session.actorRole });
       onSignedIn(session);
     } catch (err) {
@@ -52,8 +60,25 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
     }
   }
 
+  async function handleDevelopmentTestLogin() {
+    if (developmentSubmitting || submitting) return;
+    setError(null);
+    setDevelopmentSubmitting(true);
+    try {
+      const issued = await requestDevelopmentTestSession(apiBaseUrl);
+      const session = await persistVerifiedSession(issued.token, STAGE14_TEST_ACTOR.actorId, STAGE14_TEST_ACTOR.role, true, true);
+      recordTelemetryEvent({ name: "sign_in_succeeded", role: session.actorRole });
+      onSignedIn(session);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Stage 14 test login failed.");
+      recordTelemetryEvent({ name: "sign_in_failed", reason: "unknown" });
+    } finally {
+      setDevelopmentSubmitting(false);
+    }
+  }
+
   return (
-    <ScrollView style={styles.container} testID="login-screen">
+    <ScrollView style={styles.container} contentContainerStyle={styles.containerContent} testID="login-screen">
       <Text style={styles.title} accessibilityRole="header">
         V-EMS Crew
       </Text>
@@ -102,7 +127,7 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
       />
 
       {error ? (
-        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="login-error">
+        <Text style={styles.error} accessibilityRole="alert" accessibilityLiveRegion="polite" testID={error === REVOKED_SESSION_MESSAGE ? "session-revoked" : error === INVALID_SESSION_MESSAGE ? "session-invalid" : "login-error"}>
           {error}
         </Text>
       ) : null}
@@ -117,6 +142,20 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
       >
         {submitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
       </Pressable>
+
+      {showDevelopmentTestLogin ? (
+        <Pressable
+          style={[styles.devButton, developmentSubmitting && styles.buttonDisabled]}
+          disabled={developmentSubmitting || submitting}
+          accessibilityState={{ disabled: developmentSubmitting || submitting }}
+          onPress={handleDevelopmentTestLogin}
+          accessibilityRole="button"
+          accessibilityLabel="Development sign in"
+          testID="development-test-login"
+        >
+          {developmentSubmitting ? <ActivityIndicator color="#1a4fd6" /> : <Text style={styles.devButtonText}>Development sign in</Text>}
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -124,12 +163,15 @@ export default function LoginScreen({ onSignedIn }: LoginScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
     padding: 24,
     backgroundColor: "#fff",
     width: "100%",
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: "center"
+  },
+  containerContent: {
+    flexGrow: 1,
+    justifyContent: "center"
   },
   title: {
     fontSize: 28,
@@ -170,6 +212,17 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "600"
+  },
+  devButton: {
+    marginTop: 12,
+    minHeight: TOUCH_TARGET_MIN,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  devButtonText: {
+    color: "#1a4fd6",
+    fontSize: 14,
     fontWeight: "600"
   }
 });

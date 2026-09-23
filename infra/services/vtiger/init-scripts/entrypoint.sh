@@ -86,10 +86,10 @@ if [ ! -f "${MARKER_FILE}" ]; then
   : "${DB_PORT:=3306}"
   : "${DB_NAME:=vtiger}"
   : "${DB_USER:=vtiger}"
-  : "${DB_PASSWORD:=vtigerpass}"
+  : "${DB_PASSWORD:?DB_PASSWORD is required}"
   : "${VTIGER_SITE_URL:=http://localhost:8080}"
   : "${VTIGER_ADMIN_USER:=admin}"
-  : "${VTIGER_ADMIN_PASSWORD:=Admin@123}"
+  : "${VTIGER_ADMIN_PASSWORD:?VTIGER_ADMIN_PASSWORD is required}"
   : "${VTIGER_ADMIN_EMAIL:=admin@example.com}"
   : "${VTIGER_COMPANY_NAME:=VEMS Dev}"
   : "${VTIGER_TIMEZONE:=UTC}"
@@ -98,6 +98,7 @@ if [ ! -f "${MARKER_FILE}" ]; then
 
   export DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD
   export VTIGER_SITE_URL VTIGER_ADMIN_USER VTIGER_ADMIN_PASSWORD
+  export VTIGER_ACCESS_KEY
   export VTIGER_ADMIN_EMAIL VTIGER_COMPANY_NAME VTIGER_TIMEZONE
   export VTIGER_CURRENCY VTIGER_LANGUAGE
 

@@ -1,0 +1,26 @@
+appId: org.vems.mobilecrew
+tags:
+  - stage14
+  - c2
+  - mutation
+---
+- runFlow:
+    file: maestro-c2-observation-prepare.yaml
+- assertVisible:
+    id: observation-form
+- scrollUntilVisible:
+    element:
+      id: observation-submit
+    direction: DOWN
+    timeout: 30000
+    speed: 30
+    visibilityPercentage: 100
+    centerElement: true
+- assertVisible:
+    id: observation-submit
+- tapOn:
+    id: observation-submit
+- extendedWaitUntil:
+    visible:
+      id: observation-submit-succeeded
+    timeout: 60000

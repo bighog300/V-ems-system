@@ -1,8 +1,3 @@
-FROM openemr/openemr:latest
-
-COPY init-scripts/ /opt/vems/init-scripts/
-COPY config/openemr.conf.php /var/www/localhost/htdocs/openemr/sites/default/sqlconf.php
-
-RUN chmod +x /opt/vems/init-scripts/*.sh
-
-ENTRYPOINT ["/opt/vems/init-scripts/entrypoint.sh"]
+FROM openemr/openemr:8.3.0@sha256:c7e030af718acb52ebe10a372da03a46d1195a49350fb358cdd810421583d21a
+# Preserve the upstream supported auto-installer and default entrypoint.
+COPY development/provision-development.php /opt/vems/provision-development.php

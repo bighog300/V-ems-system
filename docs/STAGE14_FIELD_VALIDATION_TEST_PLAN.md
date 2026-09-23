@@ -307,6 +307,29 @@ this log in the same repository (a simple table or linked spreadsheet is fine) s
 sign-off can point at it directly rather than relying on memory. A scenario is not
 "done" until it has a passing row on **both** platforms at minimum once.
 
+All rows below are Android emulator runs on the Windows-native topology, synthetic data only,
+by Claude Code under user direction. No iOS run exists yet, so no scenario is complete.
+Evidence detail: `docs/STAGE14_EXECUTION_REPORT_2026-09-17.md`, section "Windows-native
+environment and C2 acceptance — 2026-09-20".
+
+| Scenario | Device / OS / network | Date | Tester | Commit under test | Result | Defect |
+|---|---|---|---|---|---|---|
+| Environment: Windows bootstrap, `vems-dev` stack, adapters, idempotent rerun | Windows 11, Docker Desktop, loopback | 2026-09-20 | Claude Code | `52a4dd8`, then `48529e4` | PASS | Fixed in `52a4dd8`, `48529e4` |
+| Android debug build, install, non-mutating smoke (sign-in to jobs list) | Pixel_Tablet AVD, Android 15 (API 35), x86_64, `10.0.2.2` to host | 2026-09-20 | Claude Code | `52a4dd8` (APK) | PASS | none |
+| Section A navigation: jobs list, incident workspace, patient case, vitals form | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | `48529e4` (API), `52a4dd8` (APK) | PASS | none |
+| C2: vitals recorded through the rendered UI (one tap, PCR-000002) | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | `48529e4` (API), `52a4dd8` (APK) | PASS | none |
+| Scenario 1 golden path, transported-to-facility (PCR-000003) | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | `48529e4` + working-tree fix (later committed) | FAIL | PDF omits vitals and other charted items (D2); transported readiness threw ReferenceError (D1, fixed) |
+| Scenario 1 repeat, refusal outcome (PCR-000004) | Pixel_Tablet AVD, Android 15, `10.0.2.2` | 2026-09-20 | Claude Code | as above | FAIL | PDF omits the refusal and capacity documentation (D2); only one signature per version (D4b) |
+| Scenario 1 PDF-content criterion, re-export of PCR-000003 and PCR-000004 after the D2 fix (export format 2) | Windows host API, Pixel_Tablet data as above | 2026-09-20 | Claude Code | this commit | PASS (criterion only; scenario not re-run end to end) | D2 fixed |
+| 2 Multi-patient / MCI (4 cases, 2 crews, charted concurrently) | Single API client (no second device), Pixel_Tablet AVD for the device view | 2026-09-20 | Claude Code | `ee40082` | PARTIAL PASS: no data, PDF, audit or QA-flag leakage; only one device and one identity, so the multi-device criterion is untested | D9 (fixed) |
+| 3 Offline / app-kill / reboot / reconnect | Pixel_Tablet AVD; API container stopped (not radio-off: the dev client needs Metro to launch); about 13 min offline, not 4 h | 2026-09-20 | Claude Code | `ee40082` | FAIL: nothing lost across force-kill and reboot, no duplicates, but offline entries are stored with the sync time, not the charting time; needed a second manual sync | D5 (fixed), D14 (fixed) |
+| 4 Identity correction and reconciliation | API | 2026-09-20 | Claude Code | `ee40082` | FAIL: reconciliation and audit recorded, but three provisional OpenEMR patients remain beside the verified one and cases stay linked to the provisional record | D11 (tracked) |
+| 5 Clinical drills (trauma, paediatric, cardiac arrest) | API, plus device UI capability check | 2026-09-20 | Claude Code | `ee40082` | PARTIAL: stock discrepancy and guardian signature work; termination and death raise no QA flag; no weight or guardian capture in the app; guardian details missing from the PDF; time-to-chart not measured | D12 (fixed), D13 (partly fixed) |
+| 6 OpenEMR / Vtiger / API outage and recovery | Docker containers stopped in turn; API drill on the device | 2026-09-20 | Claude Code | `ee40082` | FAIL: charting continues in every outage, but OpenEMR writes are never retried, an encounter created during an outage blocks the case, and the Vtiger mirror cannot drain because it is misconfigured | D6 (fixed), D7 (fixed for unsent writes), D8 (fixed) |
+| 7 Lost / revoked device | Pixel_Tablet AVD and API | 2026-09-20 | Claude Code | `ee40082` | FAIL on the UI criterion: API returns 401 SESSION_REVOKED on the next request, but the app shows a raw message in one card and otherwise carries on. Device scope tested with a stand-in device id | D10 (fixed) |
+| 8 Timezone / DST | Pixel_Tablet AVD in four timezones; clock cannot be changed on a user build | 2026-09-20 | Claude Code | `ee40082` | PARTIAL PASS: charted timestamps are UTC-correct under +5:30, +12 and -2:30; DST span not run | none |
+| 9 Ambulance tablet usability; 10 Device pairing and vitals monitors | not executed | | | | NOT RUN | needs real crews and vendor hardware |
+
 ## Exit gate
 
 Per issue #71, restated as checkable conditions:

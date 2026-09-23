@@ -213,3 +213,38 @@ test("isQueueableFailure classifies validation, conflict and auth errors as not 
   assert.equal(isQueueableFailure(new UnauthorizedError("token expired")), false);
   assert.equal(isQueueableFailure(new ForbiddenError("not allowed")), false);
 });
+
+test("requestOrQueue gives up on a server that does not answer after the live-attempt timeout and queues instead", async () => {
+  const deps = await setupDeps();
+  // Never answers; only ends when the request is aborted, like a connection to an unreachable host.
+  const fetchImpl = ((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+    init.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  })) as unknown as typeof fetch;
+
+  const started = Date.now();
+  const result = await requestOrQueue(
+    {
+      fetchImpl,
+      url: "https://api.example.test/api/patient-cases/case-1/observations",
+      method: "POST",
+      payload: { vital_signs: { heart_rate_bpm: 80 } },
+      config: { authToken: "token" },
+      timeoutMs: 40,
+      scope: "observation",
+      patientCaseId: "case-1",
+      buildOptimisticResult: (entryId) => ({ id: `LOCAL-${entryId}` })
+    },
+    deps
+  );
+
+  assert.match((result as { id: string }).id, /^LOCAL-/);
+  assert.ok(Date.now() - started < 2_000, "queued promptly instead of waiting out the default timeout");
+  const queued = await listMutations(deps.db, deps.encryptionKey);
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].entryId, (result as { id: string }).id.replace("LOCAL-", ""), "the queued entry carries the idempotency key the live attempt used");
+});
+
+test("the default live-attempt timeout is short enough to feel instant offline, and still longer than a normal round trip", async () => {
+  const { LIVE_ATTEMPT_TIMEOUT_MS } = await import("../../src/api/offlineMutation.ts");
+  assert.ok(LIVE_ATTEMPT_TIMEOUT_MS >= 2_000 && LIVE_ATTEMPT_TIMEOUT_MS <= 6_000);
+});

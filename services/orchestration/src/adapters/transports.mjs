@@ -33,6 +33,9 @@ function parseJsonBody(text, target, method) {
     const error = new Error(`${target}.${method} returned invalid JSON`);
     error.code = "DOWNSTREAM_INVALID_RESPONSE";
     error.classification = "DOWNSTREAM_INVALID_RESPONSE";
+    // OpenEMR answers a failed INSERT with HTTP 200 and an HTML "Query Error" page. The page quotes the SQL, which can hold
+    // patient details, so keep only the fact that it happened.
+    error.insertFailed = /Query Error[\s\S]{0,200}insert failed/i.test(text);
     throw error;
   }
 }
@@ -111,10 +114,45 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
       return requestJson(`${apiBase}${path}`, options, "openemr", method, timeoutMs);
     };
     const standardData = (response) => response?.data ?? response;
+    // A write sent to an unreachable OpenEMR ends in a timeout whose outcome cannot be known (the record may or may not
+    // exist), which blocks a retry. Probing first turns the common outage case into a proven "nothing was sent". Any HTTP
+    // response, whatever its status, means OpenEMR is reachable; only a network-level failure counts as unreachable.
+    const probeTimeoutMs = Number(env.OPENEMR_PROBE_TIMEOUT_MS ?? 2000);
+    const assertReachable = async (method) => {
+      try {
+        await fetch(`${baseUrl.replace(/\/$/, "")}/`, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(probeTimeoutMs) });
+      } catch (cause) {
+        const error = new Error(`openemr.${method} not attempted: OpenEMR is unreachable`);
+        error.code = "DOWNSTREAM_UNAVAILABLE"; error.classification = "DOWNSTREAM_UNAVAILABLE"; error.notSent = true; error.cause = cause;
+        throw error;
+      }
+    };
+    // OpenEMR allocates a patient's pid without a lock, so concurrent creates collide: one succeeds and the others get a failed
+    // INSERT. This process is the only writer VEMS controls, so creates go through one at a time, and a failed INSERT (nothing
+    // was written) is retried a couple of times, which also covers a collision with someone creating a patient in the UI.
+    let patientCreates = Promise.resolve();
+    const oneAtATime = (task) => { const run = patientCreates.then(task); patientCreates = run.then(() => {}, () => {}); return run; };
+    const insertRetries = Number(env.OPENEMR_INSERT_RETRIES ?? 2);
+    const insertRetryDelayMs = Number(env.OPENEMR_INSERT_RETRY_DELAY_MS ?? 150);
+    const createPatientRecord = (method, body) => oneAtATime(async () => {
+      for (let attempt = 0; ; attempt += 1) {
+        try { return await call(method, "/patient", body); }
+        catch (error) {
+          if (!error?.insertFailed) throw error;
+          if (attempt >= insertRetries) {
+            const failure = new Error(`openemr.${method} failed: OpenEMR could not insert the patient record`);
+            failure.code = "DOWNSTREAM_UNAVAILABLE"; failure.classification = "DOWNSTREAM_UNAVAILABLE"; failure.notSent = true; failure.cause = error;
+            throw failure;
+          }
+          await new Promise((resolve) => setTimeout(resolve, insertRetryDelayMs * (attempt + 1)));
+        }
+      }
+    });
     const patientId = (data) => data?.uuid ?? data?.id ?? data?.pid ?? null;
     return async ({ method, payload }) => {
       const patient = encodeURIComponent(payload?.patient_id ?? "");
       const encounter = encodeURIComponent(payload?.encounter_id ?? "");
+      if (method === "createPatient" || method === "createEncounter" || method === "createObservation" || method === "createIntervention") await assertReachable(method);
       if (method === "searchPatient") {
         const query = new URLSearchParams(); if (payload?.first_name) query.set("fname", payload.first_name); if (payload?.last_name) query.set("lname", payload.last_name); if (payload?.dob) query.set("DOB", payload.dob); if (payload?.phone) query.set("phone", payload.phone);
         const response = await call(method, `/patient?${query}`, undefined, "GET");
@@ -122,7 +160,7 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
         return { match_status: candidates.length === 1 ? "matched" : candidates.length > 1 ? "ambiguous" : "not_found", match_confidence: candidates.length === 1 ? 1 : 0, patient_id: candidates.length === 1 ? patientId(candidates[0]) : null, candidates };
       }
       if (method === "createPatient") {
-        const response = await call(method, "/patient", { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex, phone_contact: payload.phone, ...(payload.provisional_identity ? { genericname1: PROVISIONAL_IDENTITY_LABEL, genericval1: PROVISIONAL_IDENTITY_NOTE } : {}) });
+        const response = await createPatientRecord(method, { fname: payload.first_name, lname: payload.last_name, DOB: payload.dob, sex: payload.sex === "X" ? "Other" : payload.sex, phone_contact: payload.phone, ...(payload.provisional_identity ? { genericname1: PROVISIONAL_IDENTITY_LABEL, genericval1: PROVISIONAL_IDENTITY_NOTE } : {}) });
         const data = standardData(response); return { patient_id: patientId(data), display_name: [data?.fname, data?.lname].filter(Boolean).join(" ") };
       }
       if (method === "createEncounter") {
@@ -150,6 +188,38 @@ export function createOpenEmrTransportFromEnv(env = process.env) {
       if (method === "getHandover") {
         const response = await call(method, `/patient/${patient}/encounter/${encounter}/soap_note`, undefined, "GET");
         return Array.isArray(response?.data) ? response.data[response.data.length - 1] ?? null : response ?? null;
+      }
+      if (method === "getPatientHistory") {
+        // Encounter lists arrive as { data: [...] }; the medication list is a bare array.
+        const list = (response) => (Array.isArray(response) ? response : Array.isArray(response?.data) ? response.data : []);
+        const encounters = list(await call(method, `/patient/${patient}/encounter`, undefined, "GET"));
+        // The medication list is keyed by the numeric pid, not the uuid VEMS stores, so resolve the pid first.
+        const record = standardData(await call(method, `/patient/${patient}`, undefined, "GET"));
+        const pid = (Array.isArray(record) ? record[0] : record)?.pid;
+        if (pid === undefined || pid === null) {
+          // An empty list here would read as "no prior medications"; fail visibly instead.
+          const error = new Error("OpenEMR patient record did not include a pid; medication history cannot be read"); error.code = "DOWNSTREAM_SCHEMA_MISMATCH"; error.classification = error.code; throw error;
+        }
+        let medicationResponse;
+        try {
+          medicationResponse = await call(method, `/patient/${encodeURIComponent(pid)}/medication`, undefined, "GET");
+        } catch (error) {
+          // OpenEMR's list controller answers an empty list with 404 and an empty body (RestControllerHelper::responseHandler);
+          // the pid was just resolved from the patient record, so a 404 here means "no medications". Any other failure propagates.
+          if (error?.status !== 404) throw error;
+        }
+        const medications = list(medicationResponse);
+        return {
+          as_of: new Date().toISOString(),
+          encounters: encounters.map((row) => ({ encounter_date: row.date ?? null, reason: row.reason ?? null, facility: row.facility_name ?? null })),
+          // OpenEMR's medication list carries a title and dates, not a dose or frequency.
+          medications: medications.map((row) => ({
+            medication_name: row.title ?? null,
+            dose: null,
+            frequency: null,
+            status: String(row.activity) === "1" && !row.enddate ? "active" : "inactive"
+          }))
+        };
       }
       throw new Error(`OpenEMR native route not configured for ${method}`);
     };
@@ -205,14 +275,24 @@ export function createVtigerTransportFromEnv(env = process.env) {
   // The real transport is intentionally lazy: authentication happens on the
   // first worker call and the session remains in memory only.
   let clientPromise;
-  const getClient = () => clientPromise ??= import("./vtiger/client.mjs").then(({ createVtigerWebserviceClient }) => createVtigerWebserviceClient(env));
+  // Vtiger rejects a create without an owner, and mirror payloads are built when the intent is queued, often before an owner
+  // is known. Fill it in at send time for every create, so no module has to remember to. Read live: the worker may resolve
+  // the integration user after this transport was built.
+  const getClient = () => clientPromise ??= import("./vtiger/client.mjs").then(({ createVtigerWebserviceClient }) => {
+    const client = createVtigerWebserviceClient(env);
+    const create = client.create.bind(client);
+    return { ...client, create: (element, elementType) => create(!element.assigned_user_id && env.VTIGER_ASSIGNED_USER_ID ? { ...element, assigned_user_id: env.VTIGER_ASSIGNED_USER_ID } : element, elementType) };
+  });
   return async ({ method, payload }) => {
     const client = await getClient();
     const externalKey = payload.vems_external_key;
     const module = payload.elementType ?? (method === "createPersonnelMirror" || method === "updatePersonnelMirror" ? "VEMSPersonnel" : method === "createAssignmentCrewMirror" || method === "updateAssignmentCrewMirror" ? "VEMSAssignmentCrew" : method === "createStockItemMirror" || method === "updateStockItemMirror" ? "VEMSStockItems" : method === "createVehicleStockMirror" || method === "updateVehicleStockMirror" ? "VEMSVehicleStock" : method === "recordStockUsageMirror" ? "VEMSStockUsage" : method.includes("Assignment") ? "VEMSAssignments" : "HelpDesk");
     const esc = (value) => String(value ?? "").replaceAll("'", "''");
-    const numberField = module === "VEMSAssignments" ? "vems_assignment_no" : module === "VEMSVehicles" ? "vems_vehicle_no" : module === "VEMSPersonnel" ? "vems_personnel_no" : module === "VEMSAssignmentCrew" ? "vems_assignment_crew_no" : module === "VEMSStockItems" ? "vems_stock_item_no" : module === "VEMSVehicleStock" ? "vems_vehicle_stock_no" : module === "VEMSStockUsage" ? "vems_stock_usage_no" : "ticket_no";
-    const query = `select id,${numberField},vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
+    // Only modules whose schema defines an auto-number field may select it: Vtiger answers a query naming an unknown field
+    // with PHP warnings ahead of the JSON, which surfaces as a non-JSON response. Vehicles, assignments and assignment crews
+    // have none (see infra/services/vtiger/development/modules.json).
+    const numberField = module === "VEMSPersonnel" ? "vems_personnel_no" : module === "VEMSStockItems" ? "vems_stock_item_no" : module === "VEMSVehicleStock" ? "vems_vehicle_stock_no" : module === "VEMSStockUsage" ? "vems_stock_usage_no" : module === "HelpDesk" ? "ticket_no" : null;
+    const query = `select id,${numberField ? `${numberField},` : ""}vems_external_key from ${module} where vems_external_key='${esc(externalKey)}';`;
     if (module === "VEMSAssignments" && !payload.vems_incident_remote_id) {
       const error = new Error("Vtiger incident linkage is pending"); error.code = "VTIGER_DEPENDENCY_PENDING"; error.classification = error.code; error.retryable = true; throw error;
     }
@@ -239,7 +319,7 @@ export function createVtigerTransportFromEnv(env = process.env) {
       const junctions = [];
       for (const member of payload.personnel_links ?? []) {
         const key = member.external_key;
-        const found = await client.query(`select id,vems_assignment_crew_no from VEMSAssignmentCrew where vems_external_key='${esc(key)}';`);
+        const found = await client.query(`select id,vems_external_key from VEMSAssignmentCrew where vems_external_key='${esc(key)}';`);
         if (found.length > 1) { const error = new Error("Multiple Vtiger assignment crew records match the external key"); error.code = "VTIGER_DUPLICATE_CONFLICT"; error.classification = error.code; throw error; }
         if (found.length === 1) { junctions.push({ remote_id: found[0].id, remote_number: found[0].vems_assignment_crew_no ?? null, external_key: key, staff_id: member.staff_id }); continue; }
         const relation = { vems_assignment_crew_id: member.assignment_crew_id, vems_external_key: key, vems_assignment_id: payload.vems_assignment_id, vems_staff_id: member.staff_id, assignment_ref: remoteId, personnel_ref: member.personnel_remote_id, vems_correlation_id: payload.vems_correlation_id, vems_last_correlation_id: payload.vems_last_correlation_id, vems_created_at_utc: payload.vems_created_at_utc, vems_updated_at_utc: payload.vems_updated_at_utc, assigned_user_id: payload.assigned_user_id };

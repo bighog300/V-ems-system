@@ -22,7 +22,16 @@ import PDFDocument from "pdfkit";
 // it lets a future consumer -- or a regression test -- tell which
 // rendering contract a given PDF was produced under, and stays fixed
 // across every schema change to the underlying content_json.
-export const EXPORT_FORMAT_VERSION = 1;
+//
+// Format 2 (Stage 14): the document now renders every clinical item the hashed
+// version content holds -- vital signs, assessment findings, medication and
+// procedure detail, the full disposition, the handover and crew notes. Format 1
+// printed only an assessment's type and time and omitted vitals, the handover
+// and notes entirely, so a signed record did not show what the signature covered.
+//
+// Format 3 (Stage 14, D13): the demographics section also prints the patient's weight, whether the patient is a minor, and
+// the guardian's name, relationship and phone, all of which the hashed content already held but the PDF left out.
+export const EXPORT_FORMAT_VERSION = 3;
 
 function collectPdfBuffer(doc) {
   return new Promise((resolve, reject) => {
@@ -43,8 +52,42 @@ function field(doc, label, value) {
   doc.font("Helvetica").fontSize(9).text(` ${value ?? "—"}`);
 }
 
+// A labelled line that is skipped entirely when there is nothing to show, so optional
+// clinical fields do not add "—" noise to every entry.
+function optionalField(doc, label, value) {
+  if (value === null || value === undefined || value === "") return;
+  field(doc, label, typeof value === "object" ? JSON.stringify(value) : value);
+}
+
 function formatOrDash(value) {
   return value === null || value === undefined || value === "" ? "—" : String(value);
+}
+
+function humanize(key) {
+  const text = String(key).replaceAll("_", " ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const VITAL_LABELS = {
+  heart_rate_bpm: ["Heart rate", "bpm"],
+  respiratory_rate_bpm: ["Respiratory rate", "/min"],
+  spo2_pct: ["SpO2", "%"],
+  temperature_c: ["Temperature", "°C"],
+  gcs_total: ["GCS total", ""],
+  blood_glucose_mgdl: ["Blood glucose", "mg/dL"]
+};
+
+function vitalLines(observations) {
+  const values = observations ?? {};
+  const lines = [];
+  const { blood_pressure_systolic: systolic, blood_pressure_diastolic: diastolic } = values;
+  if (systolic !== undefined || diastolic !== undefined) lines.push(`Blood pressure ${formatOrDash(systolic)}/${formatOrDash(diastolic)} mmHg`);
+  for (const [key, value] of Object.entries(values)) {
+    if (key === "blood_pressure_systolic" || key === "blood_pressure_diastolic" || value === null || value === undefined) continue;
+    const [label, unit] = VITAL_LABELS[key] ?? [humanize(key), ""];
+    lines.push(`${label} ${value}${unit ? ` ${unit}` : ""}`);
+  }
+  return lines;
 }
 
 /**
@@ -110,6 +153,12 @@ export async function renderPcrDocument({ version, signatures }) {
     field(doc, "Name:", [demographics.first_name, demographics.last_name].filter(Boolean).join(" ") || null);
     field(doc, "Date of birth:", demographics.dob);
     field(doc, "Sex:", demographics.sex);
+    if (demographics.weight_kg !== undefined && demographics.weight_kg !== null) field(doc, "Weight:", `${demographics.weight_kg} kg`);
+    if (demographics.minor_context) field(doc, "Minor:", "Yes");
+    if (demographics.guardian_name || demographics.guardian_relationship || demographics.guardian_phone) {
+      field(doc, "Guardian:", [demographics.guardian_name, demographics.guardian_relationship ? `(${demographics.guardian_relationship})` : null].filter(Boolean).join(" ") || null);
+      field(doc, "Guardian phone:", demographics.guardian_phone);
+    }
   }
 
   heading(doc, "Assessments");
@@ -117,6 +166,19 @@ export async function renderPcrDocument({ version, signatures }) {
   if (assessments.length === 0) doc.text("No assessments recorded.");
   for (const assessment of assessments) {
     doc.text(`${formatOrDash(assessment.section_type)} — ${formatOrDash(assessment.performed_at)}`);
+    for (const [key, value] of Object.entries(assessment.payload ?? {})) {
+      if (value === null || value === undefined || value === "") continue;
+      optionalField(doc, `  ${humanize(key)}:`, value);
+    }
+  }
+
+  heading(doc, "Vital signs");
+  const observations = content.observations ?? [];
+  if (observations.length === 0) doc.text("No vital signs recorded.");
+  for (const observation of observations) {
+    doc.text(`Recorded at ${formatOrDash(observation.performed_at)}`);
+    for (const line of vitalLines(observation.observations)) doc.text(`  ${line}`);
+    optionalField(doc, "  Notes:", observation.notes);
   }
 
   heading(doc, "Medications administered");
@@ -125,6 +187,13 @@ export async function renderPcrDocument({ version, signatures }) {
   for (const medication of medications) {
     const code = medication.medication_code ? ` [${medication.medication_code}]` : "";
     doc.text(`${formatOrDash(medication.medication_name)}${code} — ${formatOrDash(medication.dose)}${medication.dose_unit ?? ""} ${formatOrDash(medication.route)} at ${formatOrDash(medication.performed_at)}`);
+    optionalField(doc, "  Formulation:", medication.formulation);
+    optionalField(doc, "  Indication:", medication.indication);
+    optionalField(doc, "  Authorization:", medication.authorization);
+    optionalField(doc, "  Response:", medication.response);
+    optionalField(doc, "  Adverse reaction:", medication.adverse_reaction);
+    optionalField(doc, "  Stock item:", medication.stock_item_id);
+    optionalField(doc, "  Quantity used:", medication.quantity_used);
   }
 
   heading(doc, "Procedures performed");
@@ -133,6 +202,13 @@ export async function renderPcrDocument({ version, signatures }) {
   for (const procedure of procedures) {
     const code = procedure.procedure_code ? ` [${procedure.procedure_code}]` : "";
     doc.text(`${formatOrDash(procedure.procedure_name)}${code} at ${formatOrDash(procedure.performed_at)}`);
+    optionalField(doc, "  Type:", procedure.procedure_type);
+    optionalField(doc, "  Attempts:", procedure.attempts);
+    if (procedure.success !== null && procedure.success !== undefined) optionalField(doc, "  Successful:", procedure.success ? "Yes" : "No");
+    optionalField(doc, "  Complications:", procedure.complications);
+    optionalField(doc, "  Response:", procedure.response);
+    optionalField(doc, "  Stock item:", procedure.stock_item_id);
+    optionalField(doc, "  Quantity used:", procedure.quantity_used);
   }
 
   heading(doc, "Disposition");
@@ -143,7 +219,30 @@ export async function renderPcrDocument({ version, signatures }) {
     const code = disposition.outcome_code ? ` [${disposition.outcome_code}]` : "";
     field(doc, "Outcome:", `${formatOrDash(disposition.outcome)}${code}`);
     field(doc, "Destination:", disposition.destination_facility);
+    optionalField(doc, "Receiving provider:", disposition.receiving_provider);
     field(doc, "Decision at:", disposition.decision_at);
+    optionalField(doc, "Reason:", disposition.reason);
+    optionalField(doc, "Notes:", disposition.notes);
+  }
+
+  const handover = content.encounter_link;
+  if (handover?.handover_status || handover?.handover_time) {
+    heading(doc, "Handover");
+    field(doc, "Status:", handover.handover_status);
+    field(doc, "Handover time:", handover.handover_time);
+    optionalField(doc, "Disposition:", handover.disposition);
+    optionalField(doc, "Destination:", handover.destination_facility);
+    optionalField(doc, "Receiving clinician:", handover.receiving_clinician);
+    optionalField(doc, "Notes:", handover.handover_notes);
+  }
+
+  const notes = content.notes ?? [];
+  if (notes.length > 0) {
+    heading(doc, "Crew notes");
+    for (const note of notes) {
+      doc.text(`${formatOrDash(note.authored_at)}${note.tags?.length ? ` [${note.tags.join(", ")}]` : ""}`);
+      doc.text(`  ${formatOrDash(note.note_text)}`);
+    }
   }
 
   heading(doc, "Signatures");

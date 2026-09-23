@@ -29,6 +29,12 @@ export interface PatientCaseDemographics {
   estimated_age_years?: number;
   sex?: string;
   gender_identity?: string;
+  // Kilograms; the basis for paediatric and weight-based dosing decisions.
+  weight_kg?: number | null;
+  minor_context?: boolean | null;
+  guardian_name?: string | null;
+  guardian_relationship?: string | null;
+  guardian_phone?: string | null;
   unidentified?: boolean;
   updated_at?: string;
 }

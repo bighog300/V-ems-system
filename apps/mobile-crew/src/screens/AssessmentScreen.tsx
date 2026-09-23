@@ -2,9 +2,11 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { createPatientCaseAssessment, listPatientCaseAssessments, type PatientCaseAssessment } from "../api/assessments.ts";
+import { createPatientCaseAssessment, listPatientCaseAssessmentsWithQueued, type PatientCaseAssessment } from "../api/assessments.ts";
 import type { Session } from "../auth/session.ts";
 import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
+import { OfflineListNotice, WaitingToSyncBadge, type ListNotice } from "../components/SyncMarkers.tsx";
 
 export interface AssessmentScreenProps {
   patientCaseId: string;
@@ -25,6 +27,7 @@ function sectionLabel(sectionType: string): string {
 
 export default function AssessmentScreen({ patientCaseId, session, onBack }: AssessmentScreenProps) {
   const [assessments, setAssessments] = useState<PatientCaseAssessment[]>([]);
+  const [listNotice, setListNotice] = useState<ListNotice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -38,8 +41,9 @@ export default function AssessmentScreen({ patientCaseId, session, onBack }: Ass
     setLoading(true);
     setError(null);
     try {
-      const result = await listPatientCaseAssessments({ ...config, patientCaseId });
-      setAssessments([...result].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
+      const merged = await listPatientCaseAssessmentsWithQueued({ ...config, patientCaseId });
+      setListNotice(merged);
+      setAssessments([...merged.items].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load assessments.");
     } finally {
@@ -125,6 +129,7 @@ export default function AssessmentScreen({ patientCaseId, session, onBack }: Ass
       </View>
 
       <Text style={styles.sectionTitle}>History</Text>
+      <OfflineListNotice notice={listNotice} testID="assessments-offline-notice" />
       {loading ? (
         <ActivityIndicator testID="assessment-loading" />
       ) : (
@@ -140,9 +145,10 @@ export default function AssessmentScreen({ patientCaseId, session, onBack }: Ass
           renderItem={({ item }) => (
             <View style={styles.row} testID={`assessment-${item.assessment_id}`}>
               <Text style={styles.rowTime}>
-                {item.performed_at} · {sectionLabel(item.section_type)}
+                {formatLocalDateTime(item.performed_at)} · {sectionLabel(item.section_type)}
               </Text>
               <Text style={styles.rowSummary}>{typeof item.payload?.notes === "string" ? item.payload.notes : ""}</Text>
+              <WaitingToSyncBadge id={item.assessment_id} />
             </View>
           )}
         />

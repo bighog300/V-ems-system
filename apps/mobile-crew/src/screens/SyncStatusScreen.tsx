@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 import { getOfflineDatabase, listOutboxEntries, updateOutboxEntry, type OutboxEntryRow } from "../offline/db.ts";
@@ -47,6 +47,12 @@ export default function SyncStatusScreen({ sync, onBack }: SyncStatusScreenProps
       load(false);
     }, [load])
   );
+
+  // A sync that finishes while this screen is open (started here, by a reconnect, or on returning to the foreground) has
+  // changed what is waiting, so the list follows it instead of showing delivered items as failed until the next visit.
+  useEffect(() => {
+    if (sync.lastResult) void load(true);
+  }, [sync.lastResult, load]);
 
   async function handleRetry(entryId: string) {
     setRetryingId(entryId);

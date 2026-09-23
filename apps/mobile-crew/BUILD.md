@@ -90,3 +90,29 @@ certificate/provisioning profile) is managed by `eas.json`'s `production`
 profile and EAS's credential storage; provisioning real signing
 credentials is a deployment/ops task outside this repo's source control
 and is intentionally not covered here.
+
+## Stage 14 development test crew login
+
+For isolated emulator acceptance only, start the API with inline environment
+values (never add them to an environment file):
+
+```sh
+NODE_ENV=development APP_ENV=development \
+VEMS_ENABLE_DEVELOPMENT_TEST_AUTH=true \
+VEMS_DEVELOPMENT_TEST_SESSION_TTL_SECONDS=3600 \
+npm run start -w @vems/api-gateway
+```
+
+Start the debug Metro bundle with the public flag inline:
+
+```sh
+EXPO_PUBLIC_ENABLE_DEVELOPMENT_TEST_AUTH=true NODE_ENV=development APP_ENV=development \
+npx expo start --dev-client --clear --host lan --port 8082
+```
+
+The debug-only `Sign in as Stage 14 test crew` control is shown only when both
+the React Native debug runtime and the exact public flag are active. The API
+issues only the server-fixed synthetic `STAFF-001` / `field_crew` session,
+using the normal issuer and verifier. It is unavailable by default and must
+fail closed for staging and production. Ordinary token login remains the
+supported path for authentication-specific testing.

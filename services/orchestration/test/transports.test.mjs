@@ -192,3 +192,240 @@ test("vtiger transport enforces timeout", async () => {
     );
   });
 });
+
+test("native OpenEMR transport reads patient history: encounters by uuid, medications by the resolved numeric pid", async () => {
+  const requests = [];
+  await withServer((req, res) => {
+    requests.push(`${req.method} ${req.url}`);
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token", token_type: "Bearer" }));
+    if (req.url === "/apis/default/api/patient/pat-1/encounter") return res.end(JSON.stringify({ data: [{ date: "2026-09-20 09:46:28", reason: "Chest pain", facility_name: "Dev Clinic" }, { date: "2026-08-01 10:00:00", reason: "Review", facility_name: null }] }));
+    if (req.url === "/apis/default/api/patient/pat-1") return res.end(JSON.stringify({ data: { uuid: "pat-1", pid: 3 } }));
+    if (req.url === "/apis/default/api/patient/3/medication") return res.end(JSON.stringify([{ title: "Aspirin", activity: 1, enddate: null }, { title: "Warfarin", activity: "0", enddate: "2020-01-01 00:00:00" }])); // the real list route returns a bare array
+    res.writeHead(404); res.end(JSON.stringify({ error: "not found" }));
+  }, async (port) => {
+    const transport = createOpenEmrTransportFromEnv({
+      OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+      OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users"
+    });
+    const history = await transport({ method: "getPatientHistory", payload: { patient_id: "pat-1" } });
+    assert.deepEqual(history.encounters, [
+      { encounter_date: "2026-09-20 09:46:28", reason: "Chest pain", facility: "Dev Clinic" },
+      { encounter_date: "2026-08-01 10:00:00", reason: "Review", facility: null }
+    ]);
+    assert.deepEqual(history.medications.map((m) => [m.medication_name, m.status]), [["Aspirin", "active"], ["Warfarin", "inactive"]]);
+    assert.ok(history.as_of);
+    assert.ok(requests.includes("GET /apis/default/api/patient/3/medication"));
+  });
+});
+
+test("native OpenEMR patient history fails visibly, not with an empty list, when the pid cannot be resolved", async () => {
+  await withServer((req, res) => {
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token", token_type: "Bearer" }));
+    if (req.url.endsWith("/encounter")) return res.end(JSON.stringify({ data: [] }));
+    if (req.url === "/apis/default/api/patient/pat-9") return res.end(JSON.stringify({ data: {} }));
+    res.writeHead(500); res.end("{}");
+  }, async (port) => {
+    const transport = createOpenEmrTransportFromEnv({
+      OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+      OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users"
+    });
+    await assert.rejects(() => transport({ method: "getPatientHistory", payload: { patient_id: "pat-9" } }), /did not include a pid/);
+  });
+});
+test("native OpenEMR patient history treats OpenEMR's 404 for an empty medication list as no medications, and fails on other errors", async () => {
+  for (const [status, expectFailure] of [[404, false], [500, true]]) {
+    await withServer((req, res) => {
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token", token_type: "Bearer" }));
+      if (req.url.endsWith("/encounter")) return res.end(JSON.stringify({ data: [{ date: "2026-09-20 09:46:28", reason: "Chest pain", facility_name: null }] }));
+      if (req.url === "/apis/default/api/patient/pat-1") return res.end(JSON.stringify({ data: { uuid: "pat-1", pid: 3 } }));
+      res.writeHead(status); res.end(status === 404 ? "" : "{}");
+    }, async (port) => {
+      const transport = createOpenEmrTransportFromEnv({
+        OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+        OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users"
+      });
+      const outcome = transport({ method: "getPatientHistory", payload: { patient_id: "pat-1" } });
+      if (expectFailure) return assert.rejects(() => outcome);
+      const history = await outcome;
+      assert.deepEqual(history.medications, []);
+      assert.equal(history.encounters.length, 1);
+    });
+  }
+});
+function standardTransport(port, extra = {}) {
+  return createOpenEmrTransportFromEnv({
+    OPENEMR_API_STYLE: "standard", OPENEMR_BASE_URL: `http://127.0.0.1:${port}`, OPENEMR_TOKEN_URL: `http://127.0.0.1:${port}/oauth/token`,
+    OPENEMR_CLIENT_ID: "client", OPENEMR_CLIENT_SECRET: "secret", OPENEMR_USERNAME: "user", OPENEMR_PASSWORD: "pass", OPENEMR_USER_ROLE: "users",
+    ...extra
+  });
+}
+
+test("patient and encounter creation probe OpenEMR first and send nothing when it does not answer", async () => {
+  const requests = [];
+  // Accepts connections but never answers, like a stopped container whose packets are dropped.
+  await withServer((req) => { requests.push(`${req.method} ${req.url}`); }, async (port) => {
+    const transport = standardTransport(port, { OPENEMR_PROBE_TIMEOUT_MS: "200" });
+    for (const [method, payload] of [["createEncounter", { patient_id: "p1", care_started_at: "2026-09-20T10:00:00Z", presenting_complaint: "x" }], ["createPatient", { first_name: "A", last_name: "B", dob: "1990-01-01", sex: "male" }]]) {
+      await assert.rejects(() => transport({ method, payload }), (error) => error.notSent === true && error.code === "DOWNSTREAM_UNAVAILABLE" && /not attempted/.test(error.message));
+    }
+    assert.ok(requests.every((request) => request === "GET /"), `only probes may reach the server, saw: ${requests}`);
+    assert.ok(!requests.some((request) => request.startsWith("POST")), "no write, and no token request, may be sent");
+  });
+});
+
+test("a refused connection is also reported as not sent", async () => {
+  const { createServer: create } = await import("node:http");
+  const server = create(); await new Promise((r) => server.listen(0, r)); const port = server.address().port; await new Promise((r) => server.close(r));
+  const transport = standardTransport(port, { OPENEMR_PROBE_TIMEOUT_MS: "500" });
+  await assert.rejects(() => transport({ method: "createEncounter", payload: { patient_id: "p1", care_started_at: "2026-09-20T10:00:00Z", presenting_complaint: "x" } }), (error) => error.notSent === true);
+});
+
+test("vitals and intervention writes are also reported as not sent when OpenEMR is unreachable", async () => {
+  const { createServer: create } = await import("node:http");
+  const server = create(); await new Promise((r) => server.listen(0, r)); const port = server.address().port; await new Promise((r) => server.close(r));
+  const transport = standardTransport(port, { OPENEMR_PROBE_TIMEOUT_MS: "500" });
+  const base = { patient_id: "p1", encounter_id: "e1" };
+  await assert.rejects(() => transport({ method: "createObservation", payload: { ...base, vital_signs: { heart_rate_bpm: 80 } } }), (error) => error.notSent === true);
+  await assert.rejects(() => transport({ method: "createIntervention", payload: { ...base, type: "medication", name: "Aspirin" } }), (error) => error.notSent === true);
+});
+
+test("a reachable OpenEMR is probed once and then written to, even when the probe answers with an error status", async () => {
+  for (const probeStatus of [302, 500]) {
+    const requests = [];
+    await withServer(async (req, res) => {
+      let body = ""; for await (const chunk of req) body += chunk;
+      requests.push(`${req.method} ${req.url}`);
+      res.setHeader("content-type", "application/json");
+      if (req.url === "/") { res.writeHead(probeStatus); return res.end(); }
+      if (req.url === "/oauth/token") return res.end(JSON.stringify({ access_token: "opaque-test-token" }));
+      if (req.url === "/apis/default/api/patient/p1/encounter") return res.end(JSON.stringify({ data: { euuid: "enc-9" } }));
+      res.writeHead(404); res.end("{}");
+    }, async (port) => {
+      const result = await standardTransport(port)({ method: "createEncounter", payload: { patient_id: "p1", care_started_at: "2026-09-20T10:00:00Z", presenting_complaint: "x" } });
+      assert.equal(result.encounter_id, "enc-9");
+      assert.deepEqual(requests, ["GET /", "POST /oauth/token", "POST /apis/default/api/patient/p1/encounter"]);
+    });
+  }
+});
+// A minimal Vtiger web-services server: challenge, login (returns the integration user), empty queries, and create.
+async function withVtigerWebservice(handler) {
+  const created = []; const queries = [];
+  await withServer(async (req, res) => {
+    const url = new URL(req.url, "http://x"); let body = ""; for await (const chunk of req) body += chunk;
+    const params = req.method === "POST" ? new URLSearchParams(body) : url.searchParams;
+    const op = params.get("operation"); res.setHeader("content-type", "application/json");
+    if (op === "getchallenge") return res.end(JSON.stringify({ success: true, result: { token: "t", serverTime: 1, expireTime: 2 } }));
+    if (op === "login") return res.end(JSON.stringify({ success: true, result: { sessionName: "s", userId: "19x5", version: "1", vtigerVersion: "8" } }));
+    if (op === "query") { queries.push(params.get("query")); return res.end(JSON.stringify({ success: true, result: [] })); }
+    if (op === "create") { const element = JSON.parse(params.get("element")); created.push({ type: params.get("elementType"), element }); return res.end(JSON.stringify({ success: true, result: { id: "1x1", ...element } })); }
+    res.writeHead(400); res.end(JSON.stringify({ success: false, error: { code: "BAD", message: op } }));
+  }, (port) => handler(port, created, queries));
+}
+
+test("every Vtiger create gets the configured owner at send time, without overriding an explicit one", async () => {
+  await withVtigerWebservice(async (port, created) => {
+    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k", VTIGER_ASSIGNED_USER_ID: "19x5" });
+    await transport({ method: "createIncidentMirror", payload: { elementType: "HelpDesk", vems_external_key: "vems:INC-1", ticket_title: "x", incident_id: "INC-1" } });
+    await transport({ method: "createVehicleMirror", payload: { elementType: "VEMSVehicles", vems_external_key: "vems:vehicle:A", vems_vehicle_id: "A", vehicle_id: "A" } });
+    await transport({ method: "createPersonnelMirror", payload: { elementType: "VEMSPersonnel", vems_external_key: "vems:p:1", staff_id: "S1", assigned_user_id: "19x9" } });
+    assert.deepEqual(created.map((c) => [c.type, c.element.assigned_user_id]), [["HelpDesk", "19x5"], ["VEMSVehicles", "19x5"], ["VEMSPersonnel", "19x9"]]);
+  });
+});
+
+test("without an owner setting a Vtiger create is sent unchanged, so Vtiger's own error surfaces", async () => {
+  await withVtigerWebservice(async (port, created) => {
+    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k" });
+    await transport({ method: "createIncidentMirror", payload: { elementType: "HelpDesk", vems_external_key: "vems:INC-2", ticket_title: "x", incident_id: "INC-2" } });
+    assert.equal(created[0].element.assigned_user_id, undefined);
+  });
+});
+
+test("Vtiger lookup queries select only fields the module schema defines", async () => {
+  const { readFileSync } = await import("node:fs");
+  const schemas = JSON.parse(readFileSync(new URL("../../../infra/services/vtiger/development/modules.json", import.meta.url), "utf8"));
+  await withVtigerWebservice(async (port, created, queries) => {
+    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k", VTIGER_ASSIGNED_USER_ID: "19x5" });
+    const key = (name) => `vems:${name}`;
+    const calls = [
+      ["createIncidentMirror", { elementType: "HelpDesk", vems_external_key: key("i"), ticket_title: "x", incident_id: "I" }],
+      ["createVehicleMirror", { elementType: "VEMSVehicles", vems_external_key: key("v"), vehicle_id: "V" }],
+      ["createPersonnelMirror", { elementType: "VEMSPersonnel", vems_external_key: key("p"), staff_id: "S" }],
+      ["createAssignmentMirror", { elementType: "VEMSAssignments", vems_external_key: key("a"), vems_incident_remote_id: "17x1", assignment_id: "A", incident_id: "I", personnel_links: [{ external_key: key("crew"), staff_id: "S", assignment_crew_id: "AC", personnel_remote_id: "40x1" }] }],
+      ["createAssignmentCrewMirror", { elementType: "VEMSAssignmentCrew", vems_external_key: key("c") }],
+      ["createStockItemMirror", { elementType: "VEMSStockItems", vems_external_key: key("s"), stock_item_id: "T" }],
+      ["createVehicleStockMirror", { elementType: "VEMSVehicleStock", vems_external_key: key("vs"), vehicle_remote_id: "37x1", stock_item_remote_id: "38x1" }],
+      ["recordStockUsageMirror", { elementType: "VEMSStockUsage", vems_external_key: key("u"), stock_item_remote_id: "38x1" }]
+    ];
+    for (const [method, payload] of calls) await transport({ method, payload }).catch(() => {});
+    assert.ok(queries.length >= calls.length - 1, "the lookups were issued");
+    for (const query of queries) {
+      const parsed = query.match(/^select (.+?) from ([A-Za-z]+)/i); assert.ok(parsed, `unparseable query: ${query}`); const [, fields, module] = parsed;
+      const known = new Set(["id", ...(schemas[module] ?? [])]);
+      for (const field of fields.split(",")) assert.ok(known.has(field.trim()), `${module} has no field ${field.trim()} (query: ${query})`);
+    }
+  });
+});
+
+// OpenEMR-like server: a POST /patient that starts while another is still in flight fails with HTTP 200 and an HTML
+// "Query Error" page (the observed race); everything else succeeds.
+async function withRacyOpenEmr(options, fn) {
+  const state = { inFlight: 0, maxInFlight: 0, posts: 0, created: 0, failuresLeft: options.failFirst ?? 0 };
+  await withServer(async (req, res) => {
+    let body = ""; for await (const chunk of req) body += chunk;
+    if (req.url === "/oauth/token") { res.setHeader("content-type", "application/json"); return res.end(JSON.stringify({ access_token: "opaque-test-token" })); }
+    if (req.url === "/apis/default/api/patient" && req.method === "POST") {
+      state.posts += 1; state.inFlight += 1; state.maxInFlight = Math.max(state.maxInFlight, state.inFlight);
+      await new Promise((r) => setTimeout(r, 40));
+      const collided = state.maxInFlight > 1 && state.inFlight > 1;
+      state.inFlight -= 1;
+      if (collided || state.failuresLeft > 0) {
+        if (!collided) state.failuresLeft -= 1;
+        res.writeHead(200, { "content-type": "text/html" });
+        return res.end("<b>Query Error</b><br>insert failed: INSERT INTO patient_data (fname) VALUES ('SECRETNAME')");
+      }
+      state.created += 1; res.setHeader("content-type", "application/json");
+      return res.end(JSON.stringify({ data: { uuid: `pat-${state.created}`, fname: "A", lname: "B" } }));
+    }
+    res.setHeader("content-type", "application/json"); res.writeHead(200); res.end("{}");
+  }, (port) => fn(port, state));
+}
+const newPatient = (n) => ({ method: "createPatient", payload: { first_name: `P${n}`, last_name: "Test", dob: "1990-01-01", sex: "Female" } });
+
+test("parallel patient creates are sent to OpenEMR one at a time and all succeed", async () => {
+  await withRacyOpenEmr({}, async (port, state) => {
+    const transport = standardTransport(port);
+    const results = await Promise.all([1, 2, 3, 4].map((n) => transport(newPatient(n))));
+    assert.equal(state.maxInFlight, 1, "never two creates in flight");
+    assert.equal(new Set(results.map((r) => r.patient_id)).size, 4);
+    assert.equal(state.created, 4);
+  });
+});
+
+test("a failed INSERT is retried, and the caller sees the created patient", async () => {
+  await withRacyOpenEmr({ failFirst: 2 }, async (port, state) => {
+    const result = await standardTransport(port, { OPENEMR_INSERT_RETRY_DELAY_MS: "5" })(newPatient(1));
+    assert.ok(result.patient_id); assert.equal(state.posts, 3); assert.equal(state.created, 1);
+  });
+});
+
+test("a persistent INSERT failure is reported as not sent, after a bounded number of attempts, without leaking the SQL", async () => {
+  await withRacyOpenEmr({ failFirst: 99 }, async (port, state) => {
+    await assert.rejects(() => standardTransport(port, { OPENEMR_INSERT_RETRY_DELAY_MS: "5" })(newPatient(1)), (error) => {
+      assert.equal(error.notSent, true); assert.equal(error.code, "DOWNSTREAM_UNAVAILABLE");
+      assert.ok(!JSON.stringify({ m: error.message, c: error.cause?.message }).includes("SECRETNAME"));
+      return true;
+    });
+    assert.equal(state.posts, 3, "one try plus two retries");
+  });
+});
+
+test("one failing patient create does not block the ones queued behind it", async () => {
+  await withRacyOpenEmr({ failFirst: 3 }, async (port, state) => {
+    const transport = standardTransport(port, { OPENEMR_INSERT_RETRY_DELAY_MS: "5" });
+    const [first, second] = await Promise.allSettled([transport(newPatient(1)), transport(newPatient(2))]);
+    assert.equal(first.status, "rejected"); assert.equal(second.status, "fulfilled"); assert.equal(state.created, 1);
+  });
+});

@@ -4,6 +4,7 @@ import { jest, describe, it, expect, afterEach } from "@jest/globals";
 import * as Location from "expo-location";
 
 import DispositionScreen from "../src/screens/DispositionScreen.tsx";
+import { withoutChartingTime } from "./timeAssert.ts";
 import type { Session } from "../src/auth/session.ts";
 
 const session: Session = {
@@ -71,6 +72,6 @@ describe("DispositionScreen — location context", () => {
     await fireEvent.press(getByTestId("save-disposition"));
 
     await waitFor(() => expect(getByTestId("disposition-saved")).toBeTruthy());
-    expect(capturedBody).toEqual({ outcome: "treated_not_transported" });
+    expect(withoutChartingTime(capturedBody, "decision_at")).toEqual({ outcome: "treated_not_transported" });
   });
 });

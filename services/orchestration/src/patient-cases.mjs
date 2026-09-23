@@ -22,6 +22,19 @@ function parseLocation(payload) {
   return { location_lat, location_lng, location_accuracy_m: location_accuracy_m ?? null };
 }
 
+// A downstream failure proves OpenEMR never processed a write when the transport says it never sent one (notSent, after a
+// failed reachability probe), it was an HTTP 4xx denial, or the connection was refused or the host could not be resolved.
+// Timeouts, resets and lost responses on the write itself are unknown outcomes. For a multi-address AggregateError every
+// attempt must qualify.
+const PRE_WRITE_HTTP_STATUS = [400, 401, 403, 404, 422];
+const PRE_WRITE_NETWORK_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN']);
+function provenPreWriteFailure(error, depth = 0) {
+  if (!error || typeof error !== 'object' || depth > 8) return false;
+  if (error.notSent === true || PRE_WRITE_HTTP_STATUS.includes(error.status) || PRE_WRITE_NETWORK_CODES.has(error.code)) return true;
+  if (Array.isArray(error.errors) && error.errors.length) return error.errors.every(inner => provenPreWriteFailure(inner, depth + 1));
+  return provenPreWriteFailure(error.cause, depth + 1);
+}
+
 const active = a => ['Assigned', 'Accepted', 'Mobilised', 'Active'].includes(a.status);
 
 export const patientCaseMethods = {
@@ -32,13 +45,15 @@ export const patientCaseMethods = {
     const encounter = await this.encounterLinks.findByPatientCaseId(id);
     const disposition = await this.clinicalDispositions?.find(id);
     const dispositionReady = Boolean(disposition?.outcome);
+    const reconciliations = await this.db.queryAll(`SELECT * FROM patient_case_identity_reconciliations WHERE patient_case_id=${sqlValue(id)} ORDER BY created_at;`);
     return { ...record, openemr_patient_id: patient?.openemr_patient_id ?? null,
       verification_status: patient?.verification_status ?? 'unknown',
       openemr_encounter_id: encounter?.openemr_encounter_id ?? null,
       encounter_status: encounter?.encounter_status ?? null,
       closure_ready: dispositionReady || Boolean(encounter?.closure_ready && encounter.handover_status === 'Handover Completed' && encounter.handover_time && encounter.disposition),
       provisional_identity: (await this.db.queryOne(`SELECT status FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`)) ? { dob_unknown: true, native_dob_placeholder: PROVISIONAL_DOB_SENTINEL } : null,
-      identity_reconciliations: await this.db.queryAll(`SELECT * FROM patient_case_identity_reconciliations WHERE patient_case_id=${sqlValue(id)} ORDER BY created_at;`) };
+      identity_reconciliations: reconciliations,
+      identity_merge_pending: reconciliations.some(r => !r.merged_at) };
   },
   async listPatientCases(incidentId) {
     await this.getIncident(incidentId);
@@ -165,24 +180,82 @@ export const patientCaseMethods = {
       return this.getPatientCase(id);
     });
   },
+  // The reconciliations that still need an administrator to merge the provisional OpenEMR patient into the verified one.
+  async listPendingIdentityMerges() {
+    const rows = await this.db.queryAll(`SELECT r.reconciliation_id, r.patient_case_id, c.incident_id, r.clinical_patient_id AS provisional_patient_id,
+      r.verified_patient_id, r.reason, r.created_at FROM patient_case_identity_reconciliations r
+      JOIN patient_cases c ON c.patient_case_id = r.patient_case_id WHERE r.merged_at IS NULL ORDER BY r.created_at, r.reconciliation_id;`);
+    return rows;
+  },
+  // An administrator merged the two patients in OpenEMR (Administration > Patients > Merge Patients) and attests it here.
+  // VEMS cannot check it: OpenEMR exposes no API for the merge or its result.
+  async confirmIdentityMerge(id, payload, meta) {
+    objectPayload(payload);
+    await this.getPatientCase(id);
+    if (typeof payload.verified_patient_id !== 'string' || !payload.verified_patient_id.trim()) invalid('verified_patient_id is required');
+    if (typeof payload.note !== 'string' || !payload.note.trim()) invalid('note is required: say where and how the merge was done');
+    return this.db.withTransaction(async () => {
+      const record = await this.db.queryOne(`SELECT * FROM patient_case_identity_reconciliations WHERE patient_case_id=${sqlValue(id)} AND verified_patient_id=${sqlValue(payload.verified_patient_id)};`);
+      if (!record) throw new ApiError('NOT_FOUND', `No identity reconciliation to ${payload.verified_patient_id} exists for ${id}`, 404);
+      if (record.merged_at) return record;
+      const merged = { merged_at: new Date().toISOString(), merged_by: meta.actorId ?? null, merge_note: payload.note.trim() };
+      await this.db.execute(`UPDATE patient_case_identity_reconciliations SET merged_at=${sqlValue(merged.merged_at)},merged_by=${sqlValue(merged.merged_by)},merge_note=${sqlValue(merged.merge_note)} WHERE reconciliation_id=${sqlValue(record.reconciliation_id)};`);
+      const c = await this.getPatientCase(id);
+      await this.audit('patient_case', id, 'confirm_identity_merge', meta, { reconciliation_id: record.reconciliation_id, merged_at: null }, { reconciliation_id: record.reconciliation_id, incident_id: c.incident_id, provisional_patient_id: record.clinical_patient_id, verified_patient_id: record.verified_patient_id, ...merged });
+      await this.event('PatientIdentityMergeConfirmed', meta.correlationId, { patient_case_id: id, incident_id: c.incident_id, reconciliation_id: record.reconciliation_id });
+      return { ...record, ...merged };
+    });
+  },
   async createProvisionalPatientForCase(id, meta) {
     const c = await this.getPatientCase(id);
     if (c.openemr_patient_id) {
       if (c.verification_status !== 'provisional') conflict('Patient case already has an identified patient');
       return c;
     }
+    const reservation = await this.db.queryOne(`SELECT patient_case_id,status FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`);
+    if (reservation && reservation.status !== 'failed') conflict('Provisional patient creation is pending or outcome unknown; reconciliation required');
     await this.db.withTransaction(async () => {
-      if (await this.db.queryOne(`SELECT patient_case_id FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`)) conflict('Provisional patient creation is pending or outcome unknown; reconciliation required');
-      await this.db.execute(`INSERT INTO patient_case_provisional_requests VALUES (${sqlValue(id)},'pending',${sqlValue(new Date().toISOString())});`);
+      if (reservation) await this.db.execute(`UPDATE patient_case_provisional_requests SET status='pending',created_at=${sqlValue(new Date().toISOString())} WHERE patient_case_id=${sqlValue(id)};`);
+      else await this.db.execute(`INSERT INTO patient_case_provisional_requests VALUES (${sqlValue(id)},'pending',${sqlValue(new Date().toISOString())});`);
     });
     // Native validation requires DOB. This explicitly marked technical date is
     // never treated as a known birth date by the Patient Case aggregate.
-    const patient = await this.openemr.createPatient({ first_name: 'Unidentified', last_name: id,
-      dob: PROVISIONAL_DOB_SENTINEL, sex: 'Unknown', provisional_identity: true });
+    let patient;
+    try {
+      patient = await this.openemr.createPatient({ first_name: 'Unidentified', last_name: id,
+        dob: PROVISIONAL_DOB_SENTINEL, sex: 'Unknown', provisional_identity: true });
+    } catch (error) {
+      // A 404 from the configured patient-create route proves that no native
+      // create handler accepted the request. Mark only that deterministic
+      // pre-resource failure retryable; unknown outcomes remain pending and
+      // require reconciliation rather than a blind replay.
+      if (provenPreWriteFailure(error)) {
+        await this.db.execute(`UPDATE patient_case_provisional_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
+      }
+      throw error;
+    }
     if (!patient.patient_id) conflict('OpenEMR returned no patient ID; reconciliation required');
     await this.linkPatientToPatientCase(id, { verification_status: 'provisional', openemr_patient_id: patient.patient_id }, { ...meta, provisionalResult: true });
     await this.db.execute(`UPDATE patient_case_provisional_requests SET status='completed' WHERE patient_case_id=${sqlValue(id)};`);
     return this.getPatientCase(id);
+  },
+  async reconcileProvisionalPatientFailure(id, payload, meta) {
+    objectPayload(payload);
+    if (payload.outcome !== 'downstream_not_created' || payload.downstream_status !== 404) {
+      invalid('Reconciliation requires proven downstream_not_created with HTTP 404');
+    }
+    const c = await this.getPatientCase(id);
+    if (c.openemr_patient_id) return c;
+    const reservation = await this.db.queryOne(`SELECT patient_case_id,status FROM patient_case_provisional_requests WHERE patient_case_id=${sqlValue(id)};`);
+    if (!reservation) conflict('No provisional patient reservation exists for this case');
+    if (reservation.status === 'completed') return c;
+    if (!['pending', 'failed'].includes(reservation.status)) conflict('Provisional patient reservation is not recoverable');
+    if (reservation.status === 'failed') return { patient_case_id: id, reservation_status: 'failed', retryable: true };
+    await this.db.execute(`UPDATE patient_case_provisional_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
+    await this.audit('patient_case', id, 'reconcile_provisional_failure', meta,
+      { patient_case_id: id, incident_id: c.incident_id, reservation_status: reservation.status },
+      { patient_case_id: id, incident_id: c.incident_id, reservation_status: 'failed', downstream_status: 404 });
+    return { patient_case_id: id, reservation_status: 'failed', retryable: true };
   },
   async getPatientCasePatientLink(id) {
     await this.getPatientCase(id);
@@ -214,12 +287,19 @@ export const patientCaseMethods = {
     // Durable reservation prevents duplicate remote writes across workers/restarts.
     // Unknown outcomes require administrative reconciliation, never blind replay.
     await this.db.withTransaction(async () => {
-      if (await this.db.queryOne(`SELECT * FROM patient_case_encounter_requests WHERE patient_case_id=${sqlValue(id)};`)) conflict('Encounter creation is pending or outcome unknown; reconciliation required');
-      await this.db.execute(`INSERT INTO patient_case_encounter_requests VALUES (${sqlValue(id)},${sqlValue(fingerprint)},'pending',${sqlValue(new Date().toISOString())});`);
+      const reservation = await this.db.queryOne(`SELECT * FROM patient_case_encounter_requests WHERE patient_case_id=${sqlValue(id)};`);
+      if (reservation && reservation.status !== 'failed') conflict('Encounter creation is pending or outcome unknown; reconciliation required');
+      if (reservation) await this.db.execute(`UPDATE patient_case_encounter_requests SET request_fingerprint=${sqlValue(fingerprint)},status='pending',created_at=${sqlValue(new Date().toISOString())} WHERE patient_case_id=${sqlValue(id)};`);
+      else await this.db.execute(`INSERT INTO patient_case_encounter_requests VALUES (${sqlValue(id)},${sqlValue(fingerprint)},'pending',${sqlValue(new Date().toISOString())});`);
     });
     const created = await this.openemr.createEncounter({ incident_id: c.incident_id, patient_case_id: id,
       patient_id: c.openemr_patient_id, assignment_id: c.assignment_id, vehicle_id: c.vehicle_id,
-      crew_ids: meta.legacy && !c.assignment_id ? (payload.crew_ids ?? []) : c.crew_ids, care_started_at: payload.care_started_at, presenting_complaint: payload.presenting_complaint });
+      crew_ids: meta.legacy && !c.assignment_id ? (payload.crew_ids ?? []) : c.crew_ids, care_started_at: payload.care_started_at, presenting_complaint: payload.presenting_complaint }).catch(async (error) => {
+      // A proven pre-write failure (an HTTP 4xx denial, or a refused / unresolvable connection) means nothing was created,
+      // so the reservation is released for a retry. Timeouts, resets and lost responses stay pending: outcome unknown.
+      if (provenPreWriteFailure(error)) await this.db.execute(`UPDATE patient_case_encounter_requests SET status='failed' WHERE patient_case_id=${sqlValue(id)};`);
+      throw error;
+    });
     if (!created.encounter_id) conflict('OpenEMR returned no encounter ID; reconciliation required');
     return this.db.withTransaction(async () => {
       const now = new Date().toISOString();

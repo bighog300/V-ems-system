@@ -14,12 +14,14 @@ maybeTest("rolls back the last migration and re-migrating reapplies it", async (
     const allIds = migrationFiles("postgres").map((m) => m.id);
     const lastId = allIds.at(-1);
     assert.equal(await lastAppliedMigration(db), lastId);
-    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'clinical_observations' AND column_name = 'device_pairing_id';"));
+    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'patient_case_demographics' AND column_name = 'weight_kg';"));
 
     const rolledBack = await rollbackLastMigration(db);
     assert.equal(rolledBack, lastId);
     assert.equal(await lastAppliedMigration(db), allIds.at(-2));
-    assert.equal(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'clinical_observations' AND column_name = 'device_pairing_id';"), undefined);
+    assert.equal(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'patient_case_demographics' AND column_name = 'weight_kg';"), undefined);
+    // Earlier migrations remain applied when only the newest migration is rolled back.
+    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'clinical_observations' AND column_name = 'device_pairing_id';"));
   } finally {
     await db.close();
   }
@@ -44,12 +46,18 @@ maybeTest("consecutive migrations can each be rolled back in turn, until one wit
     // reapplies anything missing before any assertion here.
     await db.execute("SELECT 1;");
 
-    // 022 (clinical_observations_device_pairing), 021 (device_pairings),
+    // 024 (demographics_weight), 023 (identity_merge_tracking), 022 (clinical_observations_device_pairing), 021 (device_pairings),
     // 020 (patient_case_notes), 019 (retention_and_legal_hold), 018
     // (audit_log_actor), 017 (clinical_terminology_codes), 016
     // (access_revocations), 015 (patient_case_attachments) and 014
     // (event_outbox_sequence) all ship rollback scripts; roll each back in
     // turn.
+    const rolledBack024 = await rollbackLastMigration(db);
+    assert.equal(rolledBack024, "024_demographics_weight");
+
+    const rolledBack023 = await rollbackLastMigration(db);
+    assert.equal(rolledBack023, "023_identity_merge_tracking");
+
     const rolledBack022 = await rollbackLastMigration(db);
     assert.equal(rolledBack022, "022_clinical_observations_device_pairing");
 

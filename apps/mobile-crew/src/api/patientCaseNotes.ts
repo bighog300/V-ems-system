@@ -1,5 +1,6 @@
 import { requestJson } from "./httpClient.ts";
 import { requestOrQueue } from "./offlineMutation.ts";
+import { listWithQueued } from "../offline/queuedItems.ts";
 import type { ApiConfig } from "./patientCases.ts";
 
 // Mirrors the controlled tag vocabulary in
@@ -54,23 +55,42 @@ export async function createPatientCaseNote({
   text
 }: ApiConfig & { patientCaseId: string; tags: string[]; text: string }): Promise<PatientCaseNote> {
   const authoredAt = new Date().toISOString();
+  const body = { tags, text, authored_at: authoredAt };
   return requestOrQueue<PatientCaseNote>({
     fetchImpl,
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/notes`,
     method: "POST",
-    payload: { tags, text },
+    payload: body,
     config: { authToken, deviceId },
     scope: "note",
     patientCaseId,
-    buildOptimisticResult: (entryId) => ({
-      note_id: `LOCAL-${entryId}`,
-      patient_case_id: patientCaseId,
-      encounter_id: null,
-      tags,
-      note_text: text,
-      authored_at: authoredAt,
-      clinician_id: null,
-      created_at: authoredAt
-    })
+    buildOptimisticResult: (entryId) => noteFromRequest(entryId, patientCaseId, body)
+  });
+}
+
+type NoteRequest = { tags: string[]; text: string; authored_at: string };
+
+/** The list entry shown for a note that is still waiting to sync. */
+export function noteFromRequest(entryId: string, patientCaseId: string, body: NoteRequest): PatientCaseNote {
+  return {
+    note_id: `LOCAL-${entryId}`,
+    patient_case_id: patientCaseId,
+    encounter_id: null,
+    tags: body.tags,
+    note_text: body.text,
+    authored_at: body.authored_at,
+    clinician_id: null,
+    created_at: body.authored_at
+  };
+}
+
+export function listPatientCaseNotesWithQueued(args: ApiConfig & { patientCaseId: string }) {
+  return listWithQueued<PatientCaseNote>({
+    cacheKey: `patient-case-notes:${args.patientCaseId}`,
+    fetchFresh: () => listPatientCaseNotes(args),
+    scope: "note",
+    patientCaseId: args.patientCaseId,
+    idOf: (item) => item.note_id,
+    fromQueued: (entry) => noteFromRequest(entry.entryId, entry.patientCaseId, entry.payload as NoteRequest)
   });
 }

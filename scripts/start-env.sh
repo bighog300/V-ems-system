@@ -44,6 +44,10 @@ NODE
 
   validate_required_runtime_secrets
 
+  if [[ "$ENV_NAME" == "development" ]]; then
+    "$ROOT_DIR/scripts/generate-development-mysql-tls.sh"
+  fi
+
   mkdir -p "$ROOT_DIR/.pids" "$ROOT_DIR/.logs"
 
   COMPOSE_FILE="$ROOT_DIR/infra/docker-compose.dev.yml"

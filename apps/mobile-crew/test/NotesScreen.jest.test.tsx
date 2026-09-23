@@ -4,6 +4,7 @@ import { jest, describe, it, expect, afterEach } from "@jest/globals";
 
 import NotesScreen from "../src/screens/NotesScreen.tsx";
 import type { Session } from "../src/auth/session.ts";
+import { withoutChartingTime } from "./timeAssert.ts";
 
 const session: Session = {
   apiBaseUrl: "https://api.example.test",
@@ -95,6 +96,6 @@ describe("NotesScreen", () => {
     await fireEvent.press(getByTestId("record-note"));
 
     await waitFor(() => expect(getByTestId("note-NOTE-000001")).toBeTruthy());
-    expect(capturedBody).toEqual({ tags: ["scene_safety", "mechanism_of_injury"], text: "Downed power line near the vehicle." });
+    expect(withoutChartingTime(capturedBody, "authored_at")).toEqual({ tags: ["scene_safety", "mechanism_of_injury"], text: "Downed power line near the vehicle." });
   });
 });

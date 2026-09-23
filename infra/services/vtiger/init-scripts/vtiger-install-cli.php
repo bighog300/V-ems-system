@@ -80,8 +80,9 @@ $db_user     = env_required('DB_USER');
 $db_pass     = env_required('DB_PASSWORD');
 
 $admin_user  = env_default('VTIGER_ADMIN_USER',     'admin');
-$admin_pass  = env_default('VTIGER_ADMIN_PASSWORD',  'Admin@123');
+$admin_pass  = env_required('VTIGER_ADMIN_PASSWORD');
 $admin_email = env_default('VTIGER_ADMIN_EMAIL',     'admin@example.com');
+$access_key  = env_default('VTIGER_ACCESS_KEY',      '');
 $site_url    = env_default('VTIGER_SITE_URL',        'http://localhost:8080');
 $timezone    = env_default('VTIGER_TIMEZONE',        'UTC');
 $language    = env_default('VTIGER_LANGUAGE',        'en_us');
@@ -301,12 +302,13 @@ if (!$check) {
 }
 
 if ($check->num_rows > 0) {
+    $access_sql = $access_key !== '' ? ", accesskey = '" . $db->real_escape_string($access_key) . "'" : '';
     $upd = $db->query(
         "UPDATE vtiger_users
             SET user_password = '{$pass_md5}',
                 email1        = '{$esc_email}',
                 status        = 'Active',
-                is_admin      = 'on'
+                is_admin      = 'on'{$access_sql}
           WHERE user_name = '{$esc_user}'"
     );
     if (!$upd) {

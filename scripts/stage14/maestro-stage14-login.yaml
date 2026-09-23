@@ -1,0 +1,48 @@
+appId: org.vems.mobilecrew
+---
+# Requires a non-secret API_BASE_URL flow environment variable, e.g.
+#   maestro test -e API_BASE_URL=http://<wsl-ipv4>:3001 ...
+# An undefined variable fails this assertion before any UI action.
+- assertTrue: ${API_BASE_URL.startsWith('http://')}
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: jobs-list-screen
+    timeout: 90000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: jobs-error
+    commands:
+      - tapOn:
+          id: sign-out
+      - extendedWaitUntil:
+          visible:
+            id: login-screen
+          timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: development-test-login
+    commands:
+      - tapOn:
+          id: input-api-base-url
+      - inputText: ${API_BASE_URL}
+      # Dismiss the IME by tapping the static, non-interactive title.
+      - tapOn: "V-EMS Crew"
+      - assertVisible:
+          id: development-test-login
+      - tapOn:
+          id: development-test-login
+- extendedWaitUntil:
+    visible:
+      id: jobs-list-screen
+    timeout: 90000
+- assertVisible:
+    id: jobs-list-screen
+- extendedWaitUntil:
+    visible:
+      id: job-ASN-000001
+    timeout: 30000

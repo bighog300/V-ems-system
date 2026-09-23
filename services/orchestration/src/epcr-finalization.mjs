@@ -52,6 +52,7 @@ async function snapshot(service, patientCaseId) {
 async function requirements(service, patientCaseId) {
   const c = await requireCase(service, patientCaseId), d = await service.clinicalDemographics.find(patientCaseId), a = await service.clinicalAssessments.list(patientCaseId);
   const observations = await service.clinicalObservations.list(patientCaseId), disposition = await service.clinicalDispositions.find(patientCaseId), outcome = disposition?.outcome;
+  const encounterLink = (await service.encounterLinks.findByPatientCaseId(patientCaseId)) ?? null;
   const missing = [], warnings = [], reqs = [];
   const identity = Boolean(d?.unidentified || d?.first_name || d?.last_name || c.temporary_label || c.verification_status !== "unknown");
   reqs.push({ id: "patient_identity", required: true, conditional: "all", satisfied: identity }); if (!identity) missing.push({ id: "patient_identity", message: "Patient identity or provisional/unknown identity documentation is required" });
@@ -83,6 +84,8 @@ async function createVersion(service, patientCaseId, lifecycleState, meta, sourc
   const safeguardingNotes = (await service.clinicalNotes.list(patientCaseId)).filter(note => note.tags.includes("safeguarding_concern"));
   const automaticFlags = discrepancies.map(item => ({ type: "medication_discrepancy", severity: "high", source: "system:stock_discrepancy", note: item.discrepancy_status }))
     .concat(["refusal_assessment", "refusal_treatment", "refusal_transport"].includes(disposition?.outcome) ? [{ type: "refusal", severity: "warning", source: "system:disposition", note: disposition.outcome }] : [])
+    // A death or a terminated resuscitation is a sentinel outcome that a clinical reviewer should always see.
+    .concat(["resuscitation_terminated", "death_on_scene"].includes(disposition?.outcome) ? [{ type: disposition.outcome === "death_on_scene" ? "death_on_scene" : "termination_of_resuscitation", severity: "high", source: "system:disposition", note: disposition.outcome }] : [])
     .concat(safeguardingNotes.map(note => ({ type: "safeguarding_concern", severity: "high", source: "system:patient_case_note", note: note.note_id })));
   for (const flag of automaticFlags) {
     const qa = { flag_id: id("QAF"), patient_case_id: patientCaseId, version_id: version.version_id, flag_type: flag.type, severity: flag.severity, source: flag.source, raised_at: version.created_at, raised_by: "system", resolved_at: null, resolved_by: null, resolution_note: flag.note, correlation_id: meta.correlationId };

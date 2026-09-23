@@ -1,10 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { createPatientCaseObservation, listPatientCaseObservations, type PatientCaseObservation, type VitalSigns } from "../api/observations.ts";
+import { createPatientCaseObservation, listPatientCaseObservationsWithQueued, type PatientCaseObservation, type VitalSigns } from "../api/observations.ts";
 import type { Session } from "../auth/session.ts";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
+import { OfflineListNotice, WaitingToSyncBadge, type ListNotice } from "../components/SyncMarkers.tsx";
 
 export interface VitalsScreenProps {
   patientCaseId: string;
@@ -16,6 +18,8 @@ interface VitalField {
   key: keyof VitalSigns;
   label: string;
 }
+
+type SubmitState = "idle" | "pending" | "succeeded" | "error";
 
 const VITAL_FIELDS: VitalField[] = [
   { key: "heart_rate_bpm", label: "Heart rate (bpm)" },
@@ -39,14 +43,29 @@ function summarizeVitals(vitals: VitalSigns): string {
   return parts.length > 0 ? parts.join(" · ") : "No values recorded";
 }
 
+function parseVitalSigns(values: Record<string, string>): VitalSigns {
+  const vitalSigns: VitalSigns = {};
+  for (const field of VITAL_FIELDS) {
+    const raw = values[field.key];
+    if (raw && raw.trim()) {
+      const parsed = Number(raw.trim());
+      if (Number.isFinite(parsed)) vitalSigns[field.key] = parsed;
+    }
+  }
+  return vitalSigns;
+}
+
 export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsScreenProps) {
   const [observations, setObservations] = useState<PatientCaseObservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [listNotice, setListNotice] = useState<ListNotice | null>(null);
 
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [submitState, setSubmitState] = useState<SubmitState>("idle");
+  const submitInFlight = useRef(false);
 
   const config = { apiBaseUrl: session.apiBaseUrl, authToken: session.authToken, deviceId: session.deviceId };
 
@@ -54,8 +73,9 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
     setLoading(true);
     setError(null);
     try {
-      const result = await listPatientCaseObservations({ ...config, patientCaseId });
-      setObservations([...result].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
+      const merged = await listPatientCaseObservationsWithQueued({ ...config, patientCaseId });
+      setListNotice(merged);
+      setObservations([...merged.items].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load vitals.");
     } finally {
@@ -82,35 +102,36 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
   }
 
   async function handleRecord() {
-    const vitalSigns: VitalSigns = {};
-    for (const field of VITAL_FIELDS) {
-      const raw = fieldValues[field.key];
-      if (raw && raw.trim()) {
-        const parsed = Number(raw.trim());
-        if (!Number.isNaN(parsed)) vitalSigns[field.key] = parsed;
-      }
-    }
+    if (submitInFlight.current) return;
+    const vitalSigns = parseVitalSigns(fieldValues);
     if (Object.keys(vitalSigns).length === 0) {
       setError("Enter at least one value before recording.");
       return;
     }
 
+    submitInFlight.current = true;
     setSaving(true);
+    setSubmitState("pending");
     setError(null);
     try {
       const created = await createPatientCaseObservation({ ...config, patientCaseId, vitalSigns, notes: notes.trim() });
       setObservations((prev) => [created, ...prev]);
       setFieldValues({});
       setNotes("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to record vitals.");
+      setSubmitState("succeeded");
+    } catch {
+      setError("Unable to record observations. Check the connection and try again later.");
+      setSubmitState("error");
     } finally {
+      submitInFlight.current = false;
       setSaving(false);
     }
   }
 
+  const hasValidObservation = Object.keys(parseVitalSigns(fieldValues)).length > 0;
+
   return (
-    <View style={styles.container} testID="vitals-screen">
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" testID="vitals-screen">
       <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to patient case" style={styles.backLink} testID="back-to-case">
         <Text style={styles.back}>‹ Patient case</Text>
       </Pressable>
@@ -124,7 +145,7 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
         </Text>
       ) : null}
 
-      <View style={styles.form}>
+      <View style={styles.form} testID="observation-form">
         {observations.length > 0 ? (
           <Pressable
             style={styles.repeatButton}
@@ -149,41 +170,35 @@ export default function VitalsScreen({ patientCaseId, session, onBack }: VitalsS
           />
         ))}
         <TextInput style={styles.input} placeholder="Notes" accessibilityLabel="Notes" value={notes} onChangeText={setNotes} testID="vitals-notes" />
+        <Text testID={`observation-submit-${submitState}`} />
         <Pressable
           style={[styles.button, saving && styles.buttonDisabled]}
           onPress={handleRecord}
-          disabled={saving}
+          disabled={saving || !hasValidObservation}
           accessibilityRole="button"
           accessibilityLabel="Record vitals"
-          testID="record-vitals"
+          accessibilityState={{ disabled: saving || !hasValidObservation }}
+          testID="observation-submit"
         >
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Record vitals</Text>}
         </Pressable>
       </View>
 
       <Text style={styles.sectionTitle}>History</Text>
+      <OfflineListNotice notice={listNotice} testID="vitals-offline-notice" />
       {loading ? (
         <ActivityIndicator testID="vitals-loading" />
       ) : (
-        <FlatList
-          testID="vitals-list"
-          data={observations}
-          keyExtractor={(item) => item.observation_event_id}
-          ListEmptyComponent={
-            <Text style={styles.hint} testID="vitals-empty">
-              No vitals recorded yet.
-            </Text>
-          }
-          renderItem={({ item }) => (
-            <View style={styles.row} testID={`observation-${item.observation_event_id}`}>
-              <Text style={styles.rowTime}>{item.performed_at}</Text>
-              <Text style={styles.rowSummary}>{summarizeVitals(item.observations)}</Text>
-              {item.notes ? <Text style={styles.rowNotes}>{item.notes}</Text> : null}
-            </View>
-          )}
-        />
+        observations.length === 0 ? <Text style={styles.hint} testID="vitals-empty">No vitals recorded yet.</Text> : observations.map((item) => (
+          <View style={styles.row} testID={`observation-entry-${item.observation_event_id}`} key={item.observation_event_id}>
+            <Text style={styles.rowTime}>{formatLocalDateTime(item.performed_at)}</Text>
+            <Text style={styles.rowSummary}>{summarizeVitals(item.observations)}</Text>
+            <WaitingToSyncBadge id={item.observation_event_id} />
+            {item.notes ? <Text style={styles.rowNotes}>{item.notes}</Text> : null}
+          </View>
+        ))
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -191,11 +206,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    padding: 24,
     width: "100%",
     maxWidth: CONTENT_MAX_WIDTH,
     alignSelf: "center"
   },
+  content: { padding: 24 },
   backLink: {
     minHeight: TOUCH_TARGET_MIN,
     justifyContent: "center",

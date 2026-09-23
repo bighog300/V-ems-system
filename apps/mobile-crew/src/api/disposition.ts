@@ -72,7 +72,7 @@ export async function setPatientCaseDisposition({
     fetchImpl,
     url: `${apiBaseUrl}/api/patient-cases/${patientCaseId}/disposition`,
     method: "POST",
-    payload,
+    payload: { decision_at: now, ...payload },
     config: { authToken, deviceId },
     scope: "disposition",
     patientCaseId,

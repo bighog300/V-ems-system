@@ -1,0 +1,9 @@
+appId: org.vems.mobilecrew
+tags:
+  - stage14
+  - c2
+  - navigation-only
+---
+- runFlow:
+    file: maestro-c2-observation-prepare.yaml
+# Deliberately stops before observation-submit.

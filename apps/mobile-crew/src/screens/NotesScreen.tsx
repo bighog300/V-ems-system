@@ -2,9 +2,11 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { createPatientCaseNote, listPatientCaseNotes, NOTE_TAGS, type NoteTag, type PatientCaseNote } from "../api/patientCaseNotes.ts";
+import { createPatientCaseNote, listPatientCaseNotesWithQueued, NOTE_TAGS, type NoteTag, type PatientCaseNote } from "../api/patientCaseNotes.ts";
 import type { Session } from "../auth/session.ts";
 import { CHIP_TARGET_MIN, CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
+import { OfflineListNotice, WaitingToSyncBadge, type ListNotice } from "../components/SyncMarkers.tsx";
 
 export interface NotesScreenProps {
   patientCaseId: string;
@@ -29,6 +31,7 @@ function tagLabel(tag: string): string {
 
 export default function NotesScreen({ patientCaseId, session, onBack }: NotesScreenProps) {
   const [notes, setNotes] = useState<PatientCaseNote[]>([]);
+  const [listNotice, setListNotice] = useState<ListNotice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -42,8 +45,9 @@ export default function NotesScreen({ patientCaseId, session, onBack }: NotesScr
     setLoading(true);
     setError(null);
     try {
-      const result = await listPatientCaseNotes({ ...config, patientCaseId });
-      setNotes([...result].sort((a, b) => b.authored_at.localeCompare(a.authored_at)));
+      const merged = await listPatientCaseNotesWithQueued({ ...config, patientCaseId });
+      setListNotice(merged);
+      setNotes([...merged.items].sort((a, b) => b.authored_at.localeCompare(a.authored_at)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load notes.");
     } finally {
@@ -138,6 +142,7 @@ export default function NotesScreen({ patientCaseId, session, onBack }: NotesScr
       </View>
 
       <Text style={styles.sectionTitle}>History</Text>
+      <OfflineListNotice notice={listNotice} testID="notes-offline-notice" />
       {loading ? (
         <ActivityIndicator testID="notes-loading" />
       ) : (
@@ -153,9 +158,10 @@ export default function NotesScreen({ patientCaseId, session, onBack }: NotesScr
           renderItem={({ item }) => (
             <View style={styles.row} testID={`note-${item.note_id}`}>
               <Text style={styles.rowTime}>
-                {item.authored_at} · {item.tags.map(tagLabel).join(", ")}
+                {formatLocalDateTime(item.authored_at)} · {item.tags.map(tagLabel).join(", ")}
               </Text>
               <Text style={styles.rowSummary}>{item.note_text}</Text>
+              <WaitingToSyncBadge id={item.note_id} />
             </View>
           )}
         />

@@ -5,14 +5,16 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Switch, Text, TextI
 import {
   createPatientCaseMedication,
   createPatientCaseProcedure,
-  listPatientCaseMedications,
-  listPatientCaseProcedures,
+  listPatientCaseMedicationsWithQueued,
+  listPatientCaseProceduresWithQueued,
   type ClinicalProcedure,
   type MedicationAdministration
 } from "../api/interventions.ts";
 import type { Session } from "../auth/session.ts";
 import BarcodeScannerModal from "../scanning/BarcodeScannerModal.tsx";
 import { CONTENT_MAX_WIDTH, TOUCH_TARGET_MIN } from "../theme/a11y.ts";
+import { formatLocalDateTime } from "../format/localTime.ts";
+import { OfflineListNotice, WaitingToSyncBadge, type ListNotice } from "../components/SyncMarkers.tsx";
 
 type ScanTarget = "medication" | "procedure" | null;
 
@@ -28,6 +30,7 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
   const [tab, setTab] = useState<Tab>("medications");
 
   const [medications, setMedications] = useState<MedicationAdministration[]>([]);
+  const [listNotice, setListNotice] = useState<ListNotice | null>(null);
   const [procedures, setProcedures] = useState<ClinicalProcedure[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,11 +60,12 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
     setError(null);
     try {
       const [meds, procs] = await Promise.all([
-        listPatientCaseMedications({ ...config, patientCaseId }),
-        listPatientCaseProcedures({ ...config, patientCaseId })
+        listPatientCaseMedicationsWithQueued({ ...config, patientCaseId }),
+        listPatientCaseProceduresWithQueued({ ...config, patientCaseId })
       ]);
-      setMedications([...meds].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
-      setProcedures([...procs].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
+      setListNotice({ cached: meds.cached || procs.cached, cachedAt: meds.cachedAt ?? procs.cachedAt, unavailable: meds.unavailable || procs.unavailable });
+      setMedications([...meds.items].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
+      setProcedures([...procs.items].sort((a, b) => b.performed_at.localeCompare(a.performed_at)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load interventions.");
     } finally {
@@ -270,6 +274,7 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
       )}
 
       <Text style={styles.sectionTitle}>History</Text>
+      <OfflineListNotice notice={listNotice} testID="interventions-offline-notice" />
       {loading ? (
         <ActivityIndicator testID="interventions-loading" />
       ) : tab === "medications" ? (
@@ -285,11 +290,12 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
           renderItem={({ item }) => (
             <View style={styles.row} testID={`medication-${item.medication_administration_id}`}>
               <View style={styles.rowContent}>
-                <Text style={styles.rowTime}>{item.performed_at}</Text>
+                <Text style={styles.rowTime}>{formatLocalDateTime(item.performed_at)}</Text>
                 <Text style={styles.rowSummary}>
                   {item.medication_name} · {item.dose}
                   {item.dose_unit} {item.route}
                 </Text>
+                <WaitingToSyncBadge id={item.medication_administration_id} />
               </View>
               <Pressable
                 style={styles.repeatButton}
@@ -316,10 +322,11 @@ export default function InterventionsScreen({ patientCaseId, session, onBack }: 
           renderItem={({ item }) => (
             <View style={styles.row} testID={`procedure-${item.procedure_id}`}>
               <View style={styles.rowContent}>
-                <Text style={styles.rowTime}>{item.performed_at}</Text>
+                <Text style={styles.rowTime}>{formatLocalDateTime(item.performed_at)}</Text>
                 <Text style={styles.rowSummary}>
                   {item.procedure_name} · {item.success ? "Successful" : "Unsuccessful"}
                 </Text>
+                <WaitingToSyncBadge id={item.procedure_id} />
               </View>
               <Pressable
                 style={styles.repeatButton}

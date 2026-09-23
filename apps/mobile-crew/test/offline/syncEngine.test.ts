@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { test } from "node:test";
 
 import { migrate } from "../../src/offline/db.ts";
-import { enqueueMutation, getMutation, listMutations } from "../../src/offline/outboxStore.ts";
+import { enqueueMutation, getMutation, listMutations, markMutationStatus } from "../../src/offline/outboxStore.ts";
 import { backoffMs, isEntryDueForRetry, runSync, MAX_SYNC_ATTEMPTS } from "../../src/offline/syncEngine.ts";
 import { createNodeSqliteAdapter } from "./nodeSqliteAdapter.ts";
 
@@ -323,4 +323,67 @@ test("no due entries means an empty, no-op sync pass", async () => {
   const result = await runSync(db, key, { authToken: "token" }, { fetchImpl });
   assert.deepEqual(result, { attempted: 0, acknowledged: 0, retrying: 0, failed: 0, conflicted: 0 });
   assert.equal((await listMutations(db, key)).length, 0);
+});
+
+test("runSync keeps entries queued, untouched, and stops when the server rejects the session", async () => {
+  const db = await setupDb();
+  const key = new Uint8Array(randomBytes(32));
+  const first = await seedEntry(db, key);
+  const second = await seedEntry(db, key);
+  let calls = 0;
+  const fetchImpl = (async () => { calls += 1; return new Response(JSON.stringify({ error: { code: "SESSION_REVOKED", message: "revoked" } }), { status: 401 }); }) as unknown as typeof fetch;
+
+  const result = await runSync(db, key, { authToken: "token" }, { fetchImpl });
+
+  assert.equal(calls, 1, "stops after the first rejection");
+  assert.deepEqual(result, { attempted: 0, acknowledged: 0, retrying: 0, failed: 0, conflicted: 0 });
+  for (const id of [first, second]) {
+    const entry = await getMutation(db, key, id);
+    assert.equal(entry?.status, "queued", "charting is not lost or marked failed");
+    assert.equal(entry?.attemptCount, 0);
+  }
+});
+
+test("a forced pass delivers entries that are still inside their backoff window, in one pass", async () => {
+  const db = await setupDb();
+  const key = new Uint8Array(randomBytes(32));
+  const ids = [await seedEntry(db, key), await seedEntry(db, key), await seedEntry(db, key), await seedEntry(db, key)];
+
+  // Two entries were attempted while the server was down and are now backing off; two were never attempted.
+  const down = (async () => { throw new TypeError("Network request failed"); }) as unknown as typeof fetch;
+  const fixedNow = 1_000_000;
+  await runSync(db, key, { authToken: "token" }, { fetchImpl: down, now: () => fixedNow });
+  await markMutationStatus(db, ids[2], { status: "queued" });
+  await markMutationStatus(db, ids[3], { status: "queued" });
+
+  const up = (async () => new Response(JSON.stringify({ observation_event_id: "OBS-1" }), { status: 201 })) as unknown as typeof fetch;
+  const unforced = await runSync(db, key, { authToken: "token" }, { fetchImpl: up, now: () => fixedNow + 1 });
+  assert.equal(unforced.acknowledged, 2, "an unforced pass leaves the backing-off entries for later");
+
+  const forced = await runSync(db, key, { authToken: "token" }, { fetchImpl: up, now: () => fixedNow + 2, force: true });
+  assert.equal(forced.acknowledged, 2, "the forced pass delivers the rest");
+  for (const id of ids) assert.equal((await getMutation(db, key, id))?.status, "acknowledged");
+});
+
+test("forced passes never spend attempts on a connectivity failure, so offline taps cannot abandon charting", async () => {
+  const db = await setupDb();
+  const key = new Uint8Array(randomBytes(32));
+  const id = await seedEntry(db, key);
+  const down = (async () => { throw new TypeError("Network request failed"); }) as unknown as typeof fetch;
+  for (let tap = 0; tap < MAX_SYNC_ATTEMPTS + 3; tap += 1) await runSync(db, key, { authToken: "token" }, { fetchImpl: down, force: true });
+  const entry = await getMutation(db, key, id);
+  assert.equal(entry?.status, "retrying");
+  assert.equal(entry?.attemptCount, 0);
+  const up = (async () => new Response(JSON.stringify({ observation_event_id: "OBS-1" }), { status: 201 })) as unknown as typeof fetch;
+  assert.equal((await runSync(db, key, { authToken: "token" }, { fetchImpl: up, force: true })).acknowledged, 1);
+});
+
+test("a forced pass still fails an entry the server definitively rejects", async () => {
+  const db = await setupDb();
+  const key = new Uint8Array(randomBytes(32));
+  const id = await seedEntry(db, key);
+  const rejects = (async () => new Response(JSON.stringify({ error: { code: "INVALID_PAYLOAD", message: "bad" } }), { status: 400 })) as unknown as typeof fetch;
+  const result = await runSync(db, key, { authToken: "token" }, { fetchImpl: rejects, force: true });
+  assert.equal(result.failed, 1);
+  assert.equal((await getMutation(db, key, id))?.status, "failed");
 });
