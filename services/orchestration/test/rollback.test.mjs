@@ -14,12 +14,14 @@ maybeTest("rolls back the last migration and re-migrating reapplies it", async (
     const allIds = migrationFiles("postgres").map((m) => m.id);
     const lastId = allIds.at(-1);
     assert.equal(await lastAppliedMigration(db), lastId);
-    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'clinical_observations' AND column_name = 'device_pairing_id';"));
+    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'patient_case_demographics' AND column_name = 'weight_kg';"));
 
     const rolledBack = await rollbackLastMigration(db);
     assert.equal(rolledBack, lastId);
     assert.equal(await lastAppliedMigration(db), allIds.at(-2));
-    assert.equal(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'clinical_observations' AND column_name = 'device_pairing_id';"), undefined);
+    assert.equal(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'patient_case_demographics' AND column_name = 'weight_kg';"), undefined);
+    // Earlier migrations remain applied when only the newest migration is rolled back.
+    assert.ok(await db.queryOne("SELECT column_name FROM information_schema.columns WHERE table_name = 'clinical_observations' AND column_name = 'device_pairing_id';"));
   } finally {
     await db.close();
   }
