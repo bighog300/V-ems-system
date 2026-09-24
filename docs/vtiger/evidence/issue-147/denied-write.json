@@ -1,0 +1,8 @@
+{
+  "role": "integration user",
+  "result": "WRITE_ACCEPTED",
+  "canonicalBefore": "Available",
+  "canonicalAfter": "Available",
+  "mirrorAfter": "Out of Service",
+  "divergence": true
+}

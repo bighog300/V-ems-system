@@ -1,0 +1,10 @@
+{
+  "createdThroughApi": true,
+  "person": true,
+  "vehicle": true,
+  "stockItem": true,
+  "stockRestock": true,
+  "incident": true,
+  "assignment": true,
+  "clinicalRecords": false
+}

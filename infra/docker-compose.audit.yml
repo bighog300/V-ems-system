@@ -1,0 +1,29 @@
+# Overlay only through scripts/windows/vtiger-audit.ps1. Never use with vems-dev.
+name: vems-audit-147
+services:
+  mysql:
+    ports: !override ["127.0.0.1:13307:3306"]
+  redis:
+    ports: !override ["127.0.0.1:16380:6379"]
+  vtiger:
+    image: vems-audit-147/vtiger:desktop
+    ports: !override ["127.0.0.1:18080:80"]
+    environment:
+      VTIGER_SITE_URL: http://127.0.0.1:18080
+  openemr:
+    image: vems-audit-147/openemr:desktop
+    ports: !override ["127.0.0.1:18083:80"]
+    volumes:
+      - audit_openemr_ssl:/etc/ssl
+      - audit_openemr_letsencrypt:/etc/letsencrypt
+  api:
+    image: vems-audit-147/api:desktop
+    ports: !override ["127.0.0.1:13001:3001"]
+    environment:
+      PORT: "3001"
+      VEMS_DB_PATH: /var/lib/vems/data/audit-147.sqlite
+      SYNC_WORKER_ENABLED: "true"
+
+volumes:
+  audit_openemr_ssl:
+  audit_openemr_letsencrypt:

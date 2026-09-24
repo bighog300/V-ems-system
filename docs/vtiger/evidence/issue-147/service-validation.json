@@ -1,0 +1,19 @@
+{
+  "bootstrap": "PASS after documented fixes",
+  "validate": "PASS",
+  "checks": [
+    "API health",
+    "Development sign in",
+    "Jobs list",
+    "OpenEMR HTTP",
+    "OAuth discovery",
+    "OAuth token",
+    "OpenEMR invalid client rejection",
+    "OpenEMR invalid user rejection",
+    "Vtiger invalid credential rejection",
+    "Authenticated synthetic no-match patient search",
+    "Vtiger adapter schema"
+  ],
+  "ui": "NOT RUN: no connected browser",
+  "screenshots": []
+}

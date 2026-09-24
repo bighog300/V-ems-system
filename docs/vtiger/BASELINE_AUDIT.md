@@ -22,10 +22,16 @@ before adding fields: some keys are adapter-only aliases, while others may be
 unmirrored data. Do not copy personnel contact or clinical details into Vtiger
 without a field-level access and data-minimization decision.
 
+Desktop execution evidence is recorded in
+[the 24 September audit report](ISSUE_147_DESKTOP_AUDIT_2026-09-24.md).
+The isolated stack procedure is [DESKTOP_AUDIT.md](DESKTOP_AUDIT.md).
+The live gate remains open: direct-edit divergence was demonstrated, management
+roles are absent, and browser UI evidence is still missing.
+
 ## Live baseline gate — pending
 
-This execution workspace has no Docker or PHP runtime and no Vtiger instance
-attached. On the user's Windows development checkout, use the documented
+The original source-only review had no Docker or PHP runtime and no attached
+Vtiger instance. On the user's Windows development checkout, use the documented
 `scripts/windows/bootstrap-development.ps1` and
 `scripts/windows/test-development.ps1 -ServicesOnly` against a **disposable,
 synthetic** environment. Do not reset or reuse the retained Stage 14 database.

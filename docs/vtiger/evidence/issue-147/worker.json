@@ -1,0 +1,15 @@
+{
+  "matchingCycles": 183,
+  "nonIdle": [
+    "[sync-worker] cycle=4 started_at=2026-09-24T09:09:35.449Z finished_at=2026-09-24T09:09:35.833Z poll_ms=2000 batch_size=100 fetched=1 statuses={\"succeeded\":1}",
+    "[sync-worker] cycle=31 started_at=2026-09-24T09:10:31.328Z finished_at=2026-09-24T09:10:32.837Z poll_ms=2000 batch_size=100 fetched=7 statuses={\"succeeded\":7}",
+    "[sync-worker] cycle=73 started_at=2026-09-24T09:11:58.457Z finished_at=2026-09-24T09:12:03.089Z poll_ms=2000 batch_size=100 fetched=1 statuses={\"pending\":1}",
+    "[sync-worker] cycle=74 started_at=2026-09-24T09:12:05.090Z finished_at=2026-09-24T09:12:08.998Z poll_ms=2000 batch_size=100 fetched=1 statuses={\"pending\":1}",
+    "[sync-worker] cycle=76 started_at=2026-09-24T09:12:13.006Z finished_at=2026-09-24T09:12:16.932Z poll_ms=2000 batch_size=100 fetched=1 statuses={\"dead_lettered\":1}",
+    "[sync-worker] cycle=107 started_at=2026-09-24T09:13:20.551Z finished_at=2026-09-24T09:13:20.771Z poll_ms=2000 batch_size=100 fetched=1 statuses={\"succeeded\":1}"
+  ],
+  "last": [
+    "[sync-worker] cycle=182 started_at=2026-09-24T09:15:54.640Z finished_at=2026-09-24T09:15:54.642Z poll_ms=2000 batch_size=100 fetched=0 statuses={}",
+    "[sync-worker] cycle=183 started_at=2026-09-24T09:15:56.645Z finished_at=2026-09-24T09:15:56.646Z poll_ms=2000 batch_size=100 fetched=0 statuses={}"
+  ]
+}
