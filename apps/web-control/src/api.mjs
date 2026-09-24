@@ -82,6 +82,12 @@ export async function loadDispatcherBoardData({ apiBaseUrl, fetchImpl = fetch, .
   };
 }
 
+export async function createIncident({ apiBaseUrl, payload, idempotencyKey, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/incidents`, payload, config, {
+    headers: { "idempotency-key": idempotencyKey }
+  });
+}
+
 export async function loadCrewJobListData({ apiBaseUrl, fetchImpl = fetch, ...config }) {
   const boardList = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents`, config);
   return {
