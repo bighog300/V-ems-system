@@ -1,0 +1,49 @@
+{
+  "date": "2026-09-24",
+  "architecture": "vtlib Vtiger_Event handler on vtiger.entity.beforesave.final and vtiger.entity.aftersave; no Vtiger core file modified",
+  "phpGuard": {
+    "result": "PASS",
+    "runtime": "PHP 8.3 in a throwaway container from the digest-pinned Vtiger base image",
+    "classifiedFields": 115,
+    "checks": [
+      "create/change/clear denial",
+      "unchanged mirrors and metadata",
+      "wrong secret and identity",
+      "module/mode allowlist",
+      "one-save permit scope",
+      "request/admin flags do not authorize",
+      "worker operation refused in bulk-save mode",
+      "handler registration, activation and event dispatch",
+      "lock held beforesave.final to aftersave, released on denial and at shutdown, none for creates",
+      "byte-exact removal of both earlier core rewrites",
+      "drifted core source and unconfirmed registration rejected",
+      "Import view override generated for all eight modules; checkPermission and process deny",
+      "foreign Import view not overwritten; module name validated; pending queued imports rejected",
+      "Import profile disablement and cached privilege regeneration"
+    ],
+    "phpLint": "PASS: MirrorGuard.php, MirrorGuardHandler.php, ImportGuard.php, install-mirror-guard.php"
+  },
+  "orchestration": {
+    "tests": 335,
+    "passed": 324,
+    "skipped": 11,
+    "failed": 0
+  },
+  "bootstrapIsolationOwnership": {
+    "tests": 41,
+    "passed": 41,
+    "failed": 0
+  },
+  "focusedTransportMirror": {
+    "tests": 29,
+    "passed": 29,
+    "failed": 0
+  },
+  "rootLint": {
+    "existingWindowsCheckout": "FAIL: pre-existing widespread CRLF/trailing-whitespace reports and ignored local files; none in changed files",
+    "isolatedCurrentSourceLfCopy": "PASS: unchanged root linter; 240 files; git archive of the staged tree extracted in audit API /tmp and removed; checkout unchanged"
+  },
+  "gitDiffCheck": "PASS",
+  "actualBrowserUi": "NOT RUN",
+  "intendedManagerRoles": "NOT RUN: absent"
+}

@@ -1,0 +1,88 @@
+{
+  "timestamp": "2026-09-24T11:26:10.658Z",
+  "audit": [
+    {
+      "name": "vems-audit-147-api-1",
+      "id": "4258292bc02c",
+      "status": "exited",
+      "health": "unhealthy",
+      "exitCode": 1
+    },
+    {
+      "name": "vems-audit-147-openemr-1",
+      "id": "fb29d2898b0d",
+      "status": "exited",
+      "health": "unhealthy",
+      "exitCode": 0
+    },
+    {
+      "name": "vems-audit-147-vtiger-1",
+      "id": "78e343ee7565",
+      "status": "exited",
+      "health": "unhealthy",
+      "exitCode": 0
+    },
+    {
+      "name": "vems-audit-147-redis-1",
+      "id": "eadd05a0b392",
+      "status": "exited",
+      "health": "unhealthy",
+      "exitCode": 0
+    },
+    {
+      "name": "vems-audit-147-mysql-1",
+      "id": "ab5d4c3b5576",
+      "status": "exited",
+      "health": "unhealthy",
+      "exitCode": 0
+    }
+  ],
+  "development": [
+    {
+      "name": "vems-dev-api-1",
+      "id": "e0128865bef8",
+      "status": "running",
+      "health": "healthy",
+      "exitCode": 0
+    },
+    {
+      "name": "vems-dev-openemr-1",
+      "id": "9e210a9ab414",
+      "status": "running",
+      "health": "healthy",
+      "exitCode": 0
+    },
+    {
+      "name": "vems-dev-vtiger-1",
+      "id": "2faa13a78b40",
+      "status": "running",
+      "health": "healthy",
+      "exitCode": 0
+    },
+    {
+      "name": "vems-dev-mysql-1",
+      "id": "6ddfda073224",
+      "status": "running",
+      "health": "healthy",
+      "exitCode": 0
+    },
+    {
+      "name": "vems-dev-redis-1",
+      "id": "fafb564722ed",
+      "status": "running",
+      "health": "healthy",
+      "exitCode": 0
+    }
+  ],
+  "developmentOriginalIdsRunningHealthy": true,
+  "retainedNamedVolumes": [
+    "vems-audit-147_audit_openemr_letsencrypt",
+    "vems-audit-147_audit_openemr_ssl",
+    "vems-audit-147_mysql_data_dev",
+    "vems-audit-147_openemr_data_dev",
+    "vems-audit-147_redis_data_dev",
+    "vems-audit-147_vtiger_data_dev"
+  ],
+  "auditDatabaseRetained": true,
+  "volumeDeletionPerformed": false
+}

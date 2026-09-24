@@ -372,3 +372,30 @@ update repairing a mirror does not make the original direct-edit divergence safe
 
 No existing `vems-dev` or retained Stage 14 data or credentials were used or changed.
 The only services stopped were started for this isolated audit. Issue #147 remains open.
+
+## Issue #148 enforcement follow-up (24 September 2026)
+
+The merged runner and retained `vems-audit-147` stack were reused for the
+server-side enforcement follow-up. The original denied-write divergence was
+reproduced before changes. A vtlib `vtiger.entity.beforesave.final` handler now
+rejects ordinary mirror changes. It needs no Vtiger core patch. It denied the
+tested integration and administrator webservice writes across all eight modules.
+Invoked directly on the server, the UI record model and `CRMEntity::save()` also
+reject the vehicle-status change. These are **not actual browser UI tests**.
+Bulk-save mode and direct `saveentity()` calls raise no events and are confirmed
+server-side bypasses. UI Import, the user-facing route into bulk-save mode, is
+now denied for all users, administrators included. A module-level Import view
+override on each of the eight modules does this.
+
+An explicitly authenticated worker operation passed canonical create/update and
+outage replay with a stable remote ID. See the
+[follow-up report](ISSUE_148_WRITE_ENFORCEMENT_2026-09-24.md) and
+[live evidence](evidence/issue-148/enforcement.json). The original failed #147
+evidence above is historical and remains preserved.
+
+The ordinary administrator paths tested have no bypass. Administrators with
+database/code/host control can bypass an application guard; universal enforcement
+is not claimed. Browser access remains unavailable and the four intended manager
+roles are still absent. **Both #147 and #148 remain open** until actual UI and
+role checks pass. The follow-up retains audit volumes and all existing data;
+`vems-dev` remains untouched.

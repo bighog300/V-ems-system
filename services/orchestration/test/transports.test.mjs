@@ -320,14 +320,14 @@ async function withVtigerWebservice(handler) {
     if (op === "getchallenge") return res.end(JSON.stringify({ success: true, result: { token: "t", serverTime: 1, expireTime: 2 } }));
     if (op === "login") return res.end(JSON.stringify({ success: true, result: { sessionName: "s", userId: "19x5", version: "1", vtigerVersion: "8" } }));
     if (op === "query") { queries.push(params.get("query")); return res.end(JSON.stringify({ success: true, result: [] })); }
-    if (op === "create") { const element = JSON.parse(params.get("element")); created.push({ type: params.get("elementType"), element }); return res.end(JSON.stringify({ success: true, result: { id: "1x1", ...element } })); }
+    if (op === "vemsMirrorWrite") { assert.equal(params.get("mode"), "create"); assert.equal(params.get("writeKey"), "k".repeat(40)); const element = JSON.parse(params.get("element")); created.push({ type: params.get("elementType"), element }); return res.end(JSON.stringify({ success: true, result: { id: "1x1", ...element } })); }
     res.writeHead(400); res.end(JSON.stringify({ success: false, error: { code: "BAD", message: op } }));
   }, (port) => handler(port, created, queries));
 }
 
 test("every Vtiger create gets the configured owner at send time, without overriding an explicit one", async () => {
   await withVtigerWebservice(async (port, created) => {
-    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k", VTIGER_ASSIGNED_USER_ID: "19x5" });
+    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k", VTIGER_MIRROR_WRITE_KEY: "k".repeat(40), VTIGER_ASSIGNED_USER_ID: "19x5" });
     await transport({ method: "createIncidentMirror", payload: { elementType: "HelpDesk", vems_external_key: "vems:INC-1", ticket_title: "x", incident_id: "INC-1" } });
     await transport({ method: "createVehicleMirror", payload: { elementType: "VEMSVehicles", vems_external_key: "vems:vehicle:A", vems_vehicle_id: "A", vehicle_id: "A" } });
     await transport({ method: "createPersonnelMirror", payload: { elementType: "VEMSPersonnel", vems_external_key: "vems:p:1", staff_id: "S1", assigned_user_id: "19x9" } });
@@ -337,7 +337,7 @@ test("every Vtiger create gets the configured owner at send time, without overri
 
 test("without an owner setting a Vtiger create is sent unchanged, so Vtiger's own error surfaces", async () => {
   await withVtigerWebservice(async (port, created) => {
-    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k" });
+    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k", VTIGER_MIRROR_WRITE_KEY: "k".repeat(40) });
     await transport({ method: "createIncidentMirror", payload: { elementType: "HelpDesk", vems_external_key: "vems:INC-2", ticket_title: "x", incident_id: "INC-2" } });
     assert.equal(created[0].element.assigned_user_id, undefined);
   });
@@ -347,7 +347,7 @@ test("Vtiger lookup queries select only fields the module schema defines", async
   const { readFileSync } = await import("node:fs");
   const schemas = JSON.parse(readFileSync(new URL("../../../infra/services/vtiger/development/modules.json", import.meta.url), "utf8"));
   await withVtigerWebservice(async (port, created, queries) => {
-    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k", VTIGER_ASSIGNED_USER_ID: "19x5" });
+    const transport = createVtigerTransportFromEnv({ VTIGER_BASE_URL: `http://127.0.0.1:${port}/`, VTIGER_USERNAME: "u", VTIGER_ACCESS_KEY: "k", VTIGER_MIRROR_WRITE_KEY: "k".repeat(40), VTIGER_ASSIGNED_USER_ID: "19x5" });
     const key = (name) => `vems:${name}`;
     const calls = [
       ["createIncidentMirror", { elementType: "HelpDesk", vems_external_key: key("i"), ticket_title: "x", incident_id: "I" }],

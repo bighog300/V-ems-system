@@ -71,7 +71,7 @@ export async function resolveVehicleStockDependencies(payload, vehicleLinks, sto
 export async function resolveVtigerOwner(env = process.env, { createClient } = {}) {
   if (env.VTIGER_ASSIGNED_USER_ID) return env.VTIGER_ASSIGNED_USER_ID;
   if (!env.VTIGER_BASE_URL || !env.VTIGER_USERNAME || !env.VTIGER_ACCESS_KEY) return undefined;
-  const make = createClient ?? (async () => (await import("./adapters/vtiger/client.mjs")).createVtigerWebserviceClient(env));
+  const make = createClient ?? (async () => (await import("./adapters/vtiger/client.mjs")).createVtigerWebserviceClient(env, { mirrorWrites: true }));
   const login = await (await make()).auth.authenticate();
   if (!login?.userId) return undefined;
   env.VTIGER_ASSIGNED_USER_ID = String(login.userId);

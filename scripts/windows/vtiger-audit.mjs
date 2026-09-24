@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { buildDevelopmentValues, loadTemplate, atomicWriteEnvFile, parseEnvText, SECRET_KEYS } from './development-bootstrap.mjs';
 
 export const PROJECT = 'vems-audit-147';
@@ -87,7 +87,13 @@ export async function main(action) {
     }
     const marker = JSON.parse(readFileSync(markerFile,'utf8'));
     requireSafe(marker.project===PROJECT && marker.context===context && normalize(marker.root)===normalize(root), 'runtime ownership/context mismatch');
-    const values = Object.fromEntries(parseEnvText(readFileSync(envFile,'utf8')));
+    const retainedValues = parseEnvText(readFileSync(envFile,'utf8'));
+    // Upgrade only this owned audit runtime; preserve every existing credential.
+    if (action === 'start' && !retainedValues.has('VTIGER_MIRROR_WRITE_KEY')) {
+      retainedValues.set('VTIGER_MIRROR_WRITE_KEY', randomBytes(32).toString('base64url'));
+      atomicWriteEnvFile(envFile, retainedValues, SECRET_KEYS);
+    }
+    const values = Object.fromEntries(retainedValues);
     requireSafe(normalize(values.VEMS_DB_HOST_PATH)===normalize(data), 'runtime database path mismatch');
     // Do not inherit caller interpolation overrides (or COMPOSE_FILE/PROJECT_NAME).
     const interpolationKeys = new Set([...readFileSync(resolve(repo,'infra/docker-compose.dev.yml'),'utf8').matchAll(/\$\{([A-Z_][A-Z0-9_]*)/g)].map(match=>match[1]));
