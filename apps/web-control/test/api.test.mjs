@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   ApiError,
   closeIncident,
+  createIncident,
   createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
@@ -11,6 +12,22 @@ import {
   loadDispatcherBoardData,
   loadIncidentOperationalData
 } from "../src/api.mjs";
+
+test("createIncident submits a stable idempotency key and authenticated payload", async () => {
+  const calls = [];
+  const payload = { call: { call_source: "phone", received_at: "2026-09-24T09:30:00Z" }, incident: { category: "trauma", priority: "high", description: "Collision", address: "Main Street", patient_count: 2 } };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 201, async json() { return { incident_id: "INC-000123" }; } };
+  };
+  const result = await createIncident({ apiBaseUrl: "http://example.test", payload, idempotencyKey: "intake-1", authToken: "token", fetchImpl });
+  assert.equal(result.incident_id, "INC-000123");
+  assert.equal(calls[0].url, "http://example.test/api/incidents");
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.headers["idempotency-key"], "intake-1");
+  assert.equal(calls[0].options.headers.authorization, "Bearer token");
+  assert.deepEqual(JSON.parse(calls[0].options.body), payload);
+});
 
 test("loadDispatcherBoardData uses GET /api/incidents list endpoint", async () => {
   const calls = [];

@@ -3,6 +3,7 @@ import { renderPatientCasesPanel } from './crew.mjs';
 import {
   ApiError,
   closeIncident,
+  createIncident,
   createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
@@ -26,6 +27,7 @@ import {
 } from "./crew.mjs";
 import { applyProductionUiMode, readSessionFromDom } from "./session.mjs";
 import { handleAppError, startPolling } from "./runtime.mjs";
+import { buildCallIntakePayload, localDateTimeValue } from "./call-intake.mjs";
 
 function readConfig() {
   return readSessionFromDom();
@@ -37,6 +39,54 @@ let crewRenderVersion = 0;
 let closeIncidentFeedback = "";
 let selectedDispatcherIncidentId = "";
 let previousDispatcherSnapshot = new Map();
+let intakeRetry = null;
+
+async function onCallIntakeSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = document.querySelector("#createIncidentAction");
+  const feedback = document.querySelector("#callIntakeFeedback");
+  if (button.disabled) return;
+  const { payload, errors } = buildCallIntakePayload(new FormData(form));
+  if (errors.length) {
+    feedback.textContent = errors.join(" ");
+    feedback.className = "error-note";
+    return;
+  }
+  const config = readConfig();
+  if (!config.apiBaseUrl) {
+    feedback.textContent = "API Base URL is required.";
+    feedback.className = "error-note";
+    return;
+  }
+  const fingerprint = JSON.stringify(payload);
+  if (intakeRetry?.fingerprint !== fingerprint) {
+    intakeRetry = { fingerprint, key: crypto.randomUUID() };
+  }
+  button.disabled = true;
+  feedback.textContent = "Creating incident...";
+  feedback.className = "hint";
+  try {
+    const incident = await createIncident({ ...config, payload, idempotencyKey: intakeRetry.key });
+    intakeRetry = null;
+    selectedDispatcherIncidentId = incident.incident_id;
+    document.querySelector("#incidentId").value = incident.incident_id;
+    document.querySelector("#boardFilterStatus").value = "all";
+    document.querySelector("#boardFilterPriority").value = "all";
+    document.querySelector("#boardSortBy").value = "recency";
+    form.reset();
+    document.querySelector("#callIntakeReceivedAt").value = localDateTimeValue();
+    await renderDispatcherBoard();
+    feedback.textContent = `Incident ${incident.incident_id} created. Select it on the board to review and assign a unit.`;
+    feedback.className = "success-note";
+  } catch (error) {
+    feedback.textContent = formatApiError(error);
+    feedback.className = "error-note";
+    if (error.status === 401 || error.status === 403) dispatcherPolling.stop();
+  } finally {
+    button.disabled = false;
+  }
+}
 
 const dispatcherPolling = startPolling({
   enabled: () => Boolean(document.querySelector("#boardAutoRefresh")?.checked),
@@ -475,6 +525,8 @@ document.querySelector("#loadIncident").addEventListener("click", renderIncident
 document.querySelector("#loadBoard").addEventListener("click", renderCrewJobList);
 document.querySelector("#loadCrewIncident").addEventListener("click", renderCrewIncidentDetail);
 document.querySelector("#loadDispatcherBoard").addEventListener("click", () => void renderDispatcherBoard());
+document.querySelector("#callIntakeForm").addEventListener("submit", (event) => void onCallIntakeSubmit(event));
+document.querySelector("#callIntakeReceivedAt").value = localDateTimeValue();
 document.querySelector("#boardFilterActive").addEventListener("change", () => void renderDispatcherBoard());
 document.querySelector("#boardFilterStatus").addEventListener("change", () => void renderDispatcherBoard());
 document.querySelector("#boardFilterPriority").addEventListener("change", () => void renderDispatcherBoard());

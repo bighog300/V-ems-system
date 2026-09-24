@@ -27,6 +27,8 @@ class FakeElement {
     return [];
   }
 
+  reset() {}
+
   getAttribute() {
     return "";
   }
@@ -43,6 +45,10 @@ function createTestDocument() {
     ["loadBoard", new FakeElement()],
     ["loadCrewIncident", new FakeElement()],
     ["loadDispatcherBoard", new FakeElement()],
+    ["callIntakeForm", new FakeElement()],
+    ["callIntakeReceivedAt", new FakeElement()],
+    ["createIncidentAction", new FakeElement()],
+    ["callIntakeFeedback", new FakeElement()],
     ["boardFilterActive", new FakeElement({ checked: false })],
     ["boardFilterStatus", new FakeElement({ value: "all" })],
     ["boardFilterPriority", new FakeElement({ value: "all" })],
@@ -227,5 +233,54 @@ test("dispatcher polling stops and renders auth-specific messaging on 401 and 40
     assert.deepEqual(clearedIntervals, [1], `scenario ${scenario.status}: polling should stop on auth failure`);
     assert.equal(fakeDocument.elements.get("status").textContent, scenario.expectedStatus);
     assert.match(fakeDocument.elements.get("dispatcherBoardOutput").innerHTML, /error-note/);
+  }
+});
+
+test("call intake submits once, then selects the newly created incident on the refreshed board", async () => {
+  const fakeDocument = createTestDocument();
+  const originalFormData = global.FormData;
+  const values = new Map([
+    ["call_source", "phone"], ["received_at", "2026-09-24T09:30"],
+    ["category", "trauma"], ["priority", "high"],
+    ["description", "Road collision"], ["address", "Main Street"], ["patient_count", "2"]
+  ]);
+  global.FormData = class { get(name) { return values.get(name); } };
+  global.document = fakeDocument;
+  global.window = {
+    location: { search: "" },
+    setInterval() { return 1; },
+    clearInterval() {}
+  };
+  const requests = [];
+  let finishCreate;
+  global.fetch = async (url, options) => {
+    requests.push({ url, options });
+    if (options.method === "POST") {
+      await new Promise((resolve) => { finishCreate = resolve; });
+      return { ok: true, status: 201, async json() { return { incident_id: "INC-000123" }; } };
+    }
+    return {
+      ok: true, status: 200,
+      async json() {
+        return { incidents: [{ incident_id: "INC-000123", priority: "high", status: "New", location_summary: "Main Street", created_at: "2026-09-24T09:30:00Z" }] };
+      }
+    };
+  };
+
+  try {
+    await import(`../src/main.mjs?call-intake=${Date.now()}`);
+    const form = fakeDocument.elements.get("callIntakeForm");
+    form.dispatch("submit");
+    form.dispatch("submit");
+    assert.equal(requests.filter(({ options }) => options.method === "POST").length, 1);
+    finishCreate();
+    await nextTick();
+    await nextTick();
+    assert.equal(fakeDocument.elements.get("incidentId").value, "INC-000123");
+    assert.match(fakeDocument.elements.get("dispatcherBoardOutput").innerHTML, /INC-000123/);
+    assert.match(fakeDocument.elements.get("callIntakeFeedback").textContent, /created/);
+    assert.equal(fakeDocument.elements.get("createIncidentAction").disabled, false);
+  } finally {
+    global.FormData = originalFormData;
   }
 });
