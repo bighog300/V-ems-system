@@ -9,6 +9,8 @@
   ],
   "scripts": {
     "test": "npm run test --workspaces --if-present",
+    "pretest": "npm run test:vtiger-contract",
+    "test:vtiger-contract": "node --test infra/services/vtiger/field-ownership.test.mjs && node infra/services/vtiger/validate-field-ownership.mjs",
     "bootstrap": "./scripts/bootstrap.sh",
     "init-db": "./scripts/init-db.sh development",
     "start:env": "./scripts/start-env.sh development",
