@@ -43,6 +43,40 @@
         <button id="loadBoard">Load Crew Job List</button>
       </section>
 
+      <section class="panel" aria-labelledby="callIntakeHeading">
+        <h2 id="callIntakeHeading">New call / incident</h2>
+        <form id="callIntakeForm">
+          <div class="controls">
+            <label>Call source
+              <select name="call_source" required>
+                <option value="phone">Phone</option><option value="radio">Radio</option>
+                <option value="walk_in">Walk-in</option><option value="transfer">Transfer</option><option value="other">Other</option>
+              </select>
+            </label>
+            <label>Received at (local time)<input id="callIntakeReceivedAt" name="received_at" type="datetime-local" required /></label>
+            <label>Category
+              <select name="category" required>
+                <option value="medical_emergency">Medical emergency</option><option value="trauma">Trauma</option>
+                <option value="cardiac">Cardiac</option><option value="respiratory">Respiratory</option>
+                <option value="maternity">Maternity</option><option value="psychiatric">Psychiatric</option>
+                <option value="standby">Standby</option><option value="other">Other</option>
+              </select>
+            </label>
+            <label>Priority
+              <select name="priority" required>
+                <option value="critical">Critical</option><option value="high">High</option>
+                <option value="medium">Medium</option><option value="low">Low</option>
+              </select>
+            </label>
+            <label>Patient count<input name="patient_count" type="number" min="0" step="1" value="1" required /></label>
+            <label>Address<input name="address" required /></label>
+          </div>
+          <label>Description<textarea name="description" rows="3" required></textarea></label>
+          <button id="createIncidentAction" type="submit">Create incident</button>
+          <p id="callIntakeFeedback" aria-live="polite"></p>
+        </form>
+      </section>
+
       <section class="panel controls">
         <label>
           Active Only
