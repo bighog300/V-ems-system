@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "modules": {
+    "HelpDesk": {
+      "write_authority": "vems",
+      "fields": {
+        "ticket_title": "vems_mirror",
+        "description": "vems_mirror",
+        "ticketpriorities": "vems_mirror",
+        "ticketstatus": "vems_mirror",
+        "assigned_user_id": "vtiger_metadata",
+        "ticket_no": "vtiger_metadata",
+        "createdtime": "vtiger_metadata",
+        "modifiedtime": "vtiger_metadata",
+        "vems_incident_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_call_id": "vems_mirror",
+        "vems_call_source": "vems_mirror",
+        "vems_received_at_utc": "vems_mirror",
+        "vems_category": "vems_mirror",
+        "vems_address": "vems_mirror",
+        "vems_patient_count": "vems_mirror",
+        "vems_status": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_last_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_updated_at_utc": "vems_mirror",
+        "vems_closed_at_utc": "vems_mirror"
+      }
+    },
+    "VEMSAssignments": {
+      "write_authority": "vems",
+      "fields": {
+        "vems_assignment_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_incident_id": "vems_mirror",
+        "vems_incident_remote_id": "vems_mirror",
+        "incident_ref": "vems_mirror",
+        "vehicle_ref": "vems_mirror",
+        "vems_vehicle_id": "vems_mirror",
+        "vems_crew_ids": "vems_mirror",
+        "vems_status": "vems_mirror",
+        "vems_vehicle_status": "vems_mirror",
+        "vems_reason": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_last_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_updated_at_utc": "vems_mirror",
+        "assigned_user_id": "vtiger_metadata"
+      }
+    },
+    "VEMSVehicles": {
+      "write_authority": "vems",
+      "fields": {
+        "vems_vehicle_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_callsign": "vems_mirror",
+        "vems_operational_status": "vems_mirror",
+        "vems_service_status": "vems_mirror",
+        "vems_vehicle_type": "vems_mirror",
+        "vems_home_station": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_last_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_updated_at_utc": "vems_mirror",
+        "assigned_user_id": "vtiger_metadata"
+      }
+    },
+    "VEMSPersonnel": {
+      "write_authority": "vems",
+      "fields": {
+        "vems_staff_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_display_name": "vems_mirror",
+        "vems_role": "vems_mirror",
+        "vems_operational_status": "vems_mirror",
+        "vems_home_station": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_last_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_updated_at_utc": "vems_mirror",
+        "vems_personnel_no": "vtiger_metadata",
+        "assigned_user_id": "vtiger_metadata"
+      }
+    },
+    "VEMSAssignmentCrew": {
+      "write_authority": "vems",
+      "fields": {
+        "assignment_ref": "vems_mirror",
+        "personnel_ref": "vems_mirror",
+        "vems_assignment_crew_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_assignment_id": "vems_mirror",
+        "vems_staff_id": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_last_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_updated_at_utc": "vems_mirror",
+        "assigned_user_id": "vtiger_metadata"
+      }
+    },
+    "VEMSStockItems": {
+      "write_authority": "vems",
+      "fields": {
+        "vems_stock_item_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_name": "vems_mirror",
+        "vems_category": "vems_mirror",
+        "vems_unit_of_measure": "vems_mirror",
+        "vems_item_type": "vems_mirror",
+        "vems_active_status": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_last_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_updated_at_utc": "vems_mirror",
+        "vems_stock_item_no": "vtiger_metadata",
+        "assigned_user_id": "vtiger_metadata"
+      }
+    },
+    "VEMSVehicleStock": {
+      "write_authority": "vems",
+      "fields": {
+        "vems_vehicle_stock_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_vehicle_id": "vems_mirror",
+        "vems_stock_item_id": "vems_mirror",
+        "vehicle_ref": "vems_mirror",
+        "stock_item_ref": "vems_mirror",
+        "vems_quantity_on_hand": "vems_mirror",
+        "vems_minimum_quantity": "vems_mirror",
+        "vems_target_quantity": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_last_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_updated_at_utc": "vems_mirror",
+        "vems_vehicle_stock_no": "vtiger_metadata",
+        "assigned_user_id": "vtiger_metadata"
+      }
+    },
+    "VEMSStockUsage": {
+      "write_authority": "vems",
+      "fields": {
+        "vems_stock_usage_id": "vems_mirror",
+        "vems_external_key": "vems_mirror",
+        "vems_intervention_id": "vems_mirror",
+        "vems_incident_id": "vems_mirror",
+        "vems_stock_item_id": "vems_mirror",
+        "stock_item_ref": "vems_mirror",
+        "vems_quantity_used": "vems_mirror",
+        "vems_usage_source": "vems_mirror",
+        "vems_performed_at_utc": "vems_mirror",
+        "vems_intervention_type": "vems_mirror",
+        "vems_correlation_id": "vems_mirror",
+        "vems_created_at_utc": "vems_mirror",
+        "vems_stock_usage_no": "vtiger_metadata",
+        "assigned_user_id": "vtiger_metadata"
+      }
+    }
+  }
+}
