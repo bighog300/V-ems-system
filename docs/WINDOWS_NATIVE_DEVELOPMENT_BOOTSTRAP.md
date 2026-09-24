@@ -141,8 +141,12 @@ records the mobile app needs: vehicle AMB-001, incident INC-000001 assigned to S
 case linked to one synthetic OpenEMR patient, an open encounter, a primary-survey assessment and one
 set of vitals. It signs in through the development test session and uses fixed idempotency keys and
 values; dispatch status changes are applied only once. It creates no real patient data. Run it once on
-a fresh database; the same keys make a repeat run a no-op. Pending Vtiger sync intents stay pending
-because no sync worker runs in the development stack; the mobile app reads from the VEMS API.
+a fresh database; the same keys make a repeat run a no-op.
+The API process starts the Vtiger sync worker when `SYNC_WORKER_ENABLED=true` (set in the
+development Compose file), sharing its SQLite handle. The mobile app reads from the VEMS API.
+Worker cycle logs prove polling only: verify intent success and remote links separately. Do not
+start a second worker against the same SQLite bind mount. See
+[the isolated desktop audit procedure](vtiger/DESKTOP_AUDIT.md) for mirroring and outage checks.
 
 - The development OpenEMR client is registered with read and write scopes for `patient`, `encounter`,
   `vital` and `soap_note`, plus read for `medication` (`OPENEMR_SCOPE`). Bootstrap syncs that key into an existing runtime file

@@ -27,7 +27,7 @@ try {
         sqlStatement('UPDATE users SET uuid = ? WHERE username = ?', [$uuid, $username]);
     }
     // The standard API's encounter-create route requires encounters:auth_a, which Clinicians lack but Physicians hold.
-    if (!in_array('Physicians', OpenEMR\Common\Acl\AclExtended::aclGetGroupTitles($username), true)) {
+    if (!in_array('Physicians', OpenEMR\Common\Acl\AclExtended::aclGetGroupTitles($username) ?? [], true)) {
         if (!OpenEMR\Common\Acl\AclExtended::setUserAro(['Physicians'], $username, 'VEMS', '', 'Development Integration')) { throw new RuntimeException('ACL creation failed'); }
     }
     // Match the upstream usergroup_admin.php account-creation flow, including login group membership.

@@ -1,0 +1,38 @@
+{
+  "roles": [
+    {
+      "roleid": "H1",
+      "rolename": "Organization"
+    },
+    {
+      "roleid": "H2",
+      "rolename": "CEO"
+    },
+    {
+      "roleid": "H3",
+      "rolename": "Vice President"
+    },
+    {
+      "roleid": "H4",
+      "rolename": "Sales Manager"
+    },
+    {
+      "roleid": "H5",
+      "rolename": "Sales Person"
+    }
+  ],
+  "users": [
+    {
+      "identity": "administrator",
+      "is_admin": "on",
+      "status": "Active",
+      "roleid": "H2"
+    },
+    {
+      "identity": "integration",
+      "is_admin": "off",
+      "status": "Active",
+      "roleid": "H2"
+    }
+  ]
+}

@@ -1,0 +1,1574 @@
+{
+  "timestamp": "2026-09-24T09:10:27.315Z",
+  "modules": {
+    "HelpDesk": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 0,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "parent_id",
+        "product_id",
+        "ticketseverities",
+        "ticketcategories",
+        "hours",
+        "days",
+        "from_portal",
+        "modifiedby",
+        "solution",
+        "contact_id",
+        "source",
+        "starred",
+        "tags",
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "ticket_no",
+          "label": "Ticket Number",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "Assigned To",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": true,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "parent_id",
+          "label": "Organization Name",
+          "type": {
+            "refersTo": [
+              "Accounts"
+            ],
+            "name": "reference"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "ticketpriorities",
+          "label": "Priority",
+          "type": {
+            "picklistValues": [
+              {
+                "label": "Low",
+                "value": "Low"
+              },
+              {
+                "label": "Normal",
+                "value": "Normal"
+              },
+              {
+                "label": "High",
+                "value": "High"
+              },
+              {
+                "label": "Urgent",
+                "value": "Urgent"
+              }
+            ],
+            "defaultValue": "Low",
+            "name": "picklist"
+          },
+          "mandatory": true,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "product_id",
+          "label": "Product Name",
+          "type": {
+            "refersTo": [
+              "Products"
+            ],
+            "name": "reference"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "ticketseverities",
+          "label": "Severity",
+          "type": {
+            "picklistValues": [
+              {
+                "label": "Minor",
+                "value": "Minor"
+              },
+              {
+                "label": "Major",
+                "value": "Major"
+              },
+              {
+                "label": "Feature",
+                "value": "Feature"
+              },
+              {
+                "label": "Critical",
+                "value": "Critical"
+              }
+            ],
+            "defaultValue": "Minor",
+            "name": "picklist"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "ticketstatus",
+          "label": "Status",
+          "type": {
+            "picklistValues": [
+              {
+                "label": "Open",
+                "value": "Open"
+              },
+              {
+                "label": "In Progress",
+                "value": "In Progress"
+              },
+              {
+                "label": "Wait For Response",
+                "value": "Wait For Response"
+              },
+              {
+                "label": "Closed",
+                "value": "Closed"
+              }
+            ],
+            "defaultValue": "Open",
+            "name": "picklist"
+          },
+          "mandatory": true,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "ticketcategories",
+          "label": "Category",
+          "type": {
+            "picklistValues": [
+              {
+                "label": "Big Problem",
+                "value": "Big Problem"
+              },
+              {
+                "label": "Small Problem",
+                "value": "Small Problem"
+              },
+              {
+                "label": "Other Problem",
+                "value": "Other Problem"
+              }
+            ],
+            "defaultValue": "Big Problem",
+            "name": "picklist"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "hours",
+          "label": "Hours",
+          "type": {
+            "name": "double"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "days",
+          "label": "Days",
+          "type": {
+            "name": "double"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "createdtime",
+          "label": "Created Time",
+          "type": {
+            "name": "datetime"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "modifiedtime",
+          "label": "Modified Time",
+          "type": {
+            "name": "datetime"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "from_portal",
+          "label": "From Portal",
+          "type": {
+            "name": "boolean"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "modifiedby",
+          "label": "Last Modified By",
+          "type": {
+            "refersTo": [
+              "Users"
+            ],
+            "name": "reference"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "ticket_title",
+          "label": "Title",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": true,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "description",
+          "label": "Description",
+          "type": {
+            "name": "text"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "solution",
+          "label": "Solution",
+          "type": {
+            "name": "text"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "contact_id",
+          "label": "Contact Name",
+          "type": {
+            "refersTo": [
+              "Contacts"
+            ],
+            "name": "reference"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "source",
+          "label": "Source",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "starred",
+          "label": "starred",
+          "type": {
+            "name": "boolean"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "tags",
+          "label": "tags",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "unclassified"
+        },
+        {
+          "name": "vems_incident_id",
+          "label": "vems_incident_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_call_id",
+          "label": "vems_call_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_call_source",
+          "label": "vems_call_source",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_received_at_utc",
+          "label": "vems_received_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_category",
+          "label": "vems_category",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_address",
+          "label": "vems_address",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_patient_count",
+          "label": "vems_patient_count",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_status",
+          "label": "vems_status",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_last_correlation_id",
+          "label": "vems_last_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_updated_at_utc",
+          "label": "vems_updated_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_closed_at_utc",
+          "label": "vems_closed_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "id",
+          "label": "ticketid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    },
+    "VEMSAssignments": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 0,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "vems_assignment_id",
+          "label": "vems_assignment_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_incident_id",
+          "label": "vems_incident_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_incident_remote_id",
+          "label": "vems_incident_remote_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "incident_ref",
+          "label": "incident_ref",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vehicle_ref",
+          "label": "vehicle_ref",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_vehicle_id",
+          "label": "vems_vehicle_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_crew_ids",
+          "label": "vems_crew_ids",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_status",
+          "label": "vems_status",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_vehicle_status",
+          "label": "vems_vehicle_status",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_reason",
+          "label": "vems_reason",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_last_correlation_id",
+          "label": "vems_last_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_updated_at_utc",
+          "label": "vems_updated_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "assigned_user_id",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "id",
+          "label": "vemsassignmentsid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    },
+    "VEMSVehicles": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 0,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "vems_vehicle_id",
+          "label": "vems_vehicle_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_callsign",
+          "label": "vems_callsign",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_operational_status",
+          "label": "vems_operational_status",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_service_status",
+          "label": "vems_service_status",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_vehicle_type",
+          "label": "vems_vehicle_type",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_home_station",
+          "label": "vems_home_station",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_last_correlation_id",
+          "label": "vems_last_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_updated_at_utc",
+          "label": "vems_updated_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "assigned_user_id",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "id",
+          "label": "vemsvehiclesid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    },
+    "VEMSPersonnel": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 1,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "vems_staff_id",
+          "label": "vems_staff_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_display_name",
+          "label": "vems_display_name",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_role",
+          "label": "vems_role",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_operational_status",
+          "label": "vems_operational_status",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_home_station",
+          "label": "vems_home_station",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_last_correlation_id",
+          "label": "vems_last_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_updated_at_utc",
+          "label": "vems_updated_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_personnel_no",
+          "label": "vems_personnel_no",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "assigned_user_id",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "id",
+          "label": "vemspersonnelid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    },
+    "VEMSAssignmentCrew": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 0,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "assignment_ref",
+          "label": "assignment_ref",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "personnel_ref",
+          "label": "personnel_ref",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_assignment_crew_id",
+          "label": "vems_assignment_crew_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_assignment_id",
+          "label": "vems_assignment_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_staff_id",
+          "label": "vems_staff_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_last_correlation_id",
+          "label": "vems_last_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_updated_at_utc",
+          "label": "vems_updated_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "assigned_user_id",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "id",
+          "label": "vemsassignmentcrewid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    },
+    "VEMSStockItems": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 0,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "vems_stock_item_id",
+          "label": "vems_stock_item_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_name",
+          "label": "vems_name",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_category",
+          "label": "vems_category",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_unit_of_measure",
+          "label": "vems_unit_of_measure",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_item_type",
+          "label": "vems_item_type",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_active_status",
+          "label": "vems_active_status",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_last_correlation_id",
+          "label": "vems_last_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_updated_at_utc",
+          "label": "vems_updated_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_stock_item_no",
+          "label": "vems_stock_item_no",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "assigned_user_id",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "id",
+          "label": "vemsstockitemsid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    },
+    "VEMSVehicleStock": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 0,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "vems_vehicle_stock_id",
+          "label": "vems_vehicle_stock_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_vehicle_id",
+          "label": "vems_vehicle_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_stock_item_id",
+          "label": "vems_stock_item_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vehicle_ref",
+          "label": "vehicle_ref",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "stock_item_ref",
+          "label": "stock_item_ref",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_quantity_on_hand",
+          "label": "vems_quantity_on_hand",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_minimum_quantity",
+          "label": "vems_minimum_quantity",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_target_quantity",
+          "label": "vems_target_quantity",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_last_correlation_id",
+          "label": "vems_last_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_updated_at_utc",
+          "label": "vems_updated_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_vehicle_stock_no",
+          "label": "vems_vehicle_stock_no",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "assigned_user_id",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "id",
+          "label": "vemsvehiclestockid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    },
+    "VEMSStockUsage": {
+      "describe": "PASS",
+      "query": "PASS",
+      "sampleCount": 0,
+      "createable": true,
+      "updateable": true,
+      "deleteable": true,
+      "missing": [],
+      "unexpected": [
+        "id"
+      ],
+      "fields": [
+        {
+          "name": "vems_stock_usage_id",
+          "label": "vems_stock_usage_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_external_key",
+          "label": "vems_external_key",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_intervention_id",
+          "label": "vems_intervention_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_incident_id",
+          "label": "vems_incident_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_stock_item_id",
+          "label": "vems_stock_item_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "stock_item_ref",
+          "label": "stock_item_ref",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_quantity_used",
+          "label": "vems_quantity_used",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_usage_source",
+          "label": "vems_usage_source",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_performed_at_utc",
+          "label": "vems_performed_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_intervention_type",
+          "label": "vems_intervention_type",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_correlation_id",
+          "label": "vems_correlation_id",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_created_at_utc",
+          "label": "vems_created_at_utc",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vems_mirror"
+        },
+        {
+          "name": "vems_stock_usage_no",
+          "label": "vems_stock_usage_no",
+          "type": {
+            "name": "string"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "assigned_user_id",
+          "label": "assigned_user_id",
+          "type": {
+            "name": "owner"
+          },
+          "mandatory": false,
+          "editable": true,
+          "ownership": "vtiger_metadata"
+        },
+        {
+          "name": "id",
+          "label": "vemsstockusageid",
+          "type": {
+            "name": "autogenerated"
+          },
+          "mandatory": false,
+          "editable": false,
+          "ownership": "unclassified"
+        }
+      ]
+    }
+  }
+}
