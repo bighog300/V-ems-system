@@ -10,6 +10,16 @@ services:
     ports: !override ["127.0.0.1:18080:80"]
     environment:
       VTIGER_SITE_URL: http://127.0.0.1:18080
+      # Issue #147 read-only manager-role audit accounts; provisioned only by
+      # provision-audit-roles.php, never by the shared development provisioner.
+      VTIGER_DISPATCHER_USERNAME: ${VTIGER_DISPATCHER_USERNAME:?required}
+      VTIGER_DISPATCHER_PASSWORD: ${VTIGER_DISPATCHER_PASSWORD:?required}
+      VTIGER_FLEET_MANAGER_USERNAME: ${VTIGER_FLEET_MANAGER_USERNAME:?required}
+      VTIGER_FLEET_MANAGER_PASSWORD: ${VTIGER_FLEET_MANAGER_PASSWORD:?required}
+      VTIGER_STOCK_MANAGER_USERNAME: ${VTIGER_STOCK_MANAGER_USERNAME:?required}
+      VTIGER_STOCK_MANAGER_PASSWORD: ${VTIGER_STOCK_MANAGER_PASSWORD:?required}
+      VTIGER_SUPERVISOR_USERNAME: ${VTIGER_SUPERVISOR_USERNAME:?required}
+      VTIGER_SUPERVISOR_PASSWORD: ${VTIGER_SUPERVISOR_PASSWORD:?required}
   openemr:
     image: vems-audit-147/openemr:desktop
     ports: !override ["127.0.0.1:18083:80"]

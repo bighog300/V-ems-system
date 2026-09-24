@@ -37,4 +37,7 @@ jobs:
           sudo cp infra/services/vtiger/development/MirrorGuard.php infra/services/vtiger/development/MirrorGuardHandler.php infra/services/vtiger/development/ImportGuard.php infra/services/vtiger/development/install-mirror-guard.php infra/services/vtiger/field-ownership.json /opt/vems/
           for file in MirrorGuard.php MirrorGuardHandler.php ImportGuard.php install-mirror-guard.php; do php -l "infra/services/vtiger/development/$file"; done
           php infra/services/vtiger/mirror-guard.test.php
+      - name: Vtiger provisioner syntax check
+        run: |
+          for file in provision-development.php provision-audit-roles.php; do php -l "infra/services/vtiger/development/$file"; done
       - run: npm test

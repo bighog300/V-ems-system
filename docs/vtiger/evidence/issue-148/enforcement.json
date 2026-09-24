@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-24T11:23:53.991Z",
+  "timestamp": "2026-09-24T12:51:20.270Z",
   "project": "vems-audit-147",
   "checks": [
     {
@@ -178,6 +178,366 @@
       "unchanged": true
     },
     {
+      "label": "other ordinary update HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other wrong mirror secret",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other correct secret but wrong identity",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other wrong mirror secret",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other correct secret but wrong identity",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other wrong mirror secret",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other correct secret but wrong identity",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create HelpDesk",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignments",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicles",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSPersonnel",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSAssignmentCrew",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockItems",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSVehicleStock",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary update VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other ordinary create VEMSStockUsage",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other wrong mirror secret",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
+      "label": "other correct secret but wrong identity",
+      "code": "VTIGER_PERMISSION_DENIED",
+      "unchanged": true
+    },
+    {
       "label": "integration vehicle status divergence",
       "code": "VTIGER_PERMISSION_DENIED",
       "unchanged": true
@@ -192,8 +552,8 @@
   },
   "workerCreate": {
     "passed": true,
-    "canonicalId": "AMB-1481790249035521",
-    "remoteId": "37x18"
+    "canonicalId": "AMB-1481790254281666",
+    "remoteId": "37x19"
   },
   "accounts": [
     {
@@ -202,6 +562,22 @@
     },
     {
       "identity": "integration",
+      "isAdmin": false
+    },
+    {
+      "identity": "other",
+      "isAdmin": false
+    },
+    {
+      "identity": "other",
+      "isAdmin": false
+    },
+    {
+      "identity": "other",
+      "isAdmin": false
+    },
+    {
+      "identity": "other",
       "isAdmin": false
     }
   ],
@@ -377,6 +753,310 @@
         "controller": "VEMSStockUsage_Import_View",
         "profile_permission": "DENIED",
         "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_record_model",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "crmentity_save",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "HelpDesk",
+        "controller": "HelpDesk_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignments",
+        "controller": "VEMSAssignments_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicles",
+        "controller": "VEMSVehicles_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSPersonnel",
+        "controller": "VEMSPersonnel_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignmentCrew",
+        "controller": "VEMSAssignmentCrew_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockItems",
+        "controller": "VEMSStockItems_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicleStock",
+        "controller": "VEMSVehicleStock_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockUsage",
+        "controller": "VEMSStockUsage_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_record_model",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "crmentity_save",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "HelpDesk",
+        "controller": "HelpDesk_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignments",
+        "controller": "VEMSAssignments_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicles",
+        "controller": "VEMSVehicles_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSPersonnel",
+        "controller": "VEMSPersonnel_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignmentCrew",
+        "controller": "VEMSAssignmentCrew_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockItems",
+        "controller": "VEMSStockItems_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicleStock",
+        "controller": "VEMSVehicleStock_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockUsage",
+        "controller": "VEMSStockUsage_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_record_model",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "crmentity_save",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "HelpDesk",
+        "controller": "HelpDesk_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignments",
+        "controller": "VEMSAssignments_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicles",
+        "controller": "VEMSVehicles_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSPersonnel",
+        "controller": "VEMSPersonnel_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignmentCrew",
+        "controller": "VEMSAssignmentCrew_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockItems",
+        "controller": "VEMSStockItems_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicleStock",
+        "controller": "VEMSVehicleStock_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockUsage",
+        "controller": "VEMSStockUsage_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_record_model",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "crmentity_save",
+        "outcome": "MIRROR_WRITE_DENIED",
+        "unchanged": true
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "HelpDesk",
+        "controller": "HelpDesk_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignments",
+        "controller": "VEMSAssignments_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicles",
+        "controller": "VEMSVehicles_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSPersonnel",
+        "controller": "VEMSPersonnel_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSAssignmentCrew",
+        "controller": "VEMSAssignmentCrew_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockItems",
+        "controller": "VEMSStockItems_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSVehicleStock",
+        "controller": "VEMSVehicleStock_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "other",
+        "path": "ui_import_view",
+        "module": "VEMSStockUsage",
+        "controller": "VEMSStockUsage_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
       }
     ],
     "bypasses": [
@@ -394,16 +1074,16 @@
   },
   "bypassRepair": {
     "passed": true,
-    "canonicalId": "AMB-1481790249035521",
+    "canonicalId": "AMB-1481790254281666",
     "remoteIdStable": true,
     "status": "Available"
   },
   "outage": [
     {
-      "intent_id": 38,
+      "intent_id": 42,
       "status": "dead_lettered",
       "attempt_count": 3,
-      "last_error_classification": "VTIGER_OUTCOME_UNKNOWN"
+      "last_error_classification": "DOWNSTREAM_UNAVAILABLE"
     }
   ],
   "replay": {
@@ -412,7 +1092,7 @@
     "status": "Available",
     "intents": [
       {
-        "intent_id": 38,
+        "intent_id": 42,
         "status": "succeeded",
         "attempt_count": 0
       }

@@ -119,6 +119,15 @@ try {
         $identifier = Vtiger_Field::getInstance('vems_external_key', $module);
         if (!$identifier) { throw new RuntimeException("Entity identifier field missing for $moduleName"); }
         $module->setEntityIdentifier($identifier);
+        // vtlib module creation ships no default "All" filter. Without one, every
+        // account's List view (including the admin's) is a fatal error: the page
+        // calls a method on the null custom-view object that getViewId() resolves
+        // to. Match the shape of a standard module's system "All" view exactly.
+        $existingView = $adb->pquery('SELECT cvid FROM vtiger_customview WHERE viewname=? AND entitytype=?', ['All', $moduleName]);
+        if (!$adb->num_rows($existingView)) {
+            $cvid = $adb->getUniqueId('vtiger_customview');
+            $adb->pquery('INSERT INTO vtiger_customview (cvid, viewname, setdefault, setmetrics, entitytype, status, userid) VALUES (?,?,1,0,?,0,1)', [$cvid, 'All', $moduleName]);
+        }
     }
     require_once '/opt/vems/install-mirror-guard.php';
     vemsInstallMirrorGuard($adb);
