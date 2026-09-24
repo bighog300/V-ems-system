@@ -63,8 +63,26 @@ foreach ($users as $user) {
         }
         $results[] = ['identity' => $identity($user), 'path' => $path, 'outcome' => $outcome, 'unchanged' => $before === $status($id)];
     }
-    // Import runs in bulk-save mode without the handler; the installer removes it from profiles.
-    $results[] = ['identity' => $identity($user), 'path' => 'ui_import_permission', 'outcome' => isPermitted('VEMSVehicles', 'Import') === 'yes' ? 'IMPORT_PERMITTED' : 'IMPORT_DENIED'];
+    // Import runs in bulk-save mode without the handler. Resolve the controller exactly as
+    // index.php?module=<M>&view=Import does and run its permission check and process().
+    foreach (array_keys(VemsMirrorGuard::registry()) as $module) {
+        $class = Vtiger_Loader::getComponentClassName('View', 'Import', $module);
+        $outcomes = [];
+        foreach (['checkPermission', 'process'] as $method) {
+            try {
+                (new $class())->$method(new Vtiger_Request(['module' => $module, 'view' => 'Import', 'mode' => 'import'], ['module' => $module, 'view' => 'Import', 'mode' => 'import']));
+                $outcomes[] = 'IMPORT_PERMITTED';
+                break; // Never drive a real import if the guard is missing.
+            } catch (AppException $error) {
+                $outcomes[] = $error->getMessage() === vtranslate('LBL_PERMISSION_DENIED') ? 'IMPORT_DENIED' : 'UNEXPECTED_ERROR';
+            } catch (Throwable $error) {
+                $outcomes[] = 'UNEXPECTED_ERROR';
+            }
+        }
+        $results[] = ['identity' => $identity($user), 'path' => 'ui_import_view', 'module' => $module, 'controller' => $class,
+            'profile_permission' => isPermitted($module, 'Import') === 'yes' ? 'PERMITTED' : 'DENIED',
+            'outcome' => array_unique($outcomes) === ['IMPORT_DENIED'] ? 'IMPORT_DENIED' : implode('/', $outcomes)];
+    }
 }
 
 // Known bypasses without save events. Run once as administrator on a dedicated synthetic
@@ -96,7 +114,7 @@ ob_end_clean();
 echo json_encode(['actual_browser_ui' => 'NOT RUN', 'installation' => $installation, 'checks' => $results, 'bypasses' => $bypasses], JSON_PRETTY_PRINT) . PHP_EOL;
 if (!$installation['core_crmentity_pinned'] || $installation['core_contains_guard'] || count(array_filter($handlers, fn($handler) => $handler['active'])) !== 2) exit(1);
 foreach ($results as $result) {
-    if ($result['path'] === 'ui_import_permission') {
-        if ($result['identity'] === 'integration' && $result['outcome'] !== 'IMPORT_DENIED') exit(1);
+    if ($result['path'] === 'ui_import_view') {
+        if ($result['outcome'] !== 'IMPORT_DENIED' || $result['controller'] !== $result['module'] . '_Import_View') exit(1);
     } elseif ($result['outcome'] !== 'MIRROR_WRITE_DENIED' || !$result['unchanged']) exit(1);
 }

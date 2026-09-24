@@ -382,9 +382,10 @@ rejects ordinary mirror changes. It needs no Vtiger core patch. It denied the
 tested integration and administrator webservice writes across all eight modules.
 Invoked directly on the server, the UI record model and `CRMEntity::save()` also
 reject the vehicle-status change. These are **not actual browser UI tests**.
-Bulk-save mode, which UI Import uses, and direct `saveentity()` calls raise no
-events and are confirmed bypasses. Import is removed from non-administrator
-profiles.
+Bulk-save mode and direct `saveentity()` calls raise no events and are confirmed
+server-side bypasses. UI Import, the user-facing route into bulk-save mode, is
+now denied for all users, administrators included. A module-level Import view
+override on each of the eight modules does this.
 
 An explicitly authenticated worker operation passed canonical create/update and
 outage replay with a stable remote ID. See the

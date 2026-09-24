@@ -35,9 +35,18 @@ The installer also does the following:
   unless the restored file is byte-for-byte identical to the pinned source.
 - Fails unless it can confirm both active handler registrations.
   `Vtiger_Event::register` skips silently when its file-access check fails.
-- Uses vtlib `disableTools` to remove Import from every profile for the eight
-  registry modules, then calls `Vtiger_Access::syncSharingAccess` so the cached
-  `user_privileges` files take effect.
+- Closes UI Import, the user-facing route into bulk-save mode, for all users,
+  administrators included:
+  - Writes a module-level `modules/<Module>/views/Import.php` override
+    (`<Module>_Import_View`) for each of the eight registry modules. Vtiger's
+    loader prefers this over `Vtiger_Import_View`, as it does for core Calendar
+    and Users. The override's `checkPermission()` and `process()` deny every
+    mode for every user.
+  - Refuses to overwrite an `Import.php` it did not generate.
+  - Fails if an unfinished import is already queued for a registry module.
+  - As an extra layer for non-administrators, removes Import from every profile
+    with vtlib `disableTools`, then calls `Vtiger_Access::syncSharingAccess` so
+    the cached `user_privileges` files take effect.
 
 The live audit confirmed that the retained `vems-audit-147` volume had its core
 file restored to the pinned hash and contains no guard code.
@@ -47,8 +56,10 @@ file restored to the pinned hash and contains no guard code.
 handlers. Direct `saveentity()` calls and direct SQL also raise no events. The
 live probe performed both bypasses as administrator on a dedicated synthetic
 vehicle. Both changed the mirror, and the canonical worker then repaired it to
-`Available`. Import is denied to the integration account and still permitted to
-administrators, because `isPermitted` returns yes for any administrator. In the
+`Available`. These are server-side code paths. UI Import is now denied to both
+accounts on all eight modules, even though `isPermitted` still answers yes for
+the administrator. The administrator may still see the Import link, but it
+returns permission-denied. In the
 pinned distribution, the only core `saveentity()` caller outside `save()` is
 MailScanner (ModComments). `vemsMirrorWrite` refuses to run in bulk-save mode.
 
@@ -88,7 +99,7 @@ deployments require an explicit key rollout; `vems-dev` was not migrated.
 | Handler installation | Core `CRMEntity.php` at pinned hash, no guard code; both handler events registered and active |
 | Real UI record-model save, integration and administrator | Denied; vehicle unchanged |
 | `CRMEntity::save()` (event path), integration and administrator | Denied; vehicle unchanged |
-| UI Import permission | Integration denied; administrator permitted (known bypass) |
+| UI Import controller (`<Module>_Import_View` resolved by Vtiger's loader), all eight modules | Denied for integration and administrator; administrator profile check still answers yes |
 | Bulk-save mode save, administrator | **Bypass confirmed**; synthetic vehicle repaired by worker |
 | Direct `saveentity()`, administrator | **Bypass confirmed**; synthetic vehicle repaired by worker |
 | Actual browser UI/navigation/role interaction | NOT RUN: browser inventory empty; Chrome unavailable |
@@ -106,14 +117,18 @@ Repeated runs use unique vehicle IDs and preserve earlier data.
 The event-handler run created synthetic vehicle `AMB-1481790248196822` for the
 bypass probes. An earlier diagnostic run created `AMB-1481790248051946`. A direct
 probe rerun also changed it, and a canonical worker update repaired it to
-`Available`. Both vehicles are retained.
+`Available`. The Import-guard run used `AMB-1481790249035521` in the same way.
+All three vehicles are retained.
 
-The guard has **no administrator exemption**, and the tested ordinary
-administrator webservice, record-model and `save()` paths were denied. This is
-not universal enforcement. The following can bypass the application event
-boundary: UI Import by an administrator, which runs in bulk-save mode; direct
-`saveentity()` or SQL; a database or host administrator; and anyone able to
-install or alter PHP or deactivate handlers. Extensions that write tables
+The guard has **no administrator exemption**. The tested ordinary administrator
+webservice, record-model, `save()` and UI Import controller paths were denied.
+This is not universal enforcement. The following can still bypass the
+application boundary:
+
+- direct `saveentity()` calls, bulk-save mode set in PHP, or direct SQL
+- a database or host administrator
+- anyone able to install or alter PHP, deactivate handlers or remove the Import
+  override Extensions that write tables
 directly need separate review. Actual browser actions and the intended
 management roles remain open acceptance gates. This work closes neither #148 nor
 #147.
@@ -126,7 +141,11 @@ management roles remain open acceptance gates. This work closes neither #148 nor
   - authentication rejection and one-save permit scope
   - refusal of the worker operation in bulk-save mode
   - handler registration, activation and dispatch for the two save events
-  - Import disablement and privilege regeneration
+  - Import view overrides generated for all eight modules, denying
+    `checkPermission()` and `process()`
+  - refusal to overwrite a foreign `Import.php`, module-name validation, and
+    rejection of pending queued imports
+  - Import profile disablement and privilege regeneration
   - lock hold from `beforesave.final` to `aftersave`, release on denial and
     shutdown, and no lock for creates
   - byte-exact removal of both earlier core rewrites

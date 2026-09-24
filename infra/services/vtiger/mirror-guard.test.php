@@ -4,9 +4,10 @@ abstract class VTEventHandler { abstract public function handleEvent($name, $dat
 class GuardDatabase {
     public $acquired = '1';
     public $registered = '2';
+    public $queued = '0';
     public $calls = [];
     public function pquery($sql, $params) { $this->calls[] = [$sql, $params]; return true; }
-    public function query_result($result, $row, $field) { return $field === 'registered' ? $this->registered : $this->acquired; }
+    public function query_result($result, $row, $field) { return $this->$field ?? $this->acquired; }
     public function num_rows($result) { return 1; }
 }
 class CRMEntity {
@@ -20,9 +21,17 @@ class CRMEntity {
 class Vtiger_Module {
     public static $disabled = [];
     public $name;
-    public static function getInstance($name) { $module = new self(); $module->name = $name; return $module; }
+    public $id;
+    public static function getInstance($name) { $module = new self(); $module->name = $name; $module->id = crc32($name); return $module; }
     public function disableTools($tool) { self::$disabled[$this->name] = $tool; }
 }
+class Vtiger_Utils {
+    public static function CheckTable($table) { return $table === 'vtiger_import_queue'; }
+}
+class Vtiger_Request { public function getMode() { return 'import'; } }
+class AppException extends Exception {}
+class Vtiger_Import_View { public function checkPermission(Vtiger_Request $request) { return true; } public function process(Vtiger_Request $request) { return 'imported'; } }
+function vtranslate($label) { return $label; }
 class Vtiger_Event {
     public static $registered = [];
     public static function register($module, $event, $class, $path) { self::$registered[] = [$module->name, $event, $class, $path]; }
@@ -81,6 +90,29 @@ if (!str_contains(file_get_contents('modules/VEMSVehicles/handlers/VemsMirrorGua
 $adb->registered = '1';
 expectFailure(fn() => vemsInstallMirrorGuard($adb, $pristineHash), 'registration was not confirmed');
 $adb->registered = '2';
+// Module-level Import override for every registry module; it denies every user and mode.
+foreach (array_keys(VemsMirrorGuard::registry()) as $module) {
+    $view = "modules/$module/views/Import.php";
+    if (file_get_contents($view) !== vemsImportViewSource($module)) throw new RuntimeException("Import guard view missing for $module");
+    require $view;
+    $class = "{$module}_Import_View";
+    $instance = new $class();
+    foreach (['checkPermission', 'process'] as $method) {
+        try { $instance->$method(new Vtiger_Request()); throw new LogicException("$class::$method allowed import"); }
+        catch (AppException $denied) { if ($denied->getMessage() !== 'LBL_PERMISSION_DENIED') throw $denied; }
+    }
+}
+expectFailure(fn() => vemsImportViewSource('Bad/../Module'), 'Invalid module name');
+$queuedCheck = array_values(array_filter($adb->calls, fn($call) => str_contains($call[0], 'vtiger_import_queue')));
+if (!$queuedCheck || count(end($queuedCheck)[1]) !== count(VemsMirrorGuard::registry())) throw new RuntimeException('Import queue not checked for every module');
+$adb->queued = '1';
+expectFailure(fn() => vemsInstallMirrorGuard($adb, $pristineHash), 'Pending imports exist');
+$adb->queued = '0';
+$foreign = 'modules/VEMSStockUsage/views/Import.php';
+file_put_contents($foreign, "<?php // custom module view\n");
+expectFailure(fn() => vemsInstallMirrorGuard($adb, $pristineHash), 'not the V-EMS import guard');
+if (file_get_contents($foreign) !== "<?php // custom module view\n") throw new RuntimeException('Foreign Import view overwritten');
+unlink($foreign);
 // Both earlier #148 core rewrites are reverted byte-for-byte.
 $signature = "function saveentity(\$module, \$fileid = '') {";
 $end = "\t\t// END\n\t}\n\n\t/**\n\t * This function is used to upload the attachment";
@@ -177,4 +209,4 @@ denied(fn() => VemsMirrorGuard::write('VEMSVehicles', [], 'delete', str_repeat('
 CRMEntity::$bulk = true;
 denied(fn() => VemsMirrorGuard::write('VEMSVehicles', [], 'create', str_repeat('k',40), (object)['id' => 2, 'user_name' => 'worker']));
 CRMEntity::$bulk = false;
-echo "Mirror guard: $checks fields, event registration/ordering, core patch removal, lock release, create/change/clear denial and authentication checks passed\n";
+echo "Mirror guard: $checks fields, event registration/ordering, core patch removal, Import view override, lock release, create/change/clear denial and authentication checks passed\n";

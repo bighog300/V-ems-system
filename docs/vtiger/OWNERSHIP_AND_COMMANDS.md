@@ -52,14 +52,34 @@ shutdown hook releases any lock still held.
 UI Import) suppresses every non-core save handler. Direct `saveentity()` calls
 and direct SQL also raise no events. The live audit confirmed that both
 bulk-save mode and direct `saveentity()` bypass the guard (see the evidence
-`bypasses`). To reduce this exposure, the installer uses vtlib `disableTools`
-to remove Import from every profile for all eight registry modules, then
-regenerates the cached user privileges. The live probe denies Import to the
-integration account. Administrators pass `isPermitted` unconditionally and keep
-Import. `vemsMirrorWrite` refuses to run in bulk-save mode, because the event
-that consumes its permit would not fire. In the pinned distribution, the only
-core `saveentity()` caller outside `save()` is MailScanner, and it writes
-ModComments.
+`bypasses`).
+
+UI Import is the only user-facing route into bulk-save mode, and it is closed
+for all users, administrators included:
+
+- **Module-level override.** Vtiger's component loader prefers
+  `modules/<Module>/views/Import.php` (`<Module>_Import_View`) over
+  `Vtiger_Import_View`. Core Calendar and Users use the same mechanism. For each
+  of the eight registry modules, the installer writes a generated override whose
+  `checkPermission()` and `process()` both throw `LBL_PERMISSION_DENIED` for
+  every user and mode. The shared code lives in `/opt/vems/ImportGuard.php`.
+- **Why an override is needed.** `isPermitted()` always answers yes for
+  administrators, so profile settings alone cannot deny them. As an extra layer,
+  vtlib `disableTools` also removes Import from every profile, and the cached
+  user privileges are regenerated.
+- **Import link.** Administrators may still see the Import link, because link
+  visibility uses `isPermitted()`. Following the link returns
+  permission-denied.
+- **Existing files.** The installer refuses to overwrite an `Import.php` it did
+  not generate. Only HelpDesk is a core module, and the pinned distribution
+  ships no `Import.php` override for it.
+- **Queued imports.** The scheduled-import cron only processes imports queued
+  through that view. Provisioning fails if `vtiger_import_queue` holds any
+  unfinished import for a registry module.
+
+`vemsMirrorWrite` refuses to run in bulk-save mode, because the event that
+consumes its permit would not fire. In the pinned distribution, the only core
+`saveentity()` caller outside `save()` is MailScanner, and it writes ModComments.
 
 The guard has no administrator exemption. The isolated live administrator and
 integration webservice probes are recorded in
@@ -91,7 +111,8 @@ The installer is idempotent. It writes two one-line wrappers under the CRM
 document root, because vtlib and the webservice dispatcher include only files
 inside that root: `modules/VEMSVehicles/handlers/VemsMirrorGuard.php` and
 `include/Webservices/VemsMirrorWrite.php`. Both wrappers load the guard from
-`/opt/vems`. The installer registers the handler against the VEMSVehicles module
+`/opt/vems`. It also writes the generated `modules/<Module>/views/Import.php`
+overrides, which load `/opt/vems/ImportGuard.php`. The installer registers the handler against the VEMSVehicles module
 and guards all eight registry modules. Deploy the `/opt/vems` guard and registry
 with the retained CRM volume. If you roll back only the container image and those
 files are missing, the registered handler cannot load, and saves fail closed.
@@ -101,10 +122,10 @@ files are missing, the registered handler cannot load, and saves fail closed.
 This is an application save-event boundary. It does not protect against a
 database administrator, a host or container administrator, or installed PHP code
 that writes tables directly, calls `saveentity()`, enables bulk-save mode, or
-deactivates the handler. An administrator can still use UI Import, which runs in
-bulk-save mode, to change mirrored fields. Extensions that persist records
-without `CRMEntity::save()` need separate review. No universal administrator
-enforcement is claimed. The tested ordinary administrator webservice,
+deactivates the handler or removes the Import view override. Extensions that
+persist records without `CRMEntity::save()` need separate review. No universal
+administrator enforcement is claimed. The tested ordinary administrator
+webservice, UI Import controller,
 record-model and `save()` paths are denied.
 Actual UI navigation, alternate UI actions and absent management accounts remain
 unverified. Deletion and a complete management role matrix are separate work.

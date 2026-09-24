@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-24T11:09:54.509Z",
+  "timestamp": "2026-09-24T11:23:53.991Z",
   "project": "vems-audit-147",
   "checks": [
     {
@@ -192,8 +192,8 @@
   },
   "workerCreate": {
     "passed": true,
-    "canonicalId": "AMB-1481790248196822",
-    "remoteId": "37x17"
+    "canonicalId": "AMB-1481790249035521",
+    "remoteId": "37x18"
   },
   "accounts": [
     {
@@ -240,8 +240,67 @@
       },
       {
         "identity": "administrator",
-        "path": "ui_import_permission",
-        "outcome": "IMPORT_PERMITTED"
+        "path": "ui_import_view",
+        "module": "HelpDesk",
+        "controller": "HelpDesk_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_view",
+        "module": "VEMSAssignments",
+        "controller": "VEMSAssignments_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_view",
+        "module": "VEMSVehicles",
+        "controller": "VEMSVehicles_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_view",
+        "module": "VEMSPersonnel",
+        "controller": "VEMSPersonnel_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_view",
+        "module": "VEMSAssignmentCrew",
+        "controller": "VEMSAssignmentCrew_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_view",
+        "module": "VEMSStockItems",
+        "controller": "VEMSStockItems_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_view",
+        "module": "VEMSVehicleStock",
+        "controller": "VEMSVehicleStock_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_view",
+        "module": "VEMSStockUsage",
+        "controller": "VEMSStockUsage_Import_View",
+        "profile_permission": "PERMITTED",
+        "outcome": "IMPORT_DENIED"
       },
       {
         "identity": "integration",
@@ -257,7 +316,66 @@
       },
       {
         "identity": "integration",
-        "path": "ui_import_permission",
+        "path": "ui_import_view",
+        "module": "HelpDesk",
+        "controller": "HelpDesk_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_view",
+        "module": "VEMSAssignments",
+        "controller": "VEMSAssignments_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_view",
+        "module": "VEMSVehicles",
+        "controller": "VEMSVehicles_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_view",
+        "module": "VEMSPersonnel",
+        "controller": "VEMSPersonnel_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_view",
+        "module": "VEMSAssignmentCrew",
+        "controller": "VEMSAssignmentCrew_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_view",
+        "module": "VEMSStockItems",
+        "controller": "VEMSStockItems_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_view",
+        "module": "VEMSVehicleStock",
+        "controller": "VEMSVehicleStock_Import_View",
+        "profile_permission": "DENIED",
+        "outcome": "IMPORT_DENIED"
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_view",
+        "module": "VEMSStockUsage",
+        "controller": "VEMSStockUsage_Import_View",
+        "profile_permission": "DENIED",
         "outcome": "IMPORT_DENIED"
       }
     ],
@@ -276,16 +394,16 @@
   },
   "bypassRepair": {
     "passed": true,
-    "canonicalId": "AMB-1481790248196822",
+    "canonicalId": "AMB-1481790249035521",
     "remoteIdStable": true,
     "status": "Available"
   },
   "outage": [
     {
-      "intent_id": 34,
+      "intent_id": 38,
       "status": "dead_lettered",
       "attempt_count": 3,
-      "last_error_classification": "DOWNSTREAM_UNAVAILABLE"
+      "last_error_classification": "VTIGER_OUTCOME_UNKNOWN"
     }
   ],
   "replay": {
@@ -294,7 +412,7 @@
     "status": "Available",
     "intents": [
       {
-        "intent_id": 34,
+        "intent_id": 38,
         "status": "succeeded",
         "attempt_count": 0
       }

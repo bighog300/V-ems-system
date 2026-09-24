@@ -1,6 +1,7 @@
 <?php
 // Invoked after module creation; source drift must fail provisioning.
 require_once '/opt/vems/MirrorGuardHandler.php';
+require_once '/opt/vems/ImportGuard.php';
 
 // data/CRMEntity.php of the digest-pinned base image. The guard relies on its save()
 // raising vtiger.entity.beforesave.final before saveentity(); drift must be reviewed.
@@ -59,13 +60,29 @@ function vemsInstallMirrorGuard($adb, string $expectedCoreHash = VEMS_PINNED_CRM
     }
 
     // UI Import runs in bulk-save mode, which suppresses non-core save handlers.
+    $tabIds = [];
     foreach (array_keys(VemsMirrorGuard::registry()) as $moduleName) {
         $module = Vtiger_Module::getInstance($moduleName);
         if (!$module) throw new RuntimeException('Mirrored module missing');
         $module->disableTools('Import');
+        $tabIds[] = $module->id;
+        // Module-level view override: denies administrators too. Never replace a foreign file.
+        $view = "modules/$moduleName/views/Import.php";
+        if (file_exists($view) && strpos((string)file_get_contents($view), VEMS_IMPORT_GUARD_MARKER) === false) {
+            throw new RuntimeException('Existing Import view override is not the V-EMS import guard');
+        }
+        if (!is_dir(dirname($view)) && !mkdir(dirname($view), 0755, true)) throw new RuntimeException('Cannot create module views directory');
+        if (file_put_contents($view, vemsImportViewSource($moduleName)) === false) throw new RuntimeException('Cannot install import guard view');
     }
     // isPermitted() reads cached user_privileges files; regenerate them from the profiles.
     Vtiger_Access::syncSharingAccess();
+    // The scheduled-import cron would still process imports queued before the guard.
+    if (Vtiger_Utils::CheckTable('vtiger_import_queue')) {
+        $queued = $adb->pquery('SELECT COUNT(*) AS queued FROM vtiger_import_queue WHERE status<>4 AND tabid IN (' . implode(',', array_fill(0, count($tabIds), '?')) . ')', $tabIds);
+        if (!$queued || (string)$adb->query_result($queued, 0, 'queued') !== '0') {
+            throw new RuntimeException('Pending imports exist for mirrored modules; review them before enabling the guard');
+        }
+    }
 
     $result = $adb->pquery('SELECT operationid FROM vtiger_ws_operation WHERE name=?', ['vemsMirrorWrite']);
     if (!$adb->num_rows($result)) {
