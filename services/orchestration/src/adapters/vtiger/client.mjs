@@ -3,6 +3,11 @@ import { VtigerError } from "./errors.mjs";
 
 export function createVtigerWebserviceClient(env = process.env, options = {}) {
   const auth = new VtigerAuth({ baseUrl: env.VTIGER_BASE_URL, username: env.VTIGER_USERNAME, accessKey: env.VTIGER_ACCESS_KEY, timeoutMs: env.VTIGER_TIMEOUT_MS, fetchImpl: options.fetchImpl });
+  const write = (mode, element, elementType) => {
+    if (!options.mirrorWrites) return auth.call(mode, { elementType, element: JSON.stringify(element) }, "POST");
+    if (!env.VTIGER_MIRROR_WRITE_KEY || env.VTIGER_MIRROR_WRITE_KEY.length < 32) throw new VtigerError("VTIGER_AUTH_FAILED", "Mirror write credential is missing", { operation: mode });
+    return auth.call("vemsMirrorWrite", { elementType, element: JSON.stringify(element), mode, writeKey: env.VTIGER_MIRROR_WRITE_KEY }, "POST");
+  };
   return {
     auth,
     async healthCheck() {
@@ -45,8 +50,8 @@ export function createVtigerWebserviceClient(env = process.env, options = {}) {
       return { reachable: true, authenticated: true, schemaReady: true, vtigerVersion: undefined };
     },
     async query(query) { return auth.call("query", { query }); },
-    async create(element, elementType = "HelpDesk") { return auth.call("create", { elementType, element: JSON.stringify(element) }, "POST"); },
+    async create(element, elementType = "HelpDesk") { return write("create", element, elementType); },
     async retrieve(id, elementType = "HelpDesk") { return auth.call("retrieve", { id, elementType }); },
-    async update(element, elementType = "HelpDesk") { return auth.call("update", { element: JSON.stringify(element), elementType }, "POST"); }
+    async update(element, elementType = "HelpDesk") { return write("update", element, elementType); }
   };
 }

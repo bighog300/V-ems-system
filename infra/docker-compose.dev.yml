@@ -66,6 +66,7 @@ services:
       VTIGER_ADMIN_USER: ${VTIGER_ADMIN_USER:-admin}
       VTIGER_ADMIN_PASSWORD: ${VTIGER_ADMIN_PASSWORD:?VTIGER_ADMIN_PASSWORD is required}
       VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:?VTIGER_ACCESS_KEY is required}
+      VTIGER_MIRROR_WRITE_KEY: ${VTIGER_MIRROR_WRITE_KEY:-}
       VTIGER_ADMIN_EMAIL: ${VTIGER_ADMIN_EMAIL:-admin@example.com}
       VTIGER_COMPANY_NAME: ${VTIGER_COMPANY_NAME:-VEMS Dev}
       VTIGER_TIMEZONE: ${VTIGER_TIMEZONE:-UTC}
@@ -184,6 +185,7 @@ services:
       VTIGER_BASE_URL: http://vtiger
       VTIGER_USERNAME: ${VTIGER_USERNAME:?VTIGER_USERNAME is required}
       VTIGER_ACCESS_KEY: ${VTIGER_ACCESS_KEY:?VTIGER_ACCESS_KEY is required}
+      VTIGER_MIRROR_WRITE_KEY: ${VTIGER_MIRROR_WRITE_KEY:-}
       # Optional; unset means records are owned by the integration user (resolved from the Vtiger login).
       VTIGER_ASSIGNED_USER_ID: ${VTIGER_ASSIGNED_USER_ID:-}
       # Mirror worker runs inside the API process (shared SQLite handle).

@@ -8,6 +8,7 @@ export class VtigerAuth {
   }
 
   async request(operation, params = {}, method = "GET") {
+    const createsRecord = operation === "create" || (operation === "vemsMirrorWrite" && params.mode === "create");
     const body = new URLSearchParams({ operation, ...params });
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -16,8 +17,8 @@ export class VtigerAuth {
         body: method === "POST" ? body : undefined, signal: controller.signal
       });
       const text = await response.text();
-      let data; try { data = JSON.parse(text); } catch { throw new VtigerError("VTIGER_PROTOCOL_ERROR", "Vtiger returned a non-JSON response", { operation, httpStatus: response.status, outcomeUnknown: operation === "create" }); }
-      if (!response.ok) throw new VtigerError(response.status >= 500 ? "VTIGER_SERVER_ERROR" : "VTIGER_UNAVAILABLE", `Vtiger HTTP ${response.status}`, { operation, httpStatus: response.status, outcomeUnknown: operation === "create" });
+      let data; try { data = JSON.parse(text); } catch { throw new VtigerError("VTIGER_PROTOCOL_ERROR", "Vtiger returned a non-JSON response", { operation, httpStatus: response.status, outcomeUnknown: createsRecord }); }
+      if (!response.ok) throw new VtigerError(response.status >= 500 ? "VTIGER_SERVER_ERROR" : "VTIGER_UNAVAILABLE", `Vtiger HTTP ${response.status}`, { operation, httpStatus: response.status, outcomeUnknown: createsRecord });
       if (!data.success) {
         const code = data.error?.code;
         if (code === "INVALID_SESSIONID") throw new VtigerError("VTIGER_SESSION_EXPIRED", "Vtiger session expired", { operation });
@@ -27,7 +28,7 @@ export class VtigerAuth {
       }
       return data.result;
     } catch (error) {
-      if (error.name === "AbortError") throw new VtigerError("VTIGER_OUTCOME_UNKNOWN", "Vtiger request timed out", { operation, outcomeUnknown: operation === "create", cause: error });
+      if (error.name === "AbortError") throw new VtigerError("VTIGER_OUTCOME_UNKNOWN", "Vtiger request timed out", { operation, outcomeUnknown: createsRecord, cause: error });
       throw error;
     } finally { clearTimeout(timer); }
   }

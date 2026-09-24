@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-24",
+  "baseCommit": "e9e4c7b",
+  "project": "vems-audit-147",
+  "command": "node scripts/windows/vtiger-audit-live.mjs denied-write",
+  "beforeInstallingGuard": true,
+  "sourceEvidence": "../issue-147/denied-write.json",
+  "role": "integration user",
+  "result": "WRITE_ACCEPTED",
+  "canonicalBefore": "Available",
+  "canonicalAfter": "Available",
+  "mirrorAfter": "Out of Service",
+  "divergence": true,
+  "repair": "Subsequent canonical vehicle update repaired the mirror through the authenticated worker path; see enforcement.json"
+}

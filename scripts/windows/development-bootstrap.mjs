@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 export const SECRET_KEYS = [
   "DB_ROOT_PASSWORD", "VTIGER_DB_PASSWORD", "VTIGER_ADMIN_PASSWORD", "VTIGER_PASSWORD",
   "OPENEMR_DB_PASSWORD", "OPENEMR_ADMIN_PASSWORD", "OPENEMR_PASSWORD",
-  "OPENEMR_CLIENT_ID", "OPENEMR_CLIENT_SECRET", "VTIGER_ACCESS_KEY", "JWT_HS256_SECRET"
+  "OPENEMR_CLIENT_ID", "OPENEMR_CLIENT_SECRET", "VTIGER_ACCESS_KEY", "JWT_HS256_SECRET", "VTIGER_MIRROR_WRITE_KEY"
 ];
 
 const PLACEHOLDER = /(?:replace-with|change_me|change-me|your_|placeholder|example|set-me|secret-here|development-only|__set_in_local_env__)/i;

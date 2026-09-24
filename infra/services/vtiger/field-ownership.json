@@ -1,5 +1,13 @@
 {
   "version": 1,
+  "enforcement": {
+    "persistence_boundary": "CRMEntity::saveentity",
+    "worker_operation": "vemsMirrorWrite",
+    "worker_authentication": ["Vtiger integration session", "VTIGER_MIRROR_WRITE_KEY"],
+    "ordinary_mirror_changes": "denied",
+    "administrator_exemption": false,
+    "acceptance_gate": "Actual browser UI and intended management role checks remain open under #147 and #148"
+  },
   "modules": {
     "HelpDesk": {
       "write_authority": "vems",

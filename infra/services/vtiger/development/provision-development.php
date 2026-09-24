@@ -120,7 +120,9 @@ try {
         if (!$identifier) { throw new RuntimeException("Entity identifier field missing for $moduleName"); }
         $module->setEntityIdentifier($identifier);
     }
-    echo "Vtiger development identity and adapter fields ready; credentials preserved.\n";
+    require_once '/opt/vems/install-mirror-guard.php';
+    vemsInstallMirrorGuard($adb);
+    echo "Vtiger development identity, fields and mirror guard ready; credentials preserved.\n";
 } catch (Throwable $e) {
     $message = $e->getMessage();
     foreach (getenv() as $value) { if (is_string($value) && strlen($value) > 5) { $message = str_replace($value, '[REDACTED]', $message); } }

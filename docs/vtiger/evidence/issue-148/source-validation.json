@@ -1,0 +1,19 @@
+{
+  "date": "2026-09-24",
+  "phpGuard": {
+    "result": "PASS",
+    "classifiedFields": 115,
+    "checks": ["create/change/clear denial", "unchanged mirrors and metadata", "wrong secret and identity", "module/mode allowlist", "one-save permit scope", "request/admin flags do not authorize", "lock acquisition/release and acquisition failure", "installer idempotence and source drift rejection"],
+    "installerPhpLint": "PASS"
+  },
+  "orchestration": { "tests": 335, "passed": 324, "skipped": 11, "failed": 0 },
+  "bootstrapIsolationOwnership": { "tests": 41, "passed": 41, "failed": 0 },
+  "focusedTransportMirror": { "tests": 29, "passed": 29, "failed": 0 },
+  "rootLint": {
+    "existingWindowsCheckout": "FAIL: pre-existing widespread CRLF/trailing-whitespace reports and ignored local files",
+    "isolatedCurrentSourceLfCopy": "PASS: unchanged root linter; 240 tracked/unignored JS/MJS/shell files; audit API /tmp; checkout unchanged"
+  },
+  "gitDiffCheck": "PASS",
+  "actualBrowserUi": "NOT RUN",
+  "intendedManagerRoles": "NOT RUN: absent"
+}

@@ -21,10 +21,59 @@ fails when a module or field is added without classification.
 
 The schema class `vems_mirror` means V-EMS owns the value and Vtiger receives
 an asynchronous copy. `vtiger_metadata` means Vtiger generates or owns the
-local record number, owner or timestamps. Neither class is permission
-enforcement: the current provisioner creates generic fields and does not make
-the Vtiger UI read-only. Disabling direct edits and testing a manager account
-are separate gates before the management UI is released.
+local record number, owner or timestamps. Classification alone is not permission
+enforcement. The provisioned server now reads this registry at the shared
+`CRMEntity::saveentity` boundary, before its database transaction, and rejects
+ordinary saves that create, change or clear a `vems_mirror` value. This applies
+to UI record-model, ordinary webservice and bulk saves through that boundary;
+it does not depend on field visibility. Unchanged mirror values and
+`vtiger_metadata` writes remain subject to normal Vtiger permissions.
+The guard holds a MySQL advisory lock across comparison and persistence for
+both ordinary and worker saves of a record. This prevents stale ordinary saves
+from racing worker changes even though the pinned distribution enables autocommit.
+Lock acquisition failure denies the save; a `finally` block releases the lock.
+
+The guard has no administrator exemption. The isolated live administrator and
+integration webservice probes are recorded in
+`evidence/issue-148/enforcement.json`. Actual browser UI and intended manager-role
+checks remain release gates under #147 and #148.
+
+### Authenticated worker write path
+
+Worker create/update calls use the POST webservice operation `vemsMirrorWrite`.
+It requires a valid Vtiger session for the configured `VTIGER_USERNAME` **and**
+an independent random `VTIGER_MIRROR_WRITE_KEY` of at least 32 characters.
+Possession of an ordinary integration session/access key alone does not authorize
+mirror changes. The operation restricts modules to the registry, checks update
+ID/module agreement, delegates to Vtiger's normal permission checks, and grants
+one record save only. Permission is consumed before persistence and cleared in
+`finally`; nested saves do not inherit a blanket bypass. There is no fallback to
+ordinary writes when the secret is missing or the operation fails.
+
+Canonical commands, outbox correlation, stable-key lookup and supported replay
+remain unchanged. Uncertain custom creates retain the existing reconciliation
+semantics. Ordinary read clients continue to use normal webservices.
+
+New Windows environments generate the separate key. The guarded audit runner
+adds it once to its owned retained audit environment, preserving existing keys.
+For another retained deployment, explicitly provision the same new random value
+to the API worker and Vtiger environments before rebuilding/provisioning both;
+an absent key fails worker writes closed. This work did not migrate `vems-dev`.
+The installer adds a checked, idempotent hook to the pinned Vtiger distribution
+and refuses unexpected save-function source. Deploy the `/opt/vems` guard and
+registry with the retained CRM volume; rolling back only the container image
+without those files would leave the retained hook unable to load.
+
+### Limits
+
+This is an application persistence boundary, not protection against a database
+administrator, host/container administrator, or installed PHP code that writes
+tables directly or removes the guard. Specialized extension paths that bypass
+`CRMEntity::saveentity` require separate review. A privileged user who can change
+server configuration/code can bypass it; no universal administrator enforcement
+is claimed. The tested ordinary administrator webservice path is denied.
+Actual UI navigation, alternate UI actions and absent management accounts remain
+unverified. Deletion and a complete management role matrix are separate work.
 
 ## Command requirements for a future Vtiger action
 
@@ -51,8 +100,8 @@ assignments, vehicles, personnel and stock, then queues Vtiger sync intents.
 `services/orchestration/src/sync-worker-service.mjs` drains those intents.
 `apps/web-control/src/api.mjs` still lacks incident creation and assignment
 calls; implement the dispatcher UI under Stage 17. The current Vtiger
-provisioner creates fields but not a complete manager role matrix or
-read-only controls. No general Vtiger-to-V-EMS command integration exists.
+provisioner installs mirror persistence enforcement but not a complete manager
+role matrix or read-only UI controls. No general Vtiger-to-V-EMS command integration exists.
 
 The baseline audit in `BASELINE_AUDIT.md` distinguishes source inspection from
 live UI evidence. Do not mark issue #146's baseline or ownership acceptance

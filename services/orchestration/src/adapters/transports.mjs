@@ -279,7 +279,7 @@ export function createVtigerTransportFromEnv(env = process.env) {
   // is known. Fill it in at send time for every create, so no module has to remember to. Read live: the worker may resolve
   // the integration user after this transport was built.
   const getClient = () => clientPromise ??= import("./vtiger/client.mjs").then(({ createVtigerWebserviceClient }) => {
-    const client = createVtigerWebserviceClient(env);
+    const client = createVtigerWebserviceClient(env, { mirrorWrites: true });
     const create = client.create.bind(client);
     return { ...client, create: (element, elementType) => create(!element.assigned_user_id && env.VTIGER_ASSIGNED_USER_ID ? { ...element, assigned_user_id: env.VTIGER_ASSIGNED_USER_ID } : element, elementType) };
   });

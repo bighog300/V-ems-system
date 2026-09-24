@@ -31,4 +31,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - name: Vtiger persistence guard source tests
+        run: |
+          sudo mkdir -p /opt/vems
+          sudo cp infra/services/vtiger/development/MirrorGuard.php infra/services/vtiger/development/install-mirror-guard.php infra/services/vtiger/field-ownership.json /opt/vems/
+          php -l infra/services/vtiger/development/install-mirror-guard.php
+          php infra/services/vtiger/mirror-guard.test.php
       - run: npm test
