@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-24T10:37:22.411Z",
+  "timestamp": "2026-09-24T11:09:54.509Z",
   "project": "vems-audit-147",
   "checks": [
     {
@@ -192,8 +192,8 @@
   },
   "workerCreate": {
     "passed": true,
-    "canonicalId": "AMB-1481790246243742",
-    "remoteId": "37x15"
+    "canonicalId": "AMB-1481790248196822",
+    "remoteId": "37x17"
   },
   "accounts": [
     {
@@ -209,6 +209,22 @@
   "canonicalStatus": "Available",
   "savePaths": {
     "actual_browser_ui": "NOT RUN",
+    "installation": {
+      "core_crmentity_pinned": true,
+      "core_contains_guard": false,
+      "handlers": [
+        {
+          "event": "vtiger.entity.aftersave",
+          "path": "modules/VEMSVehicles/handlers/VemsMirrorGuard.php",
+          "active": true
+        },
+        {
+          "event": "vtiger.entity.beforesave.final",
+          "path": "modules/VEMSVehicles/handlers/VemsMirrorGuard.php",
+          "active": true
+        }
+      ]
+    },
     "checks": [
       {
         "identity": "administrator",
@@ -218,9 +234,14 @@
       },
       {
         "identity": "administrator",
-        "path": "bulk_saveentity",
+        "path": "crmentity_save",
         "outcome": "MIRROR_WRITE_DENIED",
         "unchanged": true
+      },
+      {
+        "identity": "administrator",
+        "path": "ui_import_permission",
+        "outcome": "IMPORT_PERMITTED"
       },
       {
         "identity": "integration",
@@ -230,15 +251,38 @@
       },
       {
         "identity": "integration",
-        "path": "bulk_saveentity",
+        "path": "crmentity_save",
         "outcome": "MIRROR_WRITE_DENIED",
         "unchanged": true
+      },
+      {
+        "identity": "integration",
+        "path": "ui_import_permission",
+        "outcome": "IMPORT_DENIED"
+      }
+    ],
+    "bypasses": [
+      {
+        "identity": "administrator",
+        "path": "bulk_save_mode",
+        "outcome": "BYPASS_CONFIRMED"
+      },
+      {
+        "identity": "administrator",
+        "path": "direct_saveentity",
+        "outcome": "BYPASS_CONFIRMED"
       }
     ]
   },
+  "bypassRepair": {
+    "passed": true,
+    "canonicalId": "AMB-1481790248196822",
+    "remoteIdStable": true,
+    "status": "Available"
+  },
   "outage": [
     {
-      "intent_id": 26,
+      "intent_id": 34,
       "status": "dead_lettered",
       "attempt_count": 3,
       "last_error_classification": "DOWNSTREAM_UNAVAILABLE"
@@ -250,7 +294,7 @@
     "status": "Available",
     "intents": [
       {
-        "intent_id": 26,
+        "intent_id": 34,
         "status": "succeeded",
         "attempt_count": 0
       }

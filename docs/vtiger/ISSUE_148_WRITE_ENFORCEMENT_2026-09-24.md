@@ -15,9 +15,46 @@ same already-divergent value and was a no-op, not a valid negative test. The
 final suite first repairs the mirror through a real canonical worker update,
 then submits a different value and verifies rejection and unchanged state.
 
-The pinned Vtiger provisioner installs the registry-based guard at the start of
-`CRMEntity::saveentity`, before its transaction and including saves that bypass
-events. A dedicated POST `vemsMirrorWrite` operation requires both the configured
+### Review-gate refactor: vtlib event handler, no core patch
+
+The first revision of this PR rewrote `data/CRMEntity.php::saveentity()`, which
+the [execution plan](../VEMS_VTIGER_MANAGEMENT_PLATFORM_EXECUTION_PLAN.md)
+excludes. The guard now uses Vtiger's supported event path instead. The
+provisioner calls `Vtiger_Event::register` to register `VemsMirrorGuardHandler`
+for `vtiger.entity.beforesave.final` (lock and compare) and
+`vtiger.entity.aftersave` (release). In the pinned distribution,
+`CRMEntity::save()` raises `beforesave.final` immediately before `saveentity()`.
+The handler therefore runs before persistence for UI record-model, mass/inline
+edit, `CRMEntity::save()` and webservice create/update/revise.
+
+The installer also does the following:
+
+- Checks that `data/CRMEntity.php` matches the SHA-256 hash of the digest-pinned
+  base image (`32ff1da7…`). That source defines the event ordering above.
+- Removes the earlier revision's rewrite from retained CRM volumes. It fails
+  unless the restored file is byte-for-byte identical to the pinned source.
+- Fails unless it can confirm both active handler registrations.
+  `Vtiger_Event::register` skips silently when its file-access check fails.
+- Uses vtlib `disableTools` to remove Import from every profile for the eight
+  registry modules, then calls `Vtiger_Access::syncSharingAccess` so the cached
+  `user_privileges` files take effect.
+
+The live audit confirmed that the retained `vems-audit-147` volume had its core
+file restored to the pinned hash and contains no guard code.
+
+**Bypasses.** Paths that raise no save events bypass the guard. Bulk-save mode
+(`$VTIGER_BULK_SAVE_MODE`, set by UI Import) suppresses all non-core save
+handlers. Direct `saveentity()` calls and direct SQL also raise no events. The
+live probe performed both bypasses as administrator on a dedicated synthetic
+vehicle. Both changed the mirror, and the canonical worker then repaired it to
+`Available`. Import is denied to the integration account and still permitted to
+administrators, because `isPermitted` returns yes for any administrator. In the
+pinned distribution, the only core `saveentity()` caller outside `save()` is
+MailScanner (ModComments). `vemsMirrorWrite` refuses to run in bulk-save mode.
+
+### Mirror write operation
+
+A dedicated POST `vemsMirrorWrite` operation requires both the configured
 integration identity's authenticated Vtiger session and a separate random secret.
 Its permission covers one save of the requested module/record, is consumed at
 persistence and is cleared on return/error. Standard Vtiger permissions still
@@ -26,9 +63,12 @@ no ordinary-write fallback. Missing credentials fail closed. Uncertain creates
 retain reconciliation behavior.
 
 Final review found the pinned distribution disables its transaction wrappers.
-The guard therefore holds a per-record MySQL advisory lock from comparison
-through persistence for both worker and ordinary saves, releasing it in `finally`.
-Lock acquisition failures deny the save. This closes the comparison/save race.
+For updates, the handler therefore takes a per-record MySQL advisory lock in
+`beforesave.final` and holds it until `aftersave`. The lock covers comparison and
+persistence for both worker and ordinary saves. If the lock cannot be acquired,
+the save is denied. A denial releases the lock immediately. A failed
+`saveentity()` raises no `aftersave` event, so a shutdown hook releases any lock
+still held. This closes the race between comparison and save.
 
 The audit runner added only the missing mirror key to its owned environment.
 Existing credentials and all retained data were preserved. Other retained
@@ -45,8 +85,12 @@ deployments require an explicit key rollout; `vems-dev` was not migrated.
 | Wrong worker secret, both available accounts | Denied |
 | Correct worker secret with administrator identity | Denied |
 | Integration vehicle operational-status divergence attempt | Denied; canonical and mirror remain Available |
+| Handler installation | Core `CRMEntity.php` at pinned hash, no guard code; both handler events registered and active |
 | Real UI record-model save, integration and administrator | Denied; vehicle unchanged |
-| Direct bulk `saveentity`, integration and administrator | Denied; vehicle unchanged |
+| `CRMEntity::save()` (event path), integration and administrator | Denied; vehicle unchanged |
+| UI Import permission | Integration denied; administrator permitted (known bypass) |
+| Bulk-save mode save, administrator | **Bypass confirmed**; synthetic vehicle repaired by worker |
+| Direct `saveentity()`, administrator | **Bypass confirmed**; synthetic vehicle repaired by worker |
 | Actual browser UI/navigation/role interaction | NOT RUN: browser inventory empty; Chrome unavailable |
 | Dispatcher, fleet manager, stock manager, supervisor | NOT RUN: these roles/accounts are absent |
 | Canonical worker vehicle create and update | Passed |
@@ -59,18 +103,35 @@ created. Later runs reuse it, so their `transportFixtures` array lists no new
 fixture. Synthetic vehicles from earlier suite attempts are also retained.
 Repeated runs use unique vehicle IDs and preserve earlier data.
 
-There is **no administrator exemption in the guard**, and the tested ordinary
-administrator paths were denied. This is not universal enforcement: a database
-or host administrator, or an administrator able to install/alter PHP, can bypass
-the application boundary. Extensions writing tables directly require separate
-review. Actual browser actions and the intended management roles remain an open
-acceptance gate. Neither #148 nor #147 is closed by this work.
+The event-handler run created synthetic vehicle `AMB-1481790248196822` for the
+bypass probes. An earlier diagnostic run created `AMB-1481790248051946`. A direct
+probe rerun also changed it, and a canonical worker update repaired it to
+`Available`. Both vehicles are retained.
+
+The guard has **no administrator exemption**, and the tested ordinary
+administrator webservice, record-model and `save()` paths were denied. This is
+not universal enforcement. The following can bypass the application event
+boundary: UI Import by an administrator, which runs in bulk-save mode; direct
+`saveentity()` or SQL; a database or host administrator; and anyone able to
+install or alter PHP or deactivate handlers. Extensions that write tables
+directly need separate review. Actual browser actions and the intended
+management roles remain open acceptance gates. This work closes neither #148 nor
+#147.
 
 ## Verification and corrections
 
-- PHP guard tests cover all 115 classified fields, create/change/clear denial,
-  allowed unchanged values/metadata, authentication rejection, one-save scope,
-  lock acquisition/release and installer idempotence/source-drift rejection.
+- PHP guard tests cover:
+  - all 115 classified fields, including create, change and clear denial
+  - allowed unchanged values and metadata
+  - authentication rejection and one-save permit scope
+  - refusal of the worker operation in bulk-save mode
+  - handler registration, activation and dispatch for the two save events
+  - Import disablement and privilege regeneration
+  - lock hold from `beforesave.final` to `aftersave`, release on denial and
+    shutdown, and no lock for creates
+  - byte-exact removal of both earlier core rewrites
+  - rejection of drifted or unremovable core source and of unconfirmed
+    registration
 - Orchestration regression suite: 335 tests, 324 passed, 11 skipped, zero failed.
 - Windows bootstrap, isolation and field-contract tests: 41 passed.
 - Focused transport/mirror-operation tests: 29 passed.

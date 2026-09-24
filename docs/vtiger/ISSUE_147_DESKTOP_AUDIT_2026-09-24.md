@@ -377,11 +377,14 @@ The only services stopped were started for this isolated audit. Issue #147 remai
 
 The merged runner and retained `vems-audit-147` stack were reused for the
 server-side enforcement follow-up. The original denied-write divergence was
-reproduced before changes. The shared persistence boundary now rejects ordinary
-mirror changes, including tested integration and administrator webservice writes
-across all eight modules. The UI record model and bulk save path also reject the
-vehicle-status change when invoked directly on the server. These are **not actual
-browser UI tests**.
+reproduced before changes. A vtlib `vtiger.entity.beforesave.final` handler now
+rejects ordinary mirror changes. It needs no Vtiger core patch. It denied the
+tested integration and administrator webservice writes across all eight modules.
+Invoked directly on the server, the UI record model and `CRMEntity::save()` also
+reject the vehicle-status change. These are **not actual browser UI tests**.
+Bulk-save mode, which UI Import uses, and direct `saveentity()` calls raise no
+events and are confirmed bypasses. Import is removed from non-administrator
+profiles.
 
 An explicitly authenticated worker operation passed canonical create/update and
 outage replay with a stable remote ID. See the

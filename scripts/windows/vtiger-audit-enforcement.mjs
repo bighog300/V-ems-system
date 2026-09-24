@@ -93,8 +93,16 @@ try {
   }
   await rejected('integration vehicle status divergence', () => client.update({ ...vehicle, vems_operational_status: 'Out of Service' }, 'VEMSVehicles'), () => client.retrieve(vehicle.id));
   evidence.canonicalStatus = (await api('GET', '/api/vehicles/AMB-147')).operational_status;
-  evidence.savePaths = JSON.parse(run(['exec', '-i', '-e', 'VEMS_AUDIT_PROJECT=vems-audit-147', 'vems-audit-147-vtiger-1', 'php'], readFileSync('scripts/windows/vtiger-audit-save-paths.php')));
-  save();
+  // The newly created synthetic vehicle carries the event-less bypass probes, then the worker repairs it.
+  try {
+    evidence.savePaths = JSON.parse(run(['exec', '-i', '-e', 'VEMS_AUDIT_PROJECT=vems-audit-147', '-e', 'VEMS_BYPASS_VEHICLE=' + id, 'vems-audit-147-vtiger-1', 'php'], readFileSync('scripts/windows/vtiger-audit-save-paths.php')));
+  } finally {
+    const callsign = 'Synthetic 148 bypass repaired';
+    await api('PATCH', '/api/vehicles/' + id, { callsign });
+    const repaired = await until(async () => client.retrieve(created.id), row => row.vems_callsign === callsign && row.vems_operational_status === 'Available', 'bypass repair');
+    evidence.bypassRepair = { passed: true, canonicalId: id, remoteIdStable: repaired.id === created.id, status: repaired.vems_operational_status };
+    save();
+  }
 
   // Deliberate outage + supported replay; no second SQLite writer/worker.
   const correlation = 'audit-148-replay-' + Date.now();

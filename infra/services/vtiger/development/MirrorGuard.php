@@ -1,18 +1,25 @@
 <?php
-/** Shared persistence guard: UI, webservice and bulk saves all pass saveentity(). */
+/**
+ * Mirror guard invoked from the supported vtlib save events (see MirrorGuardHandler.php).
+ * CRMEntity::save() raises vtiger.entity.beforesave.final before saveentity(), so the
+ * comparison precedes persistence for UI record-model, webservice and mass-edit saves.
+ * Bulk-save mode (UI Import) and direct saveentity()/SQL callers raise no events.
+ */
 final class VemsMirrorGuard {
     private static $permit = null;
+    private static $locks = [];
 
     public static function registry(): array {
         return json_decode(file_get_contents('/opt/vems/field-ownership.json'), true, 512, JSON_THROW_ON_ERROR)['modules'];
     }
 
     public static function lock($entity, string $module) {
-        if (!isset(self::registry()[$module])) return null;
+        // A create has no stored mirror values to race against.
+        if (!isset(self::registry()[$module]) || empty($entity->id)) return null;
         global $adb;
         // The pinned distribution's startTransaction enables autocommit. Use a
         // connection-scoped lock across comparison AND persistence instead.
-        $name = 'vems-mirror-' . substr(hash('sha256', $module . ':' . ($entity->id ?? 'new')), 0, 48);
+        $name = 'vems-mirror-' . substr(hash('sha256', $module . ':' . $entity->id), 0, 48);
         $result = $adb->pquery('SELECT GET_LOCK(?, 10) AS acquired', [$name]);
         if (!$result || (string)$adb->query_result($result, 0, 'acquired') !== '1') self::deny();
         return [$adb, $name];
@@ -20,6 +27,34 @@ final class VemsMirrorGuard {
 
     public static function unlock($lock): void {
         if ($lock !== null) $lock[0]->pquery('SELECT RELEASE_LOCK(?)', [$lock[1]]);
+    }
+
+    /** vtiger.entity.beforesave.final: lock, compare, and hold the lock until aftersave. */
+    public static function beforeSave($entity, string $module): void {
+        $lock = self::lock($entity, $module);
+        try {
+            self::assertSave($entity, $module);
+        } catch (Throwable $error) {
+            self::unlock($lock);
+            throw $error;
+        }
+        if ($lock === null) return;
+        if (!self::$locks) register_shutdown_function([self::class, 'releaseAll']);
+        self::$locks[spl_object_id($entity)] = $lock;
+    }
+
+    /** vtiger.entity.aftersave: persistence finished for this entity. */
+    public static function afterSave($entity): void {
+        $key = spl_object_id($entity);
+        if (!isset(self::$locks[$key])) return;
+        $lock = self::$locks[$key];
+        unset(self::$locks[$key]);
+        self::unlock($lock);
+    }
+
+    /** A failed saveentity() raises no aftersave; release before the connection is reused. */
+    public static function releaseAll(): void {
+        while (self::$locks) self::unlock(array_pop(self::$locks));
     }
 
     public static function assertSave($entity, string $module): void {
@@ -56,6 +91,8 @@ final class VemsMirrorGuard {
             !hash_equals($secret, $writeKey) || empty($user->id) ||
             $user->user_name !== getenv('VTIGER_USERNAME')) self::deny();
         if (!isset(self::registry()[$elementType]) || !is_array($element) || !in_array($mode, ['create', 'update'], true)) self::deny();
+        // The permit is only honoured by the save event; bulk mode would skip it silently.
+        if (class_exists('CRMEntity') && CRMEntity::isBulkSaveMode()) self::deny();
         $id = null;
         if ($mode === 'update') {
             global $adb;

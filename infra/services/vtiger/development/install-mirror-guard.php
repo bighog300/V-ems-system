@@ -1,28 +1,72 @@
 <?php
 // Invoked after module creation; source drift must fail provisioning.
-function vemsInstallMirrorGuard($adb): void {
-    // The dispatcher only includes handlers beneath the CRM document root.
-    if (file_put_contents('include/Webservices/VemsMirrorWrite.php', "<?php\nrequire_once '/opt/vems/MirrorGuard.php';\n") === false) {
-        throw new RuntimeException('Cannot install mirror operation handler');
-    }
-    $path = 'data/CRMEntity.php';
+require_once '/opt/vems/MirrorGuardHandler.php';
+
+// data/CRMEntity.php of the digest-pinned base image. The guard relies on its save()
+// raising vtiger.entity.beforesave.final before saveentity(); drift must be reviewed.
+const VEMS_PINNED_CRMENTITY_SHA256 = '32ff1da75c2b721879bc0722e39f689f24ed7e8cdde8a2b3dbccb50319ddcce1';
+const VEMS_MIRROR_HANDLER_PATH = 'modules/VEMSVehicles/handlers/VemsMirrorGuard.php';
+
+/** Earlier #148 builds rewrote saveentity(); restore the pinned core source exactly. */
+function vemsRemoveCoreMirrorPatch(string $path, string $expectedHash): void {
     $source = file_get_contents($path);
-    $signature = "function saveentity(\$module, \$fileid = '') {";
-    $legacy = "\n        require_once '/opt/vems/MirrorGuard.php';\n        VemsMirrorGuard::assertSave(\$this, \$module);";
-    $injection = "\n        require_once '/opt/vems/MirrorGuard.php';\n        \$vemsMirrorLock = VemsMirrorGuard::lock(\$this, \$module);\n        try {\n        VemsMirrorGuard::assertSave(\$this, \$module);";
-    $end = "\t\t// END\n\t}\n\n\t/**\n\t * This function is used to upload the attachment";
-    $guardedEnd = "\t\t// END\n        } finally { VemsMirrorGuard::unlock(\$vemsMirrorLock); }\n\t}\n\n\t/**\n\t * This function is used to upload the attachment";
-    if (strpos($source, $signature . $injection) === false || strpos($source, $guardedEnd) === false) {
-        // Upgrade the earlier audit-only hook without touching any record data.
-        $source = str_replace($signature . $legacy, $signature, $source);
-        if (substr_count($source, $signature) !== 1 || substr_count($source, $end) !== 1 || strpos($source, 'VemsMirrorGuard::assertSave') !== false) {
-            throw new RuntimeException('Unsupported CRMEntity save boundary; mirror guard was not installed');
+    if ($source === false) throw new RuntimeException('Cannot read CRMEntity save boundary');
+    if (strpos($source, 'VemsMirrorGuard') !== false) {
+        $signature = "function saveentity(\$module, \$fileid = '') {";
+        $end = "\t\t// END\n\t}\n\n\t/**\n\t * This function is used to upload the attachment";
+        $source = str_replace([
+            $signature . "\n        require_once '/opt/vems/MirrorGuard.php';\n        \$vemsMirrorLock = VemsMirrorGuard::lock(\$this, \$module);\n        try {\n        VemsMirrorGuard::assertSave(\$this, \$module);",
+            $signature . "\n        require_once '/opt/vems/MirrorGuard.php';\n        VemsMirrorGuard::assertSave(\$this, \$module);",
+            "\t\t// END\n        } finally { VemsMirrorGuard::unlock(\$vemsMirrorLock); }\n\t}\n\n\t/**\n\t * This function is used to upload the attachment",
+        ], [$signature, $signature, $end], $source);
+        if (hash('sha256', $source) !== $expectedHash) {
+            throw new RuntimeException('Unsupported CRMEntity source; core mirror patch was not removed');
         }
-        $source = str_replace([$signature, $end], [$signature . $injection, $guardedEnd], $source);
-        if (file_put_contents($path, $source) === false) {
-            throw new RuntimeException('Cannot install mirror save guard');
-        }
+        if (file_put_contents($path, $source) === false) throw new RuntimeException('Cannot restore CRMEntity source');
     }
+    if (hash_file('sha256', $path) !== $expectedHash) {
+        throw new RuntimeException('Unsupported CRMEntity source; save event ordering is unverified');
+    }
+}
+
+function vemsInstallMirrorGuard($adb, string $expectedCoreHash = VEMS_PINNED_CRMENTITY_SHA256): void {
+    vemsRemoveCoreMirrorPatch('data/CRMEntity.php', $expectedCoreHash);
+    // vtlib and the webservice dispatcher only include files beneath the CRM document root.
+    $handlerDirectory = dirname(VEMS_MIRROR_HANDLER_PATH);
+    if (!is_dir($handlerDirectory) && !mkdir($handlerDirectory, 0755, true)) {
+        throw new RuntimeException('Cannot create mirror event handler directory');
+    }
+    $wrappers = [
+        'include/Webservices/VemsMirrorWrite.php' => "<?php\nrequire_once '/opt/vems/MirrorGuard.php';\n",
+        VEMS_MIRROR_HANDLER_PATH => "<?php\nrequire_once '/opt/vems/MirrorGuardHandler.php';\n",
+    ];
+    foreach ($wrappers as $path => $source) {
+        if (file_put_contents($path, $source) === false) throw new RuntimeException('Cannot install mirror guard wrapper');
+    }
+
+    if (!class_exists('Vtiger_Event')) require_once 'vtlib/Vtiger/Event.php';
+    $owner = Vtiger_Module::getInstance('VEMSVehicles');
+    if (!$owner) throw new RuntimeException('Mirror guard owner module missing');
+    foreach ([VemsMirrorGuardHandler::BEFORE, VemsMirrorGuardHandler::AFTER] as $event) {
+        Vtiger_Event::register($owner, $event, VemsMirrorGuardHandler::class, VEMS_MIRROR_HANDLER_PATH);
+    }
+    (new VTEventsManager($adb))->setHandlerActive(VemsMirrorGuardHandler::class);
+    // Vtiger_Event::register skips silently when its file-access check fails.
+    $registered = $adb->pquery('SELECT COUNT(*) AS registered FROM vtiger_eventhandlers WHERE handler_class=? AND handler_path=? AND is_active=1 AND event_name IN (?,?)',
+        [VemsMirrorGuardHandler::class, VEMS_MIRROR_HANDLER_PATH, VemsMirrorGuardHandler::BEFORE, VemsMirrorGuardHandler::AFTER]);
+    if (!$registered || (string)$adb->query_result($registered, 0, 'registered') !== '2') {
+        throw new RuntimeException('Mirror event handler registration was not confirmed');
+    }
+
+    // UI Import runs in bulk-save mode, which suppresses non-core save handlers.
+    foreach (array_keys(VemsMirrorGuard::registry()) as $moduleName) {
+        $module = Vtiger_Module::getInstance($moduleName);
+        if (!$module) throw new RuntimeException('Mirrored module missing');
+        $module->disableTools('Import');
+    }
+    // isPermitted() reads cached user_privileges files; regenerate them from the profiles.
+    Vtiger_Access::syncSharingAccess();
+
     $result = $adb->pquery('SELECT operationid FROM vtiger_ws_operation WHERE name=?', ['vemsMirrorWrite']);
     if (!$adb->num_rows($result)) {
         $id = vtws_addWebserviceOperation('vemsMirrorWrite', 'include/Webservices/VemsMirrorWrite.php', 'vems_mirror_write', 'POST', 0);

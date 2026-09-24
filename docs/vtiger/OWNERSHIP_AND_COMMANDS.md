@@ -22,16 +22,44 @@ fails when a module or field is added without classification.
 The schema class `vems_mirror` means V-EMS owns the value and Vtiger receives
 an asynchronous copy. `vtiger_metadata` means Vtiger generates or owns the
 local record number, owner or timestamps. Classification alone is not permission
-enforcement. The provisioned server now reads this registry at the shared
-`CRMEntity::saveentity` boundary, before its database transaction, and rejects
-ordinary saves that create, change or clear a `vems_mirror` value. This applies
-to UI record-model, ordinary webservice and bulk saves through that boundary;
-it does not depend on field visibility. Unchanged mirror values and
-`vtiger_metadata` writes remain subject to normal Vtiger permissions.
-The guard holds a MySQL advisory lock across comparison and persistence for
-both ordinary and worker saves of a record. This prevents stale ordinary saves
-from racing worker changes even though the pinned distribution enables autocommit.
-Lock acquisition failure denies the save; a `finally` block releases the lock.
+enforcement. The provisioner registers a vtlib event handler
+(`VemsMirrorGuardHandler`, through `Vtiger_Event::register`) for
+`vtiger.entity.beforesave.final` and `vtiger.entity.aftersave`. Vtiger core
+files are not patched. The pinned `CRMEntity::save()` raises
+`beforesave.final` before `saveentity()` persists anything. The handler reads
+this registry and rejects ordinary saves that create, change or clear a
+`vems_mirror` value. This covers UI record-model, `CRMEntity::save()` and
+ordinary webservice saves. It does not depend on field visibility. Unchanged
+mirror values and `vtiger_metadata` writes remain subject to normal Vtiger
+permissions.
+
+The installer requires `data/CRMEntity.php` to match the SHA-256 hash of the
+digest-pinned base image. That source defines the event ordering described
+above. An earlier #148 build rewrote `saveentity()`. The installer removes that
+rewrite and, if the result is not byte-for-byte identical to the pinned source,
+provisioning fails. It also fails unless both handler registrations are
+confirmed active.
+
+For updates, the handler takes a MySQL advisory lock for the record in
+`beforesave.final` and holds it until `aftersave`, which spans the comparison
+and persistence of both ordinary and worker saves. This stops a stale ordinary
+save from racing a worker change, even though the pinned distribution enables
+autocommit. If the lock cannot be acquired, the save is denied. A denial releases
+the lock immediately. A failed `saveentity()` raises no `aftersave` event, so a
+shutdown hook releases any lock still held.
+
+**Paths without save events.** Bulk-save mode (`$VTIGER_BULK_SAVE_MODE`, set by
+UI Import) suppresses every non-core save handler. Direct `saveentity()` calls
+and direct SQL also raise no events. The live audit confirmed that both
+bulk-save mode and direct `saveentity()` bypass the guard (see the evidence
+`bypasses`). To reduce this exposure, the installer uses vtlib `disableTools`
+to remove Import from every profile for all eight registry modules, then
+regenerates the cached user privileges. The live probe denies Import to the
+integration account. Administrators pass `isPermitted` unconditionally and keep
+Import. `vemsMirrorWrite` refuses to run in bulk-save mode, because the event
+that consumes its permit would not fire. In the pinned distribution, the only
+core `saveentity()` caller outside `save()` is MailScanner, and it writes
+ModComments.
 
 The guard has no administrator exemption. The isolated live administrator and
 integration webservice probes are recorded in
@@ -59,19 +87,25 @@ adds it once to its owned retained audit environment, preserving existing keys.
 For another retained deployment, explicitly provision the same new random value
 to the API worker and Vtiger environments before rebuilding/provisioning both;
 an absent key fails worker writes closed. This work did not migrate `vems-dev`.
-The installer adds a checked, idempotent hook to the pinned Vtiger distribution
-and refuses unexpected save-function source. Deploy the `/opt/vems` guard and
-registry with the retained CRM volume; rolling back only the container image
-without those files would leave the retained hook unable to load.
+The installer is idempotent. It writes two one-line wrappers under the CRM
+document root, because vtlib and the webservice dispatcher include only files
+inside that root: `modules/VEMSVehicles/handlers/VemsMirrorGuard.php` and
+`include/Webservices/VemsMirrorWrite.php`. Both wrappers load the guard from
+`/opt/vems`. The installer registers the handler against the VEMSVehicles module
+and guards all eight registry modules. Deploy the `/opt/vems` guard and registry
+with the retained CRM volume. If you roll back only the container image and those
+files are missing, the registered handler cannot load, and saves fail closed.
 
 ### Limits
 
-This is an application persistence boundary, not protection against a database
-administrator, host/container administrator, or installed PHP code that writes
-tables directly or removes the guard. Specialized extension paths that bypass
-`CRMEntity::saveentity` require separate review. A privileged user who can change
-server configuration/code can bypass it; no universal administrator enforcement
-is claimed. The tested ordinary administrator webservice path is denied.
+This is an application save-event boundary. It does not protect against a
+database administrator, a host or container administrator, or installed PHP code
+that writes tables directly, calls `saveentity()`, enables bulk-save mode, or
+deactivates the handler. An administrator can still use UI Import, which runs in
+bulk-save mode, to change mirrored fields. Extensions that persist records
+without `CRMEntity::save()` need separate review. No universal administrator
+enforcement is claimed. The tested ordinary administrator webservice,
+record-model and `save()` paths are denied.
 Actual UI navigation, alternate UI actions and absent management accounts remain
 unverified. Deletion and a complete management role matrix are separate work.
 

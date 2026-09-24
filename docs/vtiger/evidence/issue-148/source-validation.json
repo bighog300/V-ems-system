@@ -1,17 +1,19 @@
 {
   "date": "2026-09-24",
+  "architecture": "vtlib Vtiger_Event handler on vtiger.entity.beforesave.final and vtiger.entity.aftersave; no Vtiger core file modified",
   "phpGuard": {
     "result": "PASS",
+    "runtime": "PHP 8.3 in a throwaway container from the digest-pinned Vtiger base image",
     "classifiedFields": 115,
-    "checks": ["create/change/clear denial", "unchanged mirrors and metadata", "wrong secret and identity", "module/mode allowlist", "one-save permit scope", "request/admin flags do not authorize", "lock acquisition/release and acquisition failure", "installer idempotence and source drift rejection"],
-    "installerPhpLint": "PASS"
+    "checks": ["create/change/clear denial", "unchanged mirrors and metadata", "wrong secret and identity", "module/mode allowlist", "one-save permit scope", "request/admin flags do not authorize", "worker operation refused in bulk-save mode", "handler registration, activation and event dispatch", "Import disabled for all registry modules and cached privileges regenerated", "lock held beforesave.final to aftersave, released on denial and at shutdown, none for creates", "byte-exact removal of both earlier core rewrites", "drifted core source and unconfirmed registration rejected"],
+    "phpLint": "PASS: MirrorGuard.php, MirrorGuardHandler.php, install-mirror-guard.php"
   },
   "orchestration": { "tests": 335, "passed": 324, "skipped": 11, "failed": 0 },
   "bootstrapIsolationOwnership": { "tests": 41, "passed": 41, "failed": 0 },
   "focusedTransportMirror": { "tests": 29, "passed": 29, "failed": 0 },
   "rootLint": {
-    "existingWindowsCheckout": "FAIL: pre-existing widespread CRLF/trailing-whitespace reports and ignored local files",
-    "isolatedCurrentSourceLfCopy": "PASS: unchanged root linter; 240 tracked/unignored JS/MJS/shell files; audit API /tmp; checkout unchanged"
+    "existingWindowsCheckout": "FAIL: pre-existing widespread CRLF/trailing-whitespace reports and ignored local files; none in changed files",
+    "isolatedCurrentSourceLfCopy": "PASS: unchanged root linter; 240 files; git archive of the staged tree extracted in audit API /tmp and removed; checkout unchanged"
   },
   "gitDiffCheck": "PASS",
   "actualBrowserUi": "NOT RUN",
