@@ -1,0 +1,18 @@
+{
+  "label": "after-partB",
+  "timestamp": "2026-09-25T17:47:31.652Z",
+  "vtigerRecordCounts": {
+    "VEMSVehicles": 12,
+    "VEMSStockItems": 2,
+    "HelpDesk": 2,
+    "VEMSPersonnel": 3
+  },
+  "vtigerVehiclesMatchingUiTestId": [],
+  "vtigerVehiclesWithBlankExternalKey": [
+    "37x33"
+  ],
+  "canonicalVehicleCount": 11,
+  "canonicalLookupOfUiTestVehicle": {
+    "status": 404
+  }
+}
