@@ -52,11 +52,83 @@ PHP;
         chmod("$directory/$module.php", 0644);
     }
     $language = "languages/en_us/$module.php";
-    if (!file_exists($language)) {
-        $strings = "<?php\n\$languageStrings = array('$module' => '$module');\n\$jsLanguageStrings = array();\n";
+    // Rewrite when the file predates readable labels (no SINGLE_ entry), so upgrades converge.
+    // Only the custom modules: HelpDesk ships its own language file, which must never be replaced.
+    $custom = isset(VEMS_MODULE_LABELS[$module]);
+    if (!file_exists($language) || ($custom && strpos(file_get_contents($language), "'SINGLE_$module'") === false)) {
+        $label = VEMS_MODULE_LABELS[$module] ?? $module;
+        $singular = VEMS_MODULE_SINGULAR[$module] ?? $label;
+        $strings = "<?php\n\$languageStrings = array('$module' => '$label', 'SINGLE_$module' => '$singular', 'LBL_VEMS_INFORMATION' => 'V-EMS Information');\n\$jsLanguageStrings = array();\n";
         if (file_put_contents($language, $strings) === false) { throw new RuntimeException("Cannot write language file for $module"); }
         chmod($language, 0644);
     }
+}
+
+// Readable names for the custom modules (the menu and record headers otherwise show class names).
+const VEMS_MODULE_LABELS = [
+    'VEMSAssignments' => 'Assignments', 'VEMSVehicles' => 'Vehicles', 'VEMSPersonnel' => 'Personnel',
+    'VEMSAssignmentCrew' => 'Assignment Crew', 'VEMSStockItems' => 'Stock Items',
+    'VEMSVehicleStock' => 'Vehicle Stock', 'VEMSStockUsage' => 'Stock Usage',
+];
+const VEMS_MODULE_SINGULAR = [
+    'VEMSAssignments' => 'Assignment', 'VEMSVehicles' => 'Vehicle', 'VEMSPersonnel' => 'Person',
+    'VEMSAssignmentCrew' => 'Assignment Crew Member', 'VEMSStockItems' => 'Stock Item',
+    'VEMSVehicleStock' => 'Vehicle Stock Line', 'VEMSStockUsage' => 'Stock Usage Record',
+];
+
+// Default columns of each module's "All" list. The first column is the record link (external key).
+const VEMS_LIST_COLUMNS = [
+    'VEMSAssignments' => ['vems_external_key', 'vems_incident_id', 'vems_vehicle_id', 'vems_status', 'vems_vehicle_status', 'vems_updated_at_utc', 'assigned_user_id'],
+    'VEMSVehicles' => ['vems_external_key', 'vems_callsign', 'vems_operational_status', 'vems_service_status', 'vems_vehicle_type', 'vems_home_station', 'assigned_user_id'],
+    'VEMSPersonnel' => ['vems_external_key', 'vems_display_name', 'vems_role', 'vems_operational_status', 'vems_home_station', 'assigned_user_id'],
+    'VEMSAssignmentCrew' => ['vems_external_key', 'vems_assignment_id', 'vems_staff_id', 'vems_updated_at_utc', 'assigned_user_id'],
+    'VEMSStockItems' => ['vems_external_key', 'vems_name', 'vems_category', 'vems_item_type', 'vems_unit_of_measure', 'vems_active_status', 'assigned_user_id'],
+    'VEMSVehicleStock' => ['vems_external_key', 'vems_vehicle_id', 'vems_stock_item_id', 'vems_quantity_on_hand', 'vems_minimum_quantity', 'vems_target_quantity', 'assigned_user_id'],
+    'VEMSStockUsage' => ['vems_external_key', 'vems_stock_item_id', 'vems_quantity_used', 'vems_intervention_type', 'vems_performed_at_utc', 'vems_usage_source', 'assigned_user_id'],
+];
+
+// vems_stock_item_id -> "Stock Item ID"; vems_updated_at_utc -> "Updated At UTC".
+function vemsFieldLabel(string $name): string
+{
+    if ($name === 'assigned_user_id') { return 'Assigned To'; }
+    $acronyms = ['id' => 'ID', 'utc' => 'UTC', 'ref' => 'Reference', 'no' => 'No'];
+    $words = explode('_', preg_replace('/^vems_/', '', $name));
+    return implode(' ', array_map(fn ($w) => $acronyms[$w] ?? ucfirst($w), $words));
+}
+
+// Stock Vtiger's DetailViewActions.tpl indexes $DETAILVIEW_LINKS['DETAILVIEWBASIC'] without an existence
+// check, so any user with no basic links (no edit right) sees a PHP warning on every record. Vtiger
+// resolves a per-module template before the shared one, so a guarded copy fixes it without patching core.
+function vemsEnsureDetailActionsTemplate(string $module): void
+{
+    $source = 'layouts/v7/modules/Vtiger/DetailViewActions.tpl';
+    $directory = "layouts/v7/modules/$module";
+    $target = "$directory/DetailViewActions.tpl";
+    $needle = "\$DETAILVIEW_LINKS['DETAILVIEWBASIC']}";
+    $original = file_get_contents($source);
+    if ($original === false || strpos($original, $needle) === false) { throw new RuntimeException('Unexpected DetailViewActions.tpl; template guard not applied'); }
+    $guarded = str_replace($needle, "\$DETAILVIEW_LINKS['DETAILVIEWBASIC']|default:[]}", $original);
+    if (file_exists($target) && file_get_contents($target) === $guarded) { return; }
+    if (!is_dir($directory) && !mkdir($directory, 0755, true)) { throw new RuntimeException("Cannot create layout directory for $module"); }
+    if (file_put_contents($target, $guarded) === false) { throw new RuntimeException("Cannot write detail actions template for $module"); }
+    chmod($target, 0644);
+}
+
+// HelpDesk's summary template tests {if $DOCUMENT_WIDGET_MODEL} (and the comments/updates twins) on variables
+// it only assigns when the user's role is offered that widget, so read-only roles see "Undefined array key" and
+// "property value on null" warnings on every ticket. Initialise them first. Marker-guarded and idempotent.
+function vemsEnsureHelpDeskSummaryGuard(): void
+{
+    $path = 'layouts/v7/modules/HelpDesk/SummaryViewWidgets.tpl';
+    $marker = '{* VEMS: widget variables initialised *}';
+    $original = file_get_contents($path);
+    if ($original === false) { throw new RuntimeException('HelpDesk SummaryViewWidgets.tpl not found; template guard not applied'); }
+    if (strpos($original, $marker) !== false) { return; }
+    $needle = "{strip}\n";
+    $position = strpos($original, $needle);
+    if ($position === false) { throw new RuntimeException('Unexpected HelpDesk SummaryViewWidgets.tpl; template guard not applied'); }
+    $init = $needle . $marker . "\n{assign var=DOCUMENT_WIDGET_MODEL value=null}\n{assign var=COMMENTS_WIDGET_MODEL value=null}\n{assign var=UPDATES_WIDGET_MODEL value=null}\n";
+    if (file_put_contents($path, substr_replace($original, $init, $position, strlen($needle))) === false) { throw new RuntimeException('Cannot write HelpDesk summary template'); }
 }
 
 try {
@@ -128,7 +200,32 @@ try {
             $cvid = $adb->getUniqueId('vtiger_customview');
             $adb->pquery('INSERT INTO vtiger_customview (cvid, viewname, setdefault, setmetrics, entitytype, status, userid) VALUES (?,?,1,0,?,0,1)', [$cvid, 'All', $moduleName]);
         }
+        if (isset(VEMS_LIST_COLUMNS[$moduleName])) {
+            // Fields are created with their raw names as labels; give ours readable ones (only when
+            // the label is still the raw name, so Vtiger's own field labels are never touched).
+            foreach ($fields as $name) {
+                $adb->pquery('UPDATE vtiger_field SET fieldlabel=? WHERE tabid=? AND fieldname=? AND fieldlabel=fieldname', [vemsFieldLabel($name), $module->id, $name]);
+            }
+            // The default view needs column rows or every cell and header renders blank. Only add them
+            // when none exist, so an administrator's later column changes survive re-provisioning.
+            $filter = Vtiger_Filter::getInstance('All', $module);
+            $hasColumns = $adb->num_rows($adb->pquery('SELECT 1 FROM vtiger_cvcolumnlist WHERE cvid=?', [$filter->id])) > 0;
+            if (!$hasColumns) {
+                foreach (VEMS_LIST_COLUMNS[$moduleName] as $index => $columnName) {
+                    $column = Vtiger_Field::getInstance($columnName, $module);
+                    if ($column) { $filter->addField($column, $index); }
+                }
+            }
+            // vtlib module creation leaves no default organisation-sharing row, so Vtiger's permission
+            // check reads an undefined index for non-administrators. Match HelpDesk (Public: Read, Create/Edit,
+            // Delete); writes are still controlled by profiles and the mirror guard.
+            if (!$adb->num_rows($adb->pquery('SELECT 1 FROM vtiger_def_org_share WHERE tabid=?', [$module->id]))) {
+                Vtiger_Access::setDefaultSharing($module, 'Public_ReadWriteDelete');
+            }
+        }
+        vemsEnsureDetailActionsTemplate($moduleName);
     }
+    vemsEnsureHelpDeskSummaryGuard();
     require_once '/opt/vems/install-mirror-guard.php';
     vemsInstallMirrorGuard($adb);
     echo "Vtiger development identity, fields and mirror guard ready; credentials preserved.\n";
