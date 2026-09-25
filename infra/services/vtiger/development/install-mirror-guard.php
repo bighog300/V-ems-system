@@ -48,14 +48,14 @@ function vemsInstallMirrorGuard($adb, string $expectedCoreHash = VEMS_PINNED_CRM
     if (!class_exists('Vtiger_Event')) require_once 'vtlib/Vtiger/Event.php';
     $owner = Vtiger_Module::getInstance('VEMSVehicles');
     if (!$owner) throw new RuntimeException('Mirror guard owner module missing');
-    foreach ([VemsMirrorGuardHandler::BEFORE, VemsMirrorGuardHandler::AFTER] as $event) {
+    foreach ([VemsMirrorGuardHandler::BEFORE, VemsMirrorGuardHandler::AFTER, VemsMirrorGuardHandler::BEFORE_DELETE] as $event) {
         Vtiger_Event::register($owner, $event, VemsMirrorGuardHandler::class, VEMS_MIRROR_HANDLER_PATH);
     }
     (new VTEventsManager($adb))->setHandlerActive(VemsMirrorGuardHandler::class);
     // Vtiger_Event::register skips silently when its file-access check fails.
-    $registered = $adb->pquery('SELECT COUNT(*) AS registered FROM vtiger_eventhandlers WHERE handler_class=? AND handler_path=? AND is_active=1 AND event_name IN (?,?)',
-        [VemsMirrorGuardHandler::class, VEMS_MIRROR_HANDLER_PATH, VemsMirrorGuardHandler::BEFORE, VemsMirrorGuardHandler::AFTER]);
-    if (!$registered || (string)$adb->query_result($registered, 0, 'registered') !== '2') {
+    $registered = $adb->pquery('SELECT COUNT(*) AS registered FROM vtiger_eventhandlers WHERE handler_class=? AND handler_path=? AND is_active=1 AND event_name IN (?,?,?)',
+        [VemsMirrorGuardHandler::class, VEMS_MIRROR_HANDLER_PATH, VemsMirrorGuardHandler::BEFORE, VemsMirrorGuardHandler::AFTER, VemsMirrorGuardHandler::BEFORE_DELETE]);
+    if (!$registered || (string)$adb->query_result($registered, 0, 'registered') !== '3') {
         throw new RuntimeException('Mirror event handler registration was not confirmed');
     }
 

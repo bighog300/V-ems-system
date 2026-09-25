@@ -5,6 +5,8 @@
     "worker_operation": "vemsMirrorWrite",
     "worker_authentication": ["Vtiger integration session", "VTIGER_MIRROR_WRITE_KEY"],
     "ordinary_mirror_changes": "denied",
+    "ordinary_creates": "denied",
+    "deletes": "denied",
     "administrator_exemption": false,
     "acceptance_gate": "Actual browser UI and intended management role checks remain open under #147 and #148"
   },

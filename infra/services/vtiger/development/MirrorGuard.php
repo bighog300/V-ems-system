@@ -4,6 +4,10 @@
  * CRMEntity::save() raises vtiger.entity.beforesave.final before saveentity(), so the
  * comparison precedes persistence for UI record-model, webservice and mass-edit saves.
  * Bulk-save mode (UI Import) and direct saveentity()/SQL callers raise no events.
+ *
+ * Mirrored records are written only by the authenticated mirror operation: every create outside it is
+ * denied (even with all mirror fields blank, which would otherwise leave an orphan record) and every
+ * delete is denied (vtiger.entity.beforedelete; the worker has no delete operation).
  */
 final class VemsMirrorGuard {
     private static $permit = null;
@@ -66,6 +70,9 @@ final class VemsMirrorGuard {
             self::$permit = null;
             return;
         }
+        // A create outside the mirror operation is never allowed. Comparing fields alone let a create with
+        // every mirror-owned field blank through, leaving an orphan record with no V-EMS counterpart.
+        if ($id === null) self::deny();
         $before = [];
         if ($id !== null) {
             $stored = CRMEntity::getInstance($module);
@@ -80,9 +87,15 @@ final class VemsMirrorGuard {
         }
     }
 
-    public static function deny(): void {
-        if (class_exists('WebServiceException')) throw new WebServiceException('ACCESS_DENIED', 'V-EMS mirrored fields require the authenticated mirror write operation');
-        throw new RuntimeException('V-EMS mirrored fields require the authenticated mirror write operation');
+    /** vtiger.entity.beforedelete: mirrored records are never deleted from Vtiger, by anyone. */
+    public static function beforeDelete($entity, string $module): void {
+        if (isset(self::registry()[$module])) self::deny(' (mirrored records cannot be deleted)');
+    }
+
+    public static function deny(string $detail = ''): void {
+        $message = 'V-EMS mirrored fields require the authenticated mirror write operation' . $detail;
+        if (class_exists('WebServiceException')) throw new WebServiceException('ACCESS_DENIED', $message);
+        throw new RuntimeException($message);
     }
 
     public static function write($elementType, $element, $mode, $writeKey, $user) {
