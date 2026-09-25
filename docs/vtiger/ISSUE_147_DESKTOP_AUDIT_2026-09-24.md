@@ -513,14 +513,14 @@ already running and healthy, so it was not started by this session and was not s
 typing the password in the browser pane; credentials were never read, printed or logged. Role identity
 was confirmed from the page's `_USERMETA.userlabel` after each sign-in. Full row-level results:
 [ui-results-table-2026-09-25.md](evidence/issue-147/ui-results-table-2026-09-25.md) (also `.csv`).
-Screenshots: [screenshots/](evidence/issue-147/screenshots/) (65 real desktop captures cropped to the
-browser pane). Repo `.gitignore` excluded `screenshots/`; a narrow exception for this folder was added.
+Screenshots: [screenshots/](evidence/issue-147/screenshots/) (60 real desktop captures cropped to the
+browser pane; 5 were removed, see above). Repo `.gitignore` excluded `screenshots/`; a narrow exception for this folder was added.
 
 ### Results by role
 
 All five roles (Dispatcher, Fleet Manager, Stock Manager, Supervisor, Integration user) can open List
 and Detail for all eight modules, and all 40 direct Import navigations (5 roles x 8 modules) return
-"Permission denied" with no upload form. Every one of the 40 has a screenshot. The four manager roles
+"Permission denied" with no upload form. 35 of the 40 have a screenshot in the repo; the other 5 (Fleet Manager Import denial for AssignmentCrew, Personnel, StockItems, Vehicles and VehicleStock) were removed because the captures also showed an unrelated window, and are to be re-captured. The four manager roles
 have no edit control on any module. The Integration user has an edit control on all eight.
 
 | Check | Result |
@@ -574,7 +574,7 @@ value) and the unchanged detail page after the save have screenshots.
 
 | Gate item | Status | Basis |
 | --- | --- | --- |
-| Five-role sign-in and Import denial, all eight modules | PASS | 40 screenshots + fetch results |
+| Five-role sign-in and Import denial, all eight modules | PASS | 35 Import-denial screenshots (5 removed, to be re-captured) + fetch results for all 40 |
 | Read access for each role to all eight modules | PASS | real browser, all roles |
 | Managers offered no edit control | PASS | Detail page check, no image per module |
 | Integration user UI write blocked; mirror vs canonical equal | PASS | text capture, two data snapshots, before/after screenshots |
