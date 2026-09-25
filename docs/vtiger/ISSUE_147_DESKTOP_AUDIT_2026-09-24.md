@@ -658,3 +658,56 @@ was unchanged on reload.
 
 #147 is **not** closed by this run. Three items above remain NOT RUN, and two of them (per-module edit forms and a UI
 create attempt) bear directly on the write-authority question.
+
+## UI create, edit and delete test as the Integration user (25 September 2026)
+
+Follow-up to the earlier "UI create attempt: NOT RUN" gate item, after the Vehicles list showed an **Add Record**
+button and the record page showed **Delete Vehicle** and **Duplicate** for the Integration user. Run in the real
+Vtiger UI against the audit stack with synthetic data only; the person signed in was confirmed as
+`VEMS Development Integration`. State was read from Vtiger (webservice query) and canonical V-EMS (API) before
+and after every step ([ui-create-state-*.json](evidence/issue-147/)). Screenshots:
+[ui-create-2026-09-25/](evidence/issue-147/screenshots/ui-create-2026-09-25/).
+
+| Step | Action in the real UI | Result | Vtiger vehicles | Canonical vehicles |
+| --- | --- | --- | --- | --- |
+| Before | none | n/a | 11 | 11 |
+| A | Add Record; fill vehicle ID, external key, callsign, status, service status and type (`AMB-UI-CREATE`); Save | **DENIED**: `V-EMS mirrored fields require the authenticated mirror write operation` | 11 | 11 |
+| B | Add Record; leave every mirror field blank, owner only; Save | **CREATED**: a blank vehicle record (`37x33`) exists in Vtiger with no V-EMS counterpart | **12** | 11 |
+| C | Edit the blank record, type a callsign, Save | **DENIED** (same guard error) | 12 | 11 |
+| D | More > Delete Vehicle > Yes on the blank record | **DELETED**: back to 11 in the active list (a Vtiger delete goes to the Recycle Bin) | 11 | 11 |
+
+### Findings (not fixed here)
+
+1. **FAIL: the #148 guard does not stop a UI create with blank mirror fields.** `MirrorGuard::assertSave` compares
+   each mirror-owned field to its stored value, which is `''` on a create, and denies only when a value differs. A
+   create with every mirror field blank therefore passes, and the Integration user can add orphan records to the
+   mirror (a blank external key, no canonical counterpart) through the ordinary UI. It cannot fill them in
+   afterwards (step C is denied), so this is record pollution rather than value divergence, but it is a write path
+   into a mirror that is meant to be written only by the V-EMS worker.
+2. **FAIL: delete is not guarded.** The Integration user could delete a Vtiger record through the UI (step D). The
+   guard hooks saves only. Deleting a **real** mirrored record was deliberately not tried; it would remove that
+   record's mirror while its canonical record remains. Whether the worker then recreates it, and whether the remote ID
+   stays stable, is unknown.
+3. **Not tested: Duplicate.** The record page offers it for this role. It copies mirrored values, so the guard
+   should refuse it, but that is unverified.
+4. The Vehicles list shows Add Record and the record page shows Edit, Delete and Duplicate to a role that the design
+   says must not write mirrored data; the guard is the only control, and the UI advertises actions it then refuses.
+
+Suggested follow-up (not implemented): deny every create and delete outside the authenticated mirror operation
+regardless of field values, and remove Add Record, Delete and Duplicate from these modules' action permissions so the
+UI stops offering them.
+
+### Gate status update
+
+| Gate item | Status | Basis |
+| --- | --- | --- |
+| UI create attempt by the Integration user | **FAIL** (was NOT RUN) | Steps A to D above |
+| Edit with values on a mirrored record | PASS (denied) | Earlier run and step C |
+| Delete by the Integration user | **FAIL** | Step D, on a synthetic orphan only |
+| Duplicate by the Integration user | NOT RUN | Offered, not attempted |
+| Delete of a real mirrored record | NOT RUN | Deliberately not attempted |
+| Edit form opened on every module for every role | NOT RUN | Unchanged |
+| Exhaustive dead-link crawl | NOT RUN | Unchanged |
+
+#147 stays **open**, and the write-authority question is answered: the mirror is protected against value changes but
+not against blank-record creation or deletion.
