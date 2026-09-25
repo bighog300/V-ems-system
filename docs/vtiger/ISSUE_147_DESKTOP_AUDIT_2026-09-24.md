@@ -711,3 +711,23 @@ UI stops offering them.
 
 #147 stays **open**, and the write-authority question is answered: the mirror is protected against value changes but
 not against blank-record creation or deletion.
+
+## Browser re-test after the mirror guard fix (25 September 2026)
+
+After [#169](ISSUE_148_CREATE_DELETE_GUARD_2026-09-25.md) the three write paths found open in the UI create test were
+repeated as the Integration user and are now all refused: a blank Add Record, Delete Vehicle, and Duplicate. Vtiger and
+canonical V-EMS counts were unchanged (12 and 12). Details and screenshots:
+[ISSUE_148_CREATE_DELETE_GUARD_2026-09-25.md](ISSUE_148_CREATE_DELETE_GUARD_2026-09-25.md).
+
+| Gate item | Status | Basis |
+| --- | --- | --- |
+| UI create by the Integration user | **PASS** (denied; was FAIL) | Real-browser re-test, 2 screenshots |
+| Delete by the Integration user | **PASS** (denied; was FAIL) | Real-browser re-test, 2 screenshots; `vtws_delete` denied for the Integration user and the administrator |
+| Duplicate by the Integration user | **PASS** (denied; was NOT RUN) | Real-browser re-test, 2 screenshots |
+| Edit with values on a mirrored record | PASS (denied) | Earlier runs |
+| Delete of a real (non-disposable) mirrored record | NOT RUN | Deliberately not attempted; the guard denies deletes for every mirrored record |
+| Edit form opened on every module for every role | NOT RUN | Only VEMSVehicles for the Integration user |
+| Exhaustive dead-link crawl | NOT RUN | No dead link seen in visited pages |
+| Automatic recovery after dead-lettering | FAIL | Earlier finding, unchanged |
+
+#147 stays **open**: two NOT RUN items and the dead-letter recovery FAIL remain.
