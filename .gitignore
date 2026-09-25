@@ -58,3 +58,6 @@ openemr_data_staging/
 # Docker container logs
 .logs/
 .pids/
+
+# Issue #147 browser evidence screenshots are intentional, sanitized evidence
+!docs/vtiger/evidence/issue-147/screenshots/

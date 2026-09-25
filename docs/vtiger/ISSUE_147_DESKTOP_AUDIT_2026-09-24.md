@@ -504,3 +504,89 @@ password sign-in, which the assistant may not perform. The earlier
 [browser-ui-2026-09-24.json](evidence/issue-147/browser-ui-2026-09-24.json) evidence stands;
 its gaps (six-module walkthrough, related-list navigation, edit-control matrix for every
 role, saved screenshots) remain open. #147 is **not** closed.
+
+## Real-browser role walkthrough (25 September 2026)
+
+Started from SHA `ae51f7c8b26fe9193e269d77846d2b079810b9c5` on `main`. The `vems-audit-147` stack was
+already running and healthy, so it was not started by this session and was not stopped. The
+`vems-dev-*` containers stayed exited; no audit volume was touched. Each account was signed in by a human
+typing the password in the browser pane; credentials were never read, printed or logged. Role identity
+was confirmed from the page's `_USERMETA.userlabel` after each sign-in. Full row-level results:
+[ui-results-table-2026-09-25.md](evidence/issue-147/ui-results-table-2026-09-25.md) (also `.csv`).
+Screenshots: [screenshots/](evidence/issue-147/screenshots/) (65 real desktop captures cropped to the
+browser pane). Repo `.gitignore` excluded `screenshots/`; a narrow exception for this folder was added.
+
+### Results by role
+
+All five roles (Dispatcher, Fleet Manager, Stock Manager, Supervisor, Integration user) can open List
+and Detail for all eight modules, and all 40 direct Import navigations (5 roles x 8 modules) return
+"Permission denied" with no upload form. Every one of the 40 has a screenshot. The four manager roles
+have no edit control on any module. The Integration user has an edit control on all eight.
+
+| Check | Result |
+| --- | --- |
+| Menu | All eight modules appear under the Support app for every role tested |
+| Import denial, 5 roles x 8 modules | PASS, screenshots for all 40 |
+| Manager roles: no edit control | PASS (data check on all eight Detail pages per role) |
+| Integration user synthetic vehicle write via real edit form | DENIED by the #148 guard; see below |
+
+### Synthetic write test (Integration user, VEMSVehicles AMB-147, record 4)
+
+In the real Vtiger edit form `vems_operational_status` was changed from `Available` to `Out of Service`
+and Save was clicked (attempted twice: the first screenshot pair was unusable, so it was repeated). Vtiger
+returned raw JSON `{"success":false,"error":{"code":"V-EMS mirrored fields require the authenticated mirror
+write operation"...}}`. The record was unchanged on reload.
+
+| State | Canonical V-EMS (API) | Vtiger mirror (id 37x4) |
+| --- | --- | --- |
+| Before ([ui-write-before.json](evidence/issue-147/ui-write-before.json), 14:34:11Z) | Available | Available |
+| After ([ui-write-after.json](evidence/issue-147/ui-write-after.json), 14:40:05Z) | Available | Available |
+
+No divergence. This is the first actual-browser confirmation that the Integration user's UI edit path is
+closed for mirrored fields. Limitation: the desktop capture of the raw-JSON result page came out blank, so
+the denial is evidenced by the captured page text rather than an image; the edit form (showing the typed
+value) and the unchanged detail page after the save have screenshots.
+
+### FAIL findings for #150/#151 (documented, not fixed here)
+
+1. **Blank list columns.** All seven VEMS List views render a row with no column headers and blank
+   cells (HelpDesk renders correctly). Screenshot: `dispatcher_VEMSAssignments_list.png` and one per module.
+2. **Plain-text reference fields.** `incident_ref`, `vehicle_ref`, `assignment_ref`, `personnel_ref`,
+   `stock_item_ref` show remote IDs such as `17x7`/`37x4` as text; 0 linked reference fields on any Detail page.
+   Screenshot: `dispatcher_VEMSAssignments_detail.png`.
+3. **No related lists.** Neither HelpDesk nor the VEMS modules have related tabs, so incident -> assignment ->
+   vehicle/crew and vehicle -> stock cannot be followed by clicking; the requested relationship chain
+   was not navigable in the UI.
+4. **PHP warnings rendered on pages.** `Undefined array key "DETAILVIEWBASIC"` is visible on every VEMS Detail
+   page for every role. HelpDesk Detail shows `DETAILVIEWBASIC`, `DOCUMENT_WIDGET_MODEL` and `Attempt to read
+   property "value" on null` for the four manager roles (not for Integration user). A further UserInfoUtil.php
+   line 410 warning is visible for the Integration user. Screenshots: `dispatcher_HelpDesk_detail.png`,
+   `dispatcher_VEMSAssignments_detail.png`, `integration_VEMSVehicles_detail-after-denied-save.png`.
+5. **Other UX defects seen:** untranslated `LBL_VEMS_INFORMATION` and `SINGLE_VEMSVehicles` labels; raw
+   module class names used as menu labels; a broken `vtiger-crm-logo.png` image in the header;
+   `vems_operational_status` is a free-text box, not a picklist; the mirror-guard denial is shown as a raw
+   JSON page; managers can see the generic Sales/Marketing/Inventory apps; a newly signed-in manager account
+   lands on Vtiger's "Almost there!" preferences dialog (Stock Manager; left untouched).
+6. **Dead navigation.** No dead link was found: all module menu links and the eight module URLs loaded
+   (HTTP 200). This was not a crawl of every link on every page, so it is not claimed as exhaustive.
+
+### Acceptance-gate status after this run
+
+| Gate item | Status | Basis |
+| --- | --- | --- |
+| Five-role sign-in and Import denial, all eight modules | PASS | 40 screenshots + fetch results |
+| Read access for each role to all eight modules | PASS | real browser, all roles |
+| Managers offered no edit control | PASS | Detail page check, no image per module |
+| Integration user UI write blocked; mirror vs canonical equal | PASS | text capture, two data snapshots, before/after screenshots |
+| Administrator Import + edit denial | PASS | earlier run: browser-ui-2026-09-24.json |
+| Webservice role matrix; outage and manual replay | PASS | earlier runs (not repeated) |
+| Related-list navigation incident -> assignment -> vehicle/crew, vehicle -> stock | FAIL | relationships absent (#151) |
+| Typed reference fields / usable list columns | FAIL | #150 / #151 |
+| No PHP warnings on rendered pages | FAIL | #151 |
+| Full per-module edit-control matrix (edit form opened per module per role) | NOT RUN | only VEMSVehicles edit form exercised |
+| Exhaustive dead-link crawl | NOT RUN | |
+| Automatic recovery after dead-lettering | FAIL | earlier run; unchanged |
+
+`node --test scripts/windows/vtiger-audit.test.mjs`: 20 passed. `vtiger-audit.ps1 -Action Validate`: exit 0,
+"Non-mutating adapter validation passed." #147 is **not** closed: related-list navigation, list columns,
+reference typing and PHP warnings still FAIL, and the per-module edit-form matrix was not run.
