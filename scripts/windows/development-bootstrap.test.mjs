@@ -68,6 +68,13 @@ test("Vtiger provisioner creates module classes, language files and entity ident
   for (const [name, fields] of Object.entries(modules)) assert.ok(fields.includes("vems_external_key"), `${name} needs an entity identifier field`);
 });
 
+test("Vtiger provisioner creates a default \"All\" list view for every module, matching a standard module's system view", () => {
+  const source = readFileSync(new URL("../../infra/services/vtiger/development/provision-development.php", import.meta.url), "utf8");
+  // vtlib module creation ships no default view; without one, List is a fatal error for every account.
+  assert.match(source, /INSERT INTO vtiger_customview \(cvid, viewname, setdefault, setmetrics, entitytype, status, userid\) VALUES \(\?,\?,1,0,\?,0,1\)/);
+  assert.match(source, /SELECT cvid FROM vtiger_customview WHERE viewname=\? AND entitytype=\?/);
+});
+
 test("API port is published on loopback only", () => {
   const compose = readFileSync(new URL("../../infra/docker-compose.dev.yml", import.meta.url), "utf8");
   assert.match(compose, /"127\.0\.0\.1:\$\{API_PORT:-3001\}:3001"/);

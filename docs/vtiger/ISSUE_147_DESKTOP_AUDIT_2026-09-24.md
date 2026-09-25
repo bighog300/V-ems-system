@@ -399,3 +399,108 @@ is not claimed. Browser access remains unavailable and the four intended manager
 roles are still absent. **Both #147 and #148 remain open** until actual UI and
 role checks pass. The follow-up retains audit volumes and all existing data;
 `vems-dev` remains untouched.
+
+## Browser UI and manager-role continuation (24 September 2026, later)
+
+This section supersedes "Browser access remains unavailable" above. The built-in
+browser pane of the Claude Code desktop app reached the retained
+`vems-audit-147` Vtiger instance directly (`http://127.0.0.1:18080`). This is
+the first actual, interactive browser UI evidence gathered for #147 or #148;
+every prior attempt recorded browser access as unavailable.
+
+**Blocking discovery.** Before any account could open a module's List view, the
+page was a fatal PHP error for every account, administrator included:
+`CustomView::getViewId()` resolves the default view by querying
+`vtiger_customview` for `viewname='All'`, and vtlib's module creation never
+inserts that row. `provision-development.php` now creates one, matching the
+exact shape of a standard module's shipped "All" view. This is baseline List
+functionality, not the saved-filter/column/menu design #151 owns, and it
+applies to `vems-dev` too, not only the audit stack.
+
+**Manager roles.** `provision-audit-roles.php` (new, audit-only; not part of
+`provision-development.php` or `vems-dev`) provisions the four previously-MISSING
+roles/profiles/accounts: Dispatcher, Fleet Manager, Stock Manager, Supervisor.
+Each profile grants global view-all/export-all and denies edit-all and every
+per-module action and field, so read access comes from "view all" rather than a
+hand-built per-module matrix; #151 still owns that matrix and the associated
+menu/filter design. Credentials are generated the same way as the audit's other
+secrets, stored only in the owned `audit.env`, and never printed.
+
+**Live results**, detailed in
+[browser-ui-2026-09-24.json](evidence/issue-147/browser-ui-2026-09-24.json) and
+[roles.json](evidence/issue-147/roles.json):
+
+| Role | Sign in | List/detail view | Denied mirrored-state write |
+| --- | --- | --- | --- |
+| Dispatcher | PASS | PASS (real data; no edit control) | N/A (no edit control offered) |
+| Fleet manager | PASS | PASS | N/A (no edit control offered) |
+| Stock manager | PASS | PASS | N/A (no edit control offered) |
+| Supervisor | PASS | PASS | N/A (no edit control offered) |
+| Integration user | PASS | PASS (edit control present) | Not attempted here; see #148 evidence |
+| Administrator | PASS | PASS | **DENIED**, first actual-browser-UI proof |
+
+For the administrator, an actual mouse-driven edit-and-save of
+`vems_operational_status` on the synthetic vehicle was submitted through the
+real Vtiger edit form. It returned `{"success":false,"error":{"code":"V-EMS
+mirrored fields require the authenticated mirror write operation"}}`, and the
+record was confirmed unchanged on reload. Navigating the administrator directly
+to the VEMSVehicles Import view returned "Permission denied". Both are the
+actual-browser-UI evidence the #148 review gate asked for; every earlier #148
+result was a server-side script invocation, not a browser click.
+
+**Residual findings**, not fixed here and out of this audit's scope:
+
+- Every custom module's List view renders rows with blank column text (no
+  `vtiger_cvcolumnlist` entries exist for the generated default view; the
+  built-in HelpDesk module, which ships its own columns, renders correctly).
+  Confirmed for the administrator too, not just the new roles. This is #151's
+  saved-filter/column-configuration work.
+- Several pages emit non-fatal PHP warnings ("Undefined array key ...") for
+  accounts whose profile does not explicitly grant every action/utility id a
+  page happens to check. `provision-audit-roles.php` denies every id
+  `Vtiger_Action_Model::getAll(true)` returns, which removed most but not all
+  instances; the pages still render correct data and correct denials underneath.
+
+**Still not run:** a walkthrough of the remaining six modules beyond confirming
+the default-view fix resolves them; related-list navigation between linked
+records; a full per-module, per-account write-attempt matrix through the UI
+(one representative administrator denial was captured instead); and file
+screenshots (page-text captures were used in the evidence bundle instead).
+
+This is real progress against the #147/#148 acceptance gate, not closure of it.
+Both issues remain open pending #151's role/list design and a broader UI
+walkthrough. Only the audit-owned services were used; `vems-dev` and its data
+were not started, stopped, or changed by this continuation.
+
+## Evidence-gathering continuation (25 September 2026)
+
+Started from SHA `5f80ab976084697e21ea6495c51fc44194440435` with a clean working tree.
+The audit runner's Start, Inspect and Validate actions all exited 0 (isolation verified,
+service validation passed). `vems-dev` containers were stopped before this session and
+were not started, reset or modified; all audit volumes are retained.
+
+**Webservice matrix (new, PASS).** `node scripts/windows/vtiger-audit-live.mjs ws-matrix`
+runs [vtiger-audit-ws-matrix.php](../../scripts/windows/vtiger-audit-ws-matrix.php) inside the audit
+Vtiger container (access keys read in-process, never emitted) and records
+[ws-matrix.json](evidence/issue-147/ws-matrix.json). Results, all six accounts:
+
+| Account | Login | describe + query, 8 modules | Vehicle mirrored-status update | Mirror after / canonical |
+| --- | --- | --- | --- | --- |
+| Administrator | PASS | ALLOWED 8/8 | DENIED (#148 mirror guard) | Available / Available |
+| Integration user | PASS | ALLOWED 8/8 | DENIED (#148 mirror guard) | Available / Available |
+| Dispatcher | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+| Fleet Manager | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+| Stock Manager | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+| Supervisor | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+
+This supersedes the historical "vehicle update ACCEPTED" integration-user result above:
+the divergence no longer reproduces. Finding: the four manager accounts are denied with
+the misleading message "Permission to read given object is denied" on an update; the
+denial is correct but the message is a webservice permission-layer wording defect (#151).
+
+**Browser walkthrough: NOT RUN in this session.** The built-in browser reached
+`http://127.0.0.1:18080` (login page shown, title "vtiger") but every role requires a
+password sign-in, which the assistant may not perform. The earlier
+[browser-ui-2026-09-24.json](evidence/issue-147/browser-ui-2026-09-24.json) evidence stands;
+its gaps (six-module walkthrough, related-list navigation, edit-control matrix for every
+role, saved screenshots) remain open. #147 is **not** closed.

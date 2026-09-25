@@ -5,6 +5,22 @@
       "rolename": "Organization"
     },
     {
+      "roleid": "H14",
+      "rolename": "V-EMS Dispatcher (audit)"
+    },
+    {
+      "roleid": "H15",
+      "rolename": "V-EMS FleetManager (audit)"
+    },
+    {
+      "roleid": "H16",
+      "rolename": "V-EMS StockManager (audit)"
+    },
+    {
+      "roleid": "H17",
+      "rolename": "V-EMS Supervisor (audit)"
+    },
+    {
       "roleid": "H2",
       "rolename": "CEO"
     },
@@ -33,6 +49,30 @@
       "is_admin": "off",
       "status": "Active",
       "roleid": "H2"
+    },
+    {
+      "identity": "other",
+      "is_admin": "off",
+      "status": "Active",
+      "roleid": "H14"
+    },
+    {
+      "identity": "other",
+      "is_admin": "off",
+      "status": "Active",
+      "roleid": "H15"
+    },
+    {
+      "identity": "other",
+      "is_admin": "off",
+      "status": "Active",
+      "roleid": "H16"
+    },
+    {
+      "identity": "other",
+      "is_admin": "off",
+      "status": "Active",
+      "roleid": "H17"
     }
   ]
 }

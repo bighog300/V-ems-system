@@ -31,7 +31,9 @@ this registry and rejects ordinary saves that create, change or clear a
 `vems_mirror` value. This covers UI record-model, `CRMEntity::save()` and
 ordinary webservice saves. It does not depend on field visibility. Unchanged
 mirror values and `vtiger_metadata` writes remain subject to normal Vtiger
-permissions.
+permissions. An actual browser session confirmed this for a mouse-driven edit
+and Save through the real Vtiger edit form, not only a server-side script; see
+[browser-ui-2026-09-24.json](evidence/issue-147/browser-ui-2026-09-24.json).
 
 The installer requires `data/CRMEntity.php` to match the SHA-256 hash of the
 digest-pinned base image. That source defines the event ordering described
@@ -69,7 +71,9 @@ for all users, administrators included:
   user privileges are regenerated.
 - **Import link.** Administrators may still see the Import link, because link
   visibility uses `isPermitted()`. Following the link returns
-  permission-denied.
+  permission-denied. Confirmed through an actual browser session against the
+  audit stack, not only a server-side script; see
+  [browser-ui-2026-09-24.json](evidence/issue-147/browser-ui-2026-09-24.json).
 - **Existing files.** The installer refuses to overwrite an `Import.php` it did
   not generate. Only HelpDesk is a core module, and the pinned distribution
   ships no `Import.php` override for it.

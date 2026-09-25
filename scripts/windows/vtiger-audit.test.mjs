@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { validateIsolation, buildAuditValues, PROJECT, PORTS } from './vtiger-audit.mjs';
+import { validateIsolation, buildAuditValues, PROJECT, PORTS, AUDIT_ROLE_ENV_PREFIXES } from './vtiger-audit.mjs';
 const repo=resolve('.'), data=resolve('audit-fixture/data');
 function fixture() {
   const names={mysql:['mysql_data_dev','/var/lib/mysql'],redis:['redis_data_dev','/data'],vtiger:['vtiger_data_dev','/var/www/html'],openemr:['openemr_data_dev','/var/www/localhost/htdocs/openemr']};
@@ -56,4 +56,16 @@ test('audit credentials satisfy OpenEMR policy and preserve isolated paths',()=>
   }
   assert.equal(values.get('VEMS_DB_PATH'),'/var/lib/vems/data/audit-147.sqlite');
   assert.notEqual(values.get('OPENEMR_PASSWORD'),buildAuditValues(template,data).get('OPENEMR_PASSWORD'));
+});
+
+test('audit manager-role env prefixes are the four #147/#148 roles, each with a distinct compose overlay variable', () => {
+  assert.deepEqual(AUDIT_ROLE_ENV_PREFIXES, ['DISPATCHER', 'FLEET_MANAGER', 'STOCK_MANAGER', 'SUPERVISOR']);
+  const overlay = readFileSync('infra/docker-compose.audit.yml', 'utf8');
+  for (const prefix of AUDIT_ROLE_ENV_PREFIXES) {
+    assert.match(overlay, new RegExp(`VTIGER_${prefix}_USERNAME: \\$\\{VTIGER_${prefix}_USERNAME:\\?required\\}`));
+    assert.match(overlay, new RegExp(`VTIGER_${prefix}_PASSWORD: \\$\\{VTIGER_${prefix}_PASSWORD:\\?required\\}`));
+  }
+  const runner = readFileSync('scripts/windows/vtiger-audit.mjs', 'utf8');
+  assert.match(runner, /provision-audit-roles\.php/);
+  assert.match(runner, /'-e','VEMS_AUDIT_PROJECT=vems-audit-147'/);
 });

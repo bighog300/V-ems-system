@@ -3,7 +3,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from '
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID, randomBytes } from 'node:crypto';
-import { buildDevelopmentValues, loadTemplate, atomicWriteEnvFile, parseEnvText, SECRET_KEYS } from './development-bootstrap.mjs';
+import { buildDevelopmentValues, loadTemplate, atomicWriteEnvFile, parseEnvText, SECRET_KEYS, generateSecret, generateDevelopmentIdentity } from './development-bootstrap.mjs';
+
+// Issue #147 read-only manager-role audit accounts; see provision-audit-roles.php.
+export const AUDIT_ROLE_ENV_PREFIXES = ['DISPATCHER', 'FLEET_MANAGER', 'STOCK_MANAGER', 'SUPERVISOR'];
 
 export const PROJECT = 'vems-audit-147';
 export const PORTS = { api: [13001,3001], mysql: [13307,3306], redis: [16380,6379], vtiger: [18080,80], openemr: [18083,80] };
@@ -89,10 +92,20 @@ export async function main(action) {
     requireSafe(marker.project===PROJECT && marker.context===context && normalize(marker.root)===normalize(root), 'runtime ownership/context mismatch');
     const retainedValues = parseEnvText(readFileSync(envFile,'utf8'));
     // Upgrade only this owned audit runtime; preserve every existing credential.
+    let upgraded = false;
     if (action === 'start' && !retainedValues.has('VTIGER_MIRROR_WRITE_KEY')) {
       retainedValues.set('VTIGER_MIRROR_WRITE_KEY', randomBytes(32).toString('base64url'));
-      atomicWriteEnvFile(envFile, retainedValues, SECRET_KEYS);
+      upgraded = true;
     }
+    if (action === 'start') {
+      for (const prefix of AUDIT_ROLE_ENV_PREFIXES) {
+        if (retainedValues.has(`VTIGER_${prefix}_USERNAME`)) continue;
+        retainedValues.set(`VTIGER_${prefix}_USERNAME`, generateDevelopmentIdentity('vems_audit_' + prefix.toLowerCase()));
+        retainedValues.set(`VTIGER_${prefix}_PASSWORD`, generateSecret());
+        upgraded = true;
+      }
+    }
+    if (upgraded) atomicWriteEnvFile(envFile, retainedValues, SECRET_KEYS);
     const values = Object.fromEntries(retainedValues);
     requireSafe(normalize(values.VEMS_DB_HOST_PATH)===normalize(data), 'runtime database path mismatch');
     // Do not inherit caller interpolation overrides (or COMPOSE_FILE/PROJECT_NAME).
@@ -137,6 +150,8 @@ export async function main(action) {
       compose(['exec','-T','--user','apache','openemr','php','/opt/vems/provision-development.php']);
       console.log('Provisioning audit Vtiger.');
       compose(['exec','-T','vtiger','php','/opt/vems/provision-development.php']);
+      console.log('Provisioning audit manager-role accounts.');
+      compose(['exec','-T','-e','VEMS_AUDIT_PROJECT=vems-audit-147','vtiger','php','/opt/vems/provision-audit-roles.php']);
       console.log('Starting audit API.');
       compose(['up','-d','--wait','--wait-timeout','120','api']);
       compose(['exec','-T','api','node','scripts/windows/seed-development.mjs']);

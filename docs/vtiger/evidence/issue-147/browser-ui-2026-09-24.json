@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-09-24T00:00:00.000Z",
+  "note": "Manual, interactive session in the Claude Code built-in browser pane against the retained vems-audit-147 stack (http://127.0.0.1:18080). This is the first actual browser UI evidence gathered for #147/#148; every prior audit recorded browser access as unavailable.",
+  "blockingIssueFound": {
+    "summary": "Every custom module's List view was a fatal PHP error for every account, administrator included, because vtlib module creation never ships a default \"All\" custom view row.",
+    "detail": "CustomView::getViewId() selects `cvid FROM vtiger_customview WHERE viewname='All' AND entitytype=?`; with no matching row the resolved view id was empty, and ListViewContents.tpl fatally called isCvEditable() on a null custom-view object.",
+    "fix": "provision-development.php now inserts one default view per module (viewname=All, setdefault=1, setmetrics=0, status=0, userid=1), matching the exact shape of a standard module's system \"All\" view (verified against the shipped Leads/Accounts rows). Idempotent; applies to vems-dev too, not just the audit stack.",
+    "scopeNote": "This is baseline List-view functionality, not the saved-filter/related-list/menu design that #151 (\"PR 4 - Lists, roles and navigation\") owns."
+  },
+  "accountsCreated": {
+    "note": "provision-audit-roles.php (audit-only; not part of provision-development.php or vems-dev). Grants viewall=on/editall=off per profile; explicit per-tab action/field denial. See docs/vtiger/OWNERSHIP_AND_COMMANDS.md.",
+    "roles": ["V-EMS Dispatcher (audit)", "V-EMS FleetManager (audit)", "V-EMS StockManager (audit)", "V-EMS Supervisor (audit)"]
+  },
+  "checks": [
+    { "identity": "dispatcher", "action": "sign in", "result": "PASS", "note": "Real login form, real session; first-run preferences dialog dismissed." },
+    { "identity": "dispatcher", "action": "VEMSVehicles list view", "result": "PASS (after default-view fix)", "note": "9 rows shown; list column values render blank for this and other custom modules (see knownResidualFindings) while HelpDesk (a built-in module) renders correctly." },
+    { "identity": "dispatcher", "action": "VEMSVehicles detail view", "result": "PASS", "note": "Real mirrored field data rendered (vems_operational_status=Available, etc.)." },
+    { "identity": "dispatcher", "action": "Edit control visibility", "result": "ABSENT, as intended", "note": "No edit affordance shown; profile has editall=off and no per-tab edit action." },
+    { "identity": "integration", "action": "VEMSVehicles detail view", "result": "PASS", "note": "Edit button present (pre-existing H2/CEO profile keeps edit rights)." },
+    { "identity": "fleetManager", "action": "VEMSVehicles detail view", "result": "PASS", "note": "Real data rendered; no edit control." },
+    { "identity": "stockManager", "action": "VEMSStockItems list view", "result": "PASS", "note": "1 row shown." },
+    { "identity": "supervisor", "action": "HelpDesk (Tickets) list view", "result": "PASS", "note": "Real row rendered with title/status/priority/assignee; \"Assigned To\" filter dropdown lists all 4 new manager accounts plus admin/integration, confirming account/profile/role wiring is coherent end to end." },
+    { "identity": "administrator", "action": "Edit vems_operational_status via the real edit form and click Save", "result": "DENIED", "note": "Mouse-driven form submit returned {\"success\":false,\"error\":{\"code\":\"V-EMS mirrored fields require the authenticated mirror write operation\"}}; record confirmed unchanged (still Available) on reload. First actual-browser-UI proof of the #148 mirror guard; prior evidence was server-side script invocation only." },
+    { "identity": "administrator", "action": "Navigate to VEMSVehicles Import view", "result": "DENIED", "note": "Page rendered \"Permission denied\". First actual-browser-UI proof that administrator UI Import is closed (see PR #160's second commit, which closed this server-side)." }
+  ],
+  "knownResidualFindings": [
+    { "summary": "Custom module list views (VEMSVehicles, VEMSStockItems, etc.) render rows with blank/empty column text.", "cause": "No vtiger_cvcolumnlist entries exist for the generated default view; the module PHP class's list_fields/list_fields_name declare only External Key and Assigned To.", "scope": "#151 (\"Lists, roles and navigation\") owns saved filters, column configuration and menu design; this audit only fixed the fatal-error blocker, not the column display." },
+    { "summary": "PHP warnings appear on several pages for non-administrator accounts (e.g. \"Undefined array key 4/6/7/8/9/14/15/18/19\" in Privileges.php on the dashboard for the new profiles; \"Undefined array key 51\" in UserInfoUtil.php for the pre-existing integration account; \"Undefined array key DETAILVIEWBASIC\" in DetailViewActions.tpl for a profile with edit denied).", "cause": "Vtiger's permission-check code reads array offsets for action/utility ids without isset() guards; this triggers whenever a profile does not explicitly grant every id the page happens to check. provision-audit-roles.php now explicitly denies every id Vtiger_Action_Model::getAll(true) returns for each module, which eliminated most but not all instances.", "scope": "Cosmetic (E_WARNING, not fatal); pages still render correct data and correct denials underneath. Not fixed further here; flagged for #151 or a dedicated cleanup." }
+  ],
+  "notRun": [
+    "A dedicated browser walkthrough of the remaining 6 modules' list/detail views (VEMSAssignments, VEMSPersonnel, VEMSAssignmentCrew, VEMSVehicleStock, VEMSStockUsage) beyond confirming they resolve via the default-view fix.",
+    "Related-list navigation between linked records (incident to assignment to vehicle to crew).",
+    "A full write-attempt matrix (create/update/delete) through the real UI for every account and every module; only the single representative denial above was captured interactively.",
+    "Screenshots were viewed but not saved as files in this evidence bundle; get_page_text captures are used instead."
+  ]
+}
