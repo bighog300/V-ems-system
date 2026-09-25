@@ -62,3 +62,40 @@ test('provisioner never rewrites a language file it does not own', () => {
   assert.match(source, /\$custom = isset\(VEMS_MODULE_LABELS\[\$module\]\);/);
   assert.match(source, /\(\$custom && strpos\(file_get_contents\(\$language\)/);
 });
+
+test('reference targets are the record links on a page, excluding its own module and menu links', () => {
+  const html = '<a href="index.php?module=VEMSVehicles&view=List&app=SUPPORT">menu</a>'
+    + '<td class="fieldValue"><a href="index.php?module=HelpDesk&view=Detail&record=7">INC</a></td>'
+    + '<td class="fieldValue"><a href="index.php?module=VEMSVehicles&amp;view=Detail&amp;record=4">AMB</a></td>'
+    + '<a href="index.php?module=VEMSAssignments&view=Detail&record=8">self</a>';
+  assert.deepEqual(analyzeDetail(html, 'VEMSAssignments').referenceTargets, ['HelpDesk', 'VEMSVehicles']);
+  assert.deepEqual(analyzeDetail('<td class="fieldValue">17x7</td>', 'VEMSAssignments').referenceTargets, []);
+});
+
+test('references.json names real fields and modules and matches the mirror-owned fields', () => {
+  const references = JSON.parse(readFileSync(new URL('../../infra/services/vtiger/development/references.json', import.meta.url), 'utf8'));
+  const schemas = JSON.parse(readFileSync(new URL('../../infra/services/vtiger/development/modules.json', import.meta.url), 'utf8'));
+  const ownership = JSON.parse(readFileSync(new URL('../../infra/services/vtiger/field-ownership.json', import.meta.url), 'utf8'));
+  for (const [module, fields] of Object.entries(references)) {
+    for (const [field, target] of Object.entries(fields)) {
+      assert.ok(schemas[module]?.includes(field), `${module}.${field} exists in modules.json`);
+      assert.ok(schemas[target], `${module}.${field} targets a provisioned module (${target})`);
+      assert.equal(ownership.modules[module].fields[field], 'vems_mirror', `${module}.${field} stays mirror-owned`);
+    }
+  }
+  // Every *_ref field the schema defines must be declared, so a new one cannot silently stay plain text.
+  for (const [module, fields] of Object.entries(schemas)) {
+    for (const field of fields.filter((f) => /_ref$/.test(f))) assert.ok(references[module]?.[field], `${module}.${field} is declared in references.json`);
+  }
+});
+
+test('the reference migration aborts on bad data before altering anything', () => {
+  const source = readFileSync(new URL('../../infra/services/vtiger/development/provision-development.php', import.meta.url), 'utf8');
+  const fn = source.match(/function vemsEnsureReferenceField[\s\S]*?\n\}\r?\n/)[0];
+  const abort = fn.indexOf('nothing was changed');
+  assert.ok(abort > 0, 'aborts with an explicit message');
+  for (const mutation of ['UPDATE `$table`', 'ALTER TABLE', 'UPDATE vtiger_field']) {
+    assert.ok(fn.indexOf(mutation) > abort, `${mutation} happens only after the validation abort`);
+  }
+  assert.ok(!/REGEXP '[^']*\?/.test(fn), 'no ? inside the regex (PearDatabase counts it as a placeholder)');
+});

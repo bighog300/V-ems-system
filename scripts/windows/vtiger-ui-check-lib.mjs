@@ -24,12 +24,15 @@ export function analyzeList(html) {
   };
 }
 
-export function analyzeDetail(html) {
+export function analyzeDetail(html, ownModule) {
   const buttons = [...html.matchAll(/<(?:button|a)\b[^>]*>([\s\S]*?)<\/(?:button|a)>/g)].map((m) => text(m[1]));
   return {
     fieldLabels: [...html.matchAll(/<td[^>]*class="[^"]*fieldLabel[^"]*"[^>]*>/g)].length,
     editControl: buttons.some((b) => b === 'Edit'),
     linkedReferenceFields: [...html.matchAll(/<td[^>]*class="[^"]*fieldValue[^"]*"[^>]*>[\s\S]{0,300}?<a[^>]*href="[^"]*record=\d+/g)].length,
+    // Modules that record links on the page point to, excluding the page's own module (e.g. an assignment
+    // links to HelpDesk and VEMSVehicles). Sidebar/menu links use view=List, so only record links match.
+    referenceTargets: [...new Set([...html.matchAll(/href=["'][^"']*module=(HelpDesk|VEMS\w+)&(?:amp;)?view=Detail&(?:amp;)?record=\d+/g)].map((m) => m[1]))].filter((m) => m !== ownModule).sort(),
     relatedTabs: [...new Set([...html.matchAll(/data-label-key="([^"]+)"/g)].map((m) => m[1]))],
     warnings: phpWarnings(html),
   };

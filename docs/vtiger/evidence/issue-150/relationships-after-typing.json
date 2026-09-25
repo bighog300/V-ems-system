@@ -1,0 +1,9 @@
+{
+  "assignmentIncident": true,
+  "assignmentVehicle": true,
+  "crewAssignment": true,
+  "crewPerson": true,
+  "stockVehicle": true,
+  "stockItem": true,
+  "uiNavigation": "NOT RUN"
+}

@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-09-25T15:15:10.782Z",
+  "createdThroughApi": {
+    "incident": "INC-000002",
+    "assignment": "ASN-000002"
+  },
+  "remoteIds": {
+    "vehicle": "37x27",
+    "personnel": "38x26",
+    "stockItem": "40x28",
+    "incident": "17x30",
+    "assignment": "36x31"
+  },
+  "assignment": {
+    "incident_ref": "17x30",
+    "vehicle_ref": "37x27",
+    "incidentMatches": true,
+    "vehicleMatches": true
+  },
+  "crew": {
+    "assignment_ref": "36x31",
+    "personnel_ref": "38x26",
+    "assignmentMatches": true,
+    "personnelMatches": true
+  },
+  "vehicleStock": {
+    "vehicle_ref": "37x27",
+    "stock_item_ref": "40x28",
+    "vehicleMatches": true,
+    "itemMatches": true
+  }
+}
