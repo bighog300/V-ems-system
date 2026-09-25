@@ -1,0 +1,953 @@
+{
+  "label": "after-start",
+  "timestamp": "2026-09-25T14:56:43.404Z",
+  "roles": {
+    "Dispatcher": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 5,
+            "valueCells": 5,
+            "blankValueCells": 0,
+            "populatedValueCells": 5,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 5,
+            "populatedValueCells": 2,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Fleet Manager": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 5,
+            "valueCells": 5,
+            "blankValueCells": 0,
+            "populatedValueCells": 5,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 5,
+            "populatedValueCells": 2,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Stock Manager": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 5,
+            "valueCells": 5,
+            "blankValueCells": 0,
+            "populatedValueCells": 5,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 5,
+            "populatedValueCells": 2,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Supervisor": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 5,
+            "valueCells": 5,
+            "blankValueCells": 0,
+            "populatedValueCells": 5,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 5,
+            "populatedValueCells": 2,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Integration user": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "populatedValueCells": 6,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 5,
+            "valueCells": 5,
+            "blankValueCells": 0,
+            "populatedValueCells": 5,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 0,
+            "populatedValueCells": 7,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 7,
+            "valueCells": 7,
+            "blankValueCells": 5,
+            "populatedValueCells": 2,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        }
+      }
+    }
+  },
+  "failures": [],
+  "result": "PASS"
+}

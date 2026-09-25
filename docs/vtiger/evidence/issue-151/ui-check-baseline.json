@@ -1,0 +1,1117 @@
+{
+  "label": "baseline",
+  "timestamp": "2026-09-25T14:51:35.445Z",
+  "roles": {
+    "Dispatcher": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\"",
+              "Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+              "Warning: Attempt to read property \"value\" on null"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Fleet Manager": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\"",
+              "Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+              "Warning: Attempt to read property \"value\" on null"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Stock Manager": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\"",
+              "Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+              "Warning: Attempt to read property \"value\" on null"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Supervisor": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\"",
+              "Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+              "Warning: Attempt to read property \"value\" on null"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": false,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key \"DETAILVIEWBASIC\""
+            ]
+          },
+          "importDenied": true
+        }
+      }
+    },
+    "Integration user": {
+      "signIn": "PASS",
+      "modules": {
+        "HelpDesk": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "7",
+            "headerColumns": 6,
+            "valueCells": 6,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 9,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details",
+              "LBL_UPDATES",
+              "Activities",
+              "Documents",
+              "Service Contracts",
+              "Services",
+              "Projects",
+              "ModComments",
+              "Emails"
+            ],
+            "warnings": []
+          },
+          "importDenied": true
+        },
+        "VEMSAssignments": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "8",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key 50"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicles": {
+          "list": {
+            "rows": 10,
+            "firstRecordId": "4",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key 51"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSPersonnel": {
+          "list": {
+            "rows": 2,
+            "firstRecordId": "3",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key 52"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSAssignmentCrew": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "9",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 12,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key 53"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockItems": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "5",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key 54"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSVehicleStock": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "6",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 16,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key 55"
+            ]
+          },
+          "importDenied": true
+        },
+        "VEMSStockUsage": {
+          "list": {
+            "rows": 1,
+            "firstRecordId": "14",
+            "headerColumns": 0,
+            "valueCells": 0,
+            "blankValueCells": 0,
+            "warnings": []
+          },
+          "detail": {
+            "fieldLabels": 14,
+            "editControl": true,
+            "linkedReferenceFields": 0,
+            "relatedTabs": [
+              "Summary",
+              "Details"
+            ],
+            "warnings": [
+              "Warning: Undefined array key 56"
+            ]
+          },
+          "importDenied": true
+        }
+      }
+    }
+  },
+  "failures": [
+    "Dispatcher/HelpDesk: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Dispatcher/HelpDesk: Detail renders PHP Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+    "Dispatcher/HelpDesk: Detail renders PHP Warning: Attempt to read property \"value\" on null",
+    "Dispatcher/VEMSAssignments: List has 0 column header(s), expected >= 3",
+    "Dispatcher/VEMSAssignments: first List row has 0 value cell(s), expected >= 3",
+    "Dispatcher/VEMSAssignments: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Dispatcher/VEMSVehicles: List has 0 column header(s), expected >= 3",
+    "Dispatcher/VEMSVehicles: first List row has 0 value cell(s), expected >= 3",
+    "Dispatcher/VEMSVehicles: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Dispatcher/VEMSPersonnel: List has 0 column header(s), expected >= 3",
+    "Dispatcher/VEMSPersonnel: first List row has 0 value cell(s), expected >= 3",
+    "Dispatcher/VEMSPersonnel: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Dispatcher/VEMSAssignmentCrew: List has 0 column header(s), expected >= 3",
+    "Dispatcher/VEMSAssignmentCrew: first List row has 0 value cell(s), expected >= 3",
+    "Dispatcher/VEMSAssignmentCrew: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Dispatcher/VEMSStockItems: List has 0 column header(s), expected >= 3",
+    "Dispatcher/VEMSStockItems: first List row has 0 value cell(s), expected >= 3",
+    "Dispatcher/VEMSStockItems: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Dispatcher/VEMSVehicleStock: List has 0 column header(s), expected >= 3",
+    "Dispatcher/VEMSVehicleStock: first List row has 0 value cell(s), expected >= 3",
+    "Dispatcher/VEMSVehicleStock: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Dispatcher/VEMSStockUsage: List has 0 column header(s), expected >= 3",
+    "Dispatcher/VEMSStockUsage: first List row has 0 value cell(s), expected >= 3",
+    "Dispatcher/VEMSStockUsage: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/HelpDesk: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/HelpDesk: Detail renders PHP Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+    "Fleet Manager/HelpDesk: Detail renders PHP Warning: Attempt to read property \"value\" on null",
+    "Fleet Manager/VEMSAssignments: List has 0 column header(s), expected >= 3",
+    "Fleet Manager/VEMSAssignments: first List row has 0 value cell(s), expected >= 3",
+    "Fleet Manager/VEMSAssignments: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/VEMSVehicles: List has 0 column header(s), expected >= 3",
+    "Fleet Manager/VEMSVehicles: first List row has 0 value cell(s), expected >= 3",
+    "Fleet Manager/VEMSVehicles: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/VEMSPersonnel: List has 0 column header(s), expected >= 3",
+    "Fleet Manager/VEMSPersonnel: first List row has 0 value cell(s), expected >= 3",
+    "Fleet Manager/VEMSPersonnel: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/VEMSAssignmentCrew: List has 0 column header(s), expected >= 3",
+    "Fleet Manager/VEMSAssignmentCrew: first List row has 0 value cell(s), expected >= 3",
+    "Fleet Manager/VEMSAssignmentCrew: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/VEMSStockItems: List has 0 column header(s), expected >= 3",
+    "Fleet Manager/VEMSStockItems: first List row has 0 value cell(s), expected >= 3",
+    "Fleet Manager/VEMSStockItems: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/VEMSVehicleStock: List has 0 column header(s), expected >= 3",
+    "Fleet Manager/VEMSVehicleStock: first List row has 0 value cell(s), expected >= 3",
+    "Fleet Manager/VEMSVehicleStock: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Fleet Manager/VEMSStockUsage: List has 0 column header(s), expected >= 3",
+    "Fleet Manager/VEMSStockUsage: first List row has 0 value cell(s), expected >= 3",
+    "Fleet Manager/VEMSStockUsage: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/HelpDesk: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/HelpDesk: Detail renders PHP Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+    "Stock Manager/HelpDesk: Detail renders PHP Warning: Attempt to read property \"value\" on null",
+    "Stock Manager/VEMSAssignments: List has 0 column header(s), expected >= 3",
+    "Stock Manager/VEMSAssignments: first List row has 0 value cell(s), expected >= 3",
+    "Stock Manager/VEMSAssignments: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/VEMSVehicles: List has 0 column header(s), expected >= 3",
+    "Stock Manager/VEMSVehicles: first List row has 0 value cell(s), expected >= 3",
+    "Stock Manager/VEMSVehicles: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/VEMSPersonnel: List has 0 column header(s), expected >= 3",
+    "Stock Manager/VEMSPersonnel: first List row has 0 value cell(s), expected >= 3",
+    "Stock Manager/VEMSPersonnel: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/VEMSAssignmentCrew: List has 0 column header(s), expected >= 3",
+    "Stock Manager/VEMSAssignmentCrew: first List row has 0 value cell(s), expected >= 3",
+    "Stock Manager/VEMSAssignmentCrew: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/VEMSStockItems: List has 0 column header(s), expected >= 3",
+    "Stock Manager/VEMSStockItems: first List row has 0 value cell(s), expected >= 3",
+    "Stock Manager/VEMSStockItems: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/VEMSVehicleStock: List has 0 column header(s), expected >= 3",
+    "Stock Manager/VEMSVehicleStock: first List row has 0 value cell(s), expected >= 3",
+    "Stock Manager/VEMSVehicleStock: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Stock Manager/VEMSStockUsage: List has 0 column header(s), expected >= 3",
+    "Stock Manager/VEMSStockUsage: first List row has 0 value cell(s), expected >= 3",
+    "Stock Manager/VEMSStockUsage: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/HelpDesk: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/HelpDesk: Detail renders PHP Warning: Undefined array key \"DOCUMENT_WIDGET_MODEL\"",
+    "Supervisor/HelpDesk: Detail renders PHP Warning: Attempt to read property \"value\" on null",
+    "Supervisor/VEMSAssignments: List has 0 column header(s), expected >= 3",
+    "Supervisor/VEMSAssignments: first List row has 0 value cell(s), expected >= 3",
+    "Supervisor/VEMSAssignments: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/VEMSVehicles: List has 0 column header(s), expected >= 3",
+    "Supervisor/VEMSVehicles: first List row has 0 value cell(s), expected >= 3",
+    "Supervisor/VEMSVehicles: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/VEMSPersonnel: List has 0 column header(s), expected >= 3",
+    "Supervisor/VEMSPersonnel: first List row has 0 value cell(s), expected >= 3",
+    "Supervisor/VEMSPersonnel: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/VEMSAssignmentCrew: List has 0 column header(s), expected >= 3",
+    "Supervisor/VEMSAssignmentCrew: first List row has 0 value cell(s), expected >= 3",
+    "Supervisor/VEMSAssignmentCrew: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/VEMSStockItems: List has 0 column header(s), expected >= 3",
+    "Supervisor/VEMSStockItems: first List row has 0 value cell(s), expected >= 3",
+    "Supervisor/VEMSStockItems: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/VEMSVehicleStock: List has 0 column header(s), expected >= 3",
+    "Supervisor/VEMSVehicleStock: first List row has 0 value cell(s), expected >= 3",
+    "Supervisor/VEMSVehicleStock: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Supervisor/VEMSStockUsage: List has 0 column header(s), expected >= 3",
+    "Supervisor/VEMSStockUsage: first List row has 0 value cell(s), expected >= 3",
+    "Supervisor/VEMSStockUsage: Detail renders PHP Warning: Undefined array key \"DETAILVIEWBASIC\"",
+    "Integration user/VEMSAssignments: List has 0 column header(s), expected >= 3",
+    "Integration user/VEMSAssignments: first List row has 0 value cell(s), expected >= 3",
+    "Integration user/VEMSAssignments: Detail renders PHP Warning: Undefined array key 50",
+    "Integration user/VEMSVehicles: List has 0 column header(s), expected >= 3",
+    "Integration user/VEMSVehicles: first List row has 0 value cell(s), expected >= 3",
+    "Integration user/VEMSVehicles: Detail renders PHP Warning: Undefined array key 51",
+    "Integration user/VEMSPersonnel: List has 0 column header(s), expected >= 3",
+    "Integration user/VEMSPersonnel: first List row has 0 value cell(s), expected >= 3",
+    "Integration user/VEMSPersonnel: Detail renders PHP Warning: Undefined array key 52",
+    "Integration user/VEMSAssignmentCrew: List has 0 column header(s), expected >= 3",
+    "Integration user/VEMSAssignmentCrew: first List row has 0 value cell(s), expected >= 3",
+    "Integration user/VEMSAssignmentCrew: Detail renders PHP Warning: Undefined array key 53",
+    "Integration user/VEMSStockItems: List has 0 column header(s), expected >= 3",
+    "Integration user/VEMSStockItems: first List row has 0 value cell(s), expected >= 3",
+    "Integration user/VEMSStockItems: Detail renders PHP Warning: Undefined array key 54",
+    "Integration user/VEMSVehicleStock: List has 0 column header(s), expected >= 3",
+    "Integration user/VEMSVehicleStock: first List row has 0 value cell(s), expected >= 3",
+    "Integration user/VEMSVehicleStock: Detail renders PHP Warning: Undefined array key 55",
+    "Integration user/VEMSStockUsage: List has 0 column header(s), expected >= 3",
+    "Integration user/VEMSStockUsage: first List row has 0 value cell(s), expected >= 3",
+    "Integration user/VEMSStockUsage: Detail renders PHP Warning: Undefined array key 56"
+  ],
+  "result": "FAIL"
+}
