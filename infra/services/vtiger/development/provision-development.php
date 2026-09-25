@@ -148,6 +148,20 @@ function vemsEnsureReferenceField($adb, string $moduleName, string $fieldName, s
     if (!$linked) { $field->setRelatedModules([$relatedName]); }
 }
 
+// Each reference gets a read-only related list on its target (an incident lists its assignments, a vehicle its
+// assignments and stock lines, and so on), built by Vtiger from the reference field itself
+// (get_dependents_list). No actions are registered, so there is no Add or Select button: these records are
+// written only by the V-EMS mirror, and the mirror guard would refuse a UI create anyway.
+function vemsEnsureRelatedList($adb, string $sourceName, string $targetName): void
+{
+    $source = Vtiger_Module::getInstance($sourceName);
+    $target = Vtiger_Module::getInstance($targetName);
+    if (!$source || !$target) { throw new RuntimeException("Related list $targetName <- $sourceName: module missing"); }
+    $exists = $adb->pquery('SELECT 1 FROM vtiger_relatedlists WHERE tabid=? AND related_tabid=? AND name=?', [$target->id, $source->id, 'get_dependents_list']);
+    if ($adb->num_rows($exists)) { return; }
+    $target->setRelatedList($source, VEMS_MODULE_LABELS[$sourceName] ?? $sourceName, [], 'get_dependents_list');
+}
+
 // HelpDesk's summary template tests {if $DOCUMENT_WIDGET_MODEL} (and the comments/updates twins) on variables
 // it only assigns when the user's role is offered that widget, so read-only roles see "Undefined array key" and
 // "property value on null" warnings on every ticket. Initialise them first. Marker-guarded and idempotent.
@@ -263,7 +277,10 @@ try {
     // After every module exists (assignments reference vehicles, which are provisioned later in the loop).
     $references = json_decode(file_get_contents('/opt/vems/references.json'), true, 512, JSON_THROW_ON_ERROR);
     foreach ($references as $referencingModule => $referenceFields) {
-        foreach ($referenceFields as $referenceField => $targetModule) { vemsEnsureReferenceField($adb, $referencingModule, $referenceField, $targetModule); }
+        foreach ($referenceFields as $referenceField => $targetModule) {
+            vemsEnsureReferenceField($adb, $referencingModule, $referenceField, $targetModule);
+            vemsEnsureRelatedList($adb, $referencingModule, $targetModule);
+        }
     }
     require_once '/opt/vems/install-mirror-guard.php';
     vemsInstallMirrorGuard($adb);
