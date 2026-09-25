@@ -16,6 +16,7 @@ export function analyzeList(html) {
   return {
     rows: rows.length,
     firstRecordId: id,
+    recordIds: rows.map((r) => (r[0].match(/data-id=['"](\d+)['"]/) || [])[1]).filter(Boolean),
     headerColumns: headers.length,
     valueCells: firstRowCells.length,
     blankValueCells: firstRowCells.filter((c) => !c).length,
@@ -36,6 +37,19 @@ export function analyzeDetail(html, ownModule) {
     relatedTabs: [...new Set([...html.matchAll(/data-label-key="([^"]+)"/g)].map((m) => m[1]))],
     warnings: phpWarnings(html),
   };
+}
+
+// Record ids of a module that a page links to (record links only; menu links use view=List).
+export function recordLinks(html, module) {
+  const link = new RegExp(`href=["'][^"']*module=${module}&(?:amp;)?view=Detail&(?:amp;)?record=(\\d+)`, 'g');
+  return [...new Set([...html.matchAll(link)].map((m) => m[1]))];
+}
+
+// A related-list panel: how many rows it shows and whether they link to records of the source module.
+export function analyzeRelated(html, sourceModule) {
+  const rows = [...html.matchAll(/<tr[^>]*class="[^"]*listViewEntries[^"]*"/g)].length;
+  const link = new RegExp(`href=["'][^"']*module=${sourceModule}&(?:amp;)?view=Detail&(?:amp;)?record=\\d+`);
+  return { rows, linksToSource: link.test(html), warnings: phpWarnings(html) };
 }
 
 export function isImportDenied(html) {

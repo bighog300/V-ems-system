@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { analyzeList, analyzeDetail, isImportDenied, phpWarnings, MODULES } from './vtiger-ui-check-lib.mjs';
+import { analyzeList, analyzeDetail, analyzeRelated, recordLinks, isImportDenied, phpWarnings, MODULES } from './vtiger-ui-check-lib.mjs';
 
 const listHtml = (headers, cells) => `
 <tr class="listViewContentHeader"><th></th>${headers.map((h) => `<th><a href="#" class="listViewContentHeaderValues">&nbsp;${h}&nbsp;</a></th>`).join('')}</tr>
@@ -98,4 +98,27 @@ test('the reference migration aborts on bad data before altering anything', () =
     assert.ok(fn.indexOf(mutation) > abort, `${mutation} happens only after the validation abort`);
   }
   assert.ok(!/REGEXP '[^']*\?/.test(fn), 'no ? inside the regex (PearDatabase counts it as a placeholder)');
+});
+
+test('record links ignore menu links and de-duplicate ids', () => {
+  const html = '<a href="index.php?module=VEMSVehicles&view=List">menu</a>'
+    + '<a href="index.php?module=VEMSVehicles&view=Detail&record=4">a</a><a href="index.php?module=VEMSVehicles&amp;view=Detail&amp;record=4">b</a>'
+    + '<a href="index.php?module=VEMSVehicles&view=Detail&record=19">c</a><a href="index.php?module=HelpDesk&view=Detail&record=7">d</a>';
+  assert.deepEqual(recordLinks(html, 'VEMSVehicles'), ['4', '19']);
+  assert.deepEqual(recordLinks(html, 'VEMSPersonnel'), []);
+});
+
+test('a related-list panel reports its rows and whether they link to the source module', () => {
+  const panel = '<tr class="listViewEntries" data-id="8"><td><a href="index.php?module=VEMSAssignments&view=Detail&record=8">x</a></td></tr>';
+  assert.deepEqual(analyzeRelated(panel, 'VEMSAssignments'), { rows: 1, linksToSource: true, warnings: [] });
+  assert.equal(analyzeRelated('<div>No related records</div>', 'VEMSAssignments').rows, 0);
+  assert.equal(analyzeRelated(panel, 'VEMSVehicles').linksToSource, false);
+});
+
+test('the provisioner adds one read-only related list per declared reference, only once', () => {
+  const source = readFileSync(new URL('../../infra/services/vtiger/development/provision-development.php', import.meta.url), 'utf8');
+  const fn = source.match(/function vemsEnsureRelatedList[\s\S]*?\n\}\r?\n/)[0];
+  assert.match(fn, /SELECT 1 FROM vtiger_relatedlists WHERE tabid=\? AND related_tabid=\? AND name=\?/, 'checks for an existing relation first');
+  assert.match(fn, /setRelatedList\(\$source, [^,]+, \[\], 'get_dependents_list'\)/, 'no actions, so no Add or Select button');
+  assert.match(source, /vemsEnsureReferenceField\(\$adb, \$referencingModule, \$referenceField, \$targetModule\);\s+vemsEnsureRelatedList\(\$adb, \$referencingModule, \$targetModule\);/, 'one relation per declared reference, after the reference exists');
 });
