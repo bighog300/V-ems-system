@@ -5,7 +5,7 @@ import { main as guard } from './vtiger-audit.mjs';
 import { parseEnvText } from './development-bootstrap.mjs';
 import { createVtigerWebserviceClient } from '../../services/orchestration/src/adapters/vtiger/client.mjs';
 const phase=process.argv[2];
-if (!['describe','seed','snapshot','denied-write','outage-update','recovery','relationships','replay','roles'].includes(phase)) throw new Error('Unsupported audit phase');
+if (!['describe','seed','snapshot','denied-write','outage-update','recovery','relationships','replay','roles','ws-matrix'].includes(phase)) throw new Error('Unsupported audit phase');
 await guard('inspect');
 const root=resolve(process.env.LOCALAPPDATA,'VEMS-Audit/issue-147');
 const stateFile=resolve(root,'test-state.json');
@@ -30,6 +30,13 @@ try {
   if(r.status) throw new Error('Audit role inventory failed');
   let result;try{result=JSON.parse(r.stdout);}catch{throw new Error('Audit role inventory returned invalid JSON; raw output suppressed');}
   record('roles',result);
+ }
+ if(phase==='ws-matrix'){
+  const r=spawnSync('docker.exe',['exec','-i','-e','VEMS_AUDIT_PROJECT=vems-audit-147','vems-audit-147-vtiger-1','php'],{input:readFileSync('scripts/windows/vtiger-audit-ws-matrix.php'),encoding:'utf8'});
+  if(r.status) throw new Error('Audit webservice matrix failed');
+  let accounts;try{accounts=JSON.parse(r.stdout.slice(r.stdout.indexOf('[')));}catch{throw new Error('Audit webservice matrix returned invalid JSON; raw output suppressed');}
+  const canonical=await api('GET','/api/vehicles/AMB-147');
+  record('ws-matrix',{timestamp:new Date().toISOString(),canonicalStatus:canonical.operational_status,accounts});
  }
  if(phase==='describe'){
   const modules=JSON.parse(readFileSync('infra/services/vtiger/development/modules.json','utf8'));

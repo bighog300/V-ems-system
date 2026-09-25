@@ -1,0 +1,378 @@
+{
+  "timestamp": "2026-09-25T12:24:55.572Z",
+  "canonicalStatus": "Available",
+  "accounts": [
+    {
+      "identity": "administrator",
+      "role": "CEO",
+      "login": "PASS",
+      "reads": {
+        "HelpDesk": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSAssignments": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSVehicles": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSPersonnel": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSAssignmentCrew": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSStockItems": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSVehicleStock": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSStockUsage": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        }
+      },
+      "writes": {
+        "vehicle_status_update": {
+          "result": "DENIED:ACCESS_DENIED:V-EMS mirrored fields require the authenticated mirror write operation",
+          "mirrorBefore": "Available",
+          "mirrorAfter": "Available"
+        }
+      }
+    },
+    {
+      "identity": "integration",
+      "role": "CEO",
+      "login": "PASS",
+      "reads": {
+        "HelpDesk": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSAssignments": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSVehicles": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSPersonnel": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSAssignmentCrew": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSStockItems": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSVehicleStock": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        },
+        "VEMSStockUsage": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": true,
+          "createable": true
+        }
+      },
+      "writes": {
+        "vehicle_status_update": {
+          "result": "DENIED:ACCESS_DENIED:V-EMS mirrored fields require the authenticated mirror write operation",
+          "mirrorBefore": "Available",
+          "mirrorAfter": "Available"
+        }
+      }
+    },
+    {
+      "identity": "dispatcher",
+      "role": "V-EMS Dispatcher (audit)",
+      "login": "PASS",
+      "reads": {
+        "HelpDesk": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignments": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicles": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSPersonnel": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignmentCrew": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockItems": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicleStock": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockUsage": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        }
+      },
+      "writes": {
+        "vehicle_status_update": {
+          "result": "DENIED:ACCESS_DENIED:Permission to read given object is denied",
+          "mirrorBefore": "Available",
+          "mirrorAfter": "Available"
+        }
+      }
+    },
+    {
+      "identity": "fleetmanager",
+      "role": "V-EMS FleetManager (audit)",
+      "login": "PASS",
+      "reads": {
+        "HelpDesk": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignments": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicles": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSPersonnel": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignmentCrew": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockItems": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicleStock": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockUsage": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        }
+      },
+      "writes": {
+        "vehicle_status_update": {
+          "result": "DENIED:ACCESS_DENIED:Permission to read given object is denied",
+          "mirrorBefore": "Available",
+          "mirrorAfter": "Available"
+        }
+      }
+    },
+    {
+      "identity": "stockmanager",
+      "role": "V-EMS StockManager (audit)",
+      "login": "PASS",
+      "reads": {
+        "HelpDesk": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignments": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicles": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSPersonnel": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignmentCrew": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockItems": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicleStock": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockUsage": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        }
+      },
+      "writes": {
+        "vehicle_status_update": {
+          "result": "DENIED:ACCESS_DENIED:Permission to read given object is denied",
+          "mirrorBefore": "Available",
+          "mirrorAfter": "Available"
+        }
+      }
+    },
+    {
+      "identity": "supervisor",
+      "role": "V-EMS Supervisor (audit)",
+      "login": "PASS",
+      "reads": {
+        "HelpDesk": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignments": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicles": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSPersonnel": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSAssignmentCrew": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockItems": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSVehicleStock": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        },
+        "VEMSStockUsage": {
+          "describe": "ALLOWED",
+          "query": "ALLOWED(rows=1)",
+          "updateable": false,
+          "createable": false
+        }
+      },
+      "writes": {
+        "vehicle_status_update": {
+          "result": "DENIED:ACCESS_DENIED:Permission to read given object is denied",
+          "mirrorBefore": "Available",
+          "mirrorAfter": "Available"
+        }
+      }
+    }
+  ]
+}

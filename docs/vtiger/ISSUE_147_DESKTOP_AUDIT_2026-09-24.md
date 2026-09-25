@@ -471,3 +471,36 @@ This is real progress against the #147/#148 acceptance gate, not closure of it.
 Both issues remain open pending #151's role/list design and a broader UI
 walkthrough. Only the audit-owned services were used; `vems-dev` and its data
 were not started, stopped, or changed by this continuation.
+
+## Evidence-gathering continuation (25 September 2026)
+
+Started from SHA `5f80ab976084697e21ea6495c51fc44194440435` with a clean working tree.
+The audit runner's Start, Inspect and Validate actions all exited 0 (isolation verified,
+service validation passed). `vems-dev` containers were stopped before this session and
+were not started, reset or modified; all audit volumes are retained.
+
+**Webservice matrix (new, PASS).** `node scripts/windows/vtiger-audit-live.mjs ws-matrix`
+runs [vtiger-audit-ws-matrix.php](../../scripts/windows/vtiger-audit-ws-matrix.php) inside the audit
+Vtiger container (access keys read in-process, never emitted) and records
+[ws-matrix.json](evidence/issue-147/ws-matrix.json). Results, all six accounts:
+
+| Account | Login | describe + query, 8 modules | Vehicle mirrored-status update | Mirror after / canonical |
+| --- | --- | --- | --- | --- |
+| Administrator | PASS | ALLOWED 8/8 | DENIED (#148 mirror guard) | Available / Available |
+| Integration user | PASS | ALLOWED 8/8 | DENIED (#148 mirror guard) | Available / Available |
+| Dispatcher | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+| Fleet Manager | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+| Stock Manager | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+| Supervisor | PASS | ALLOWED 8/8 (updateable=false) | DENIED | Available / Available |
+
+This supersedes the historical "vehicle update ACCEPTED" integration-user result above:
+the divergence no longer reproduces. Finding: the four manager accounts are denied with
+the misleading message "Permission to read given object is denied" on an update; the
+denial is correct but the message is a webservice permission-layer wording defect (#151).
+
+**Browser walkthrough: NOT RUN in this session.** The built-in browser reached
+`http://127.0.0.1:18080` (login page shown, title "vtiger") but every role requires a
+password sign-in, which the assistant may not perform. The earlier
+[browser-ui-2026-09-24.json](evidence/issue-147/browser-ui-2026-09-24.json) evidence stands;
+its gaps (six-module walkthrough, related-list navigation, edit-control matrix for every
+role, saved screenshots) remain open. #147 is **not** closed.
