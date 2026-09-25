@@ -74,3 +74,27 @@ The Node tests (36) pass.
 - **Cleanup is now database-only.** A synthetic mirrored record can no longer be removed through Vtiger; this run left
   the disposable vehicle `AMB-359214570` (remote ID `37x34`) on the audit stack.
 - Applies to `vems-dev` on its next provisioning run (not touched).
+
+## Real-browser re-test after the fix (25 September 2026)
+
+Repeated in the real Vtiger UI as the Integration user (confirmed from the page's `_USERMETA.userlabel`) on the
+audit stack running the merged guard. State was read from Vtiger and canonical V-EMS before and after
+([before](evidence/issue-148-followup/ui-create-state-retest-before.json),
+[after](evidence/issue-148-followup/ui-create-state-retest-after.json)). Screenshots:
+[guard-retest-2026-09-25/](evidence/issue-147/screenshots/guard-retest-2026-09-25/).
+
+| Test | Action in the real UI | Before the fix | After the fix |
+| --- | --- | --- | --- |
+| 1. Blank create | Add Record, every mirror field blank, Save | **Created** an orphan record | **DENIED**: `V-EMS mirrored fields require the authenticated mirror write operation` (raw JSON page) |
+| 2. Delete | More > Delete Vehicle > Yes on the disposable vehicle `AMB-359214570` | **Deleted** | **DENIED**: the page stays on the vehicle and Vtiger shows an empty error dialog with only "OK"; the record is intact |
+| 3. Duplicate | More > Duplicate (form pre-filled with every mirrored value) > Save | Not tested | **DENIED** (same guard error) |
+
+Vtiger vehicles 12 before and after; canonical V-EMS 12 before and after; no blank-key record. The three previously
+untested or failing UI paths are now closed.
+
+Observations (not fixed here): the delete refusal shows an **empty** error dialog (the guard's message is not
+displayed), and the create and duplicate refusals show a raw JSON page. Both are cosmetic; the write is refused.
+The Add Record, Delete and Duplicate buttons are still offered to this role, by design (see above).
+
+Gate update: UI create by the Integration user **PASS (denied)**, delete by the Integration user **PASS (denied)**,
+Duplicate **PASS (denied)**.
