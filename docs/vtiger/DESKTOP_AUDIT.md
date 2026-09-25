@@ -56,6 +56,7 @@ Once start succeeds, the guarded evidence helper can run:
 ```powershell
 node scripts/windows/vtiger-audit-live.mjs roles
 node scripts/windows/vtiger-ui-check.mjs <label>   # five-account List/Detail/Import gate over Vtiger's real login
+node scripts/windows/vtiger-audit-live.mjs guard-create-delete   # worker create ok; ordinary creates and all deletes denied (leaves one disposable synthetic vehicle)
 node scripts/windows/vtiger-audit-live.mjs describe
 node scripts/windows/vtiger-audit-live.mjs seed
 node scripts/windows/vtiger-audit-live.mjs snapshot

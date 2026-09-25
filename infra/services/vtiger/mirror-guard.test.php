@@ -3,7 +3,7 @@
 abstract class VTEventHandler { abstract public function handleEvent($name, $data); }
 class GuardDatabase {
     public $acquired = '1';
-    public $registered = '2';
+    public $registered = '3';
     public $queued = '0';
     public $calls = [];
     public function pquery($sql, $params) { $this->calls[] = [$sql, $params]; return true; }
@@ -79,7 +79,7 @@ vemsInstallMirrorGuard($adb, $pristineHash);
 vemsInstallMirrorGuard($adb, $pristineHash);
 if (file_get_contents('data/CRMEntity.php') !== $pristine) throw new RuntimeException('Installer modified core source');
 $expected = [];
-foreach ([1, 2] as $run) foreach (['vtiger.entity.beforesave.final', 'vtiger.entity.aftersave'] as $event) {
+foreach ([1, 2] as $run) foreach (['vtiger.entity.beforesave.final', 'vtiger.entity.aftersave', 'vtiger.entity.beforedelete'] as $event) {
     $expected[] = ['VEMSVehicles', $event, 'VemsMirrorGuardHandler', 'modules/VEMSVehicles/handlers/VemsMirrorGuard.php'];
 }
 if (Vtiger_Event::$registered !== $expected) throw new RuntimeException('Handler not registered for the save events');
@@ -87,9 +87,9 @@ if (VTEventsManager::$active !== ['VemsMirrorGuardHandler', 'VemsMirrorGuardHand
 if (array_keys(Vtiger_Module::$disabled) !== array_keys(VemsMirrorGuard::registry()) || array_unique(Vtiger_Module::$disabled) !== ['HelpDesk' => 'Import']) throw new RuntimeException('Import not disabled for every mirrored module');
 if (Vtiger_Access::$synced !== 2) throw new RuntimeException('Cached user privileges not regenerated');
 if (!str_contains(file_get_contents('modules/VEMSVehicles/handlers/VemsMirrorGuard.php'), '/opt/vems/MirrorGuardHandler.php')) throw new RuntimeException('Handler wrapper missing');
-$adb->registered = '1';
-expectFailure(fn() => vemsInstallMirrorGuard($adb, $pristineHash), 'registration was not confirmed');
 $adb->registered = '2';
+expectFailure(fn() => vemsInstallMirrorGuard($adb, $pristineHash), 'registration was not confirmed');
+$adb->registered = '3';
 // Module-level Import override for every registry module; it denies every user and mode.
 foreach (array_keys(VemsMirrorGuard::registry()) as $module) {
     $view = "modules/$module/views/Import.php";
@@ -209,4 +209,36 @@ denied(fn() => VemsMirrorGuard::write('VEMSVehicles', [], 'delete', str_repeat('
 CRMEntity::$bulk = true;
 denied(fn() => VemsMirrorGuard::write('VEMSVehicles', [], 'create', str_repeat('k',40), (object)['id' => 2, 'user_name' => 'worker']));
 CRMEntity::$bulk = false;
-echo "Mirror guard: $checks fields, event registration/ordering, core patch removal, Import view override, lock release, create/change/clear denial and authentication checks passed\n";
+// #148 follow-up: a create is denied for every mirrored module unless the worker's permit covers it,
+// even when every mirror-owned field is blank (the Integration user's Add Record path).
+$permit->setValue(null, null);
+foreach (array_keys(VemsMirrorGuard::registry()) as $module) {
+    denied(fn() => VemsMirrorGuard::assertSave((object)['id' => null, 'column_fields' => []], $module));
+    denied(fn() => VemsMirrorGuard::assertSave((object)['column_fields' => ['assigned_user_id' => '5']], $module));
+    $checks++;
+}
+// A creating permit is honoured once, only for its module, and only for a create.
+$permit->setValue(null, ['VEMSVehicles', null]);
+VemsMirrorGuard::assertSave((object)['id' => null, 'column_fields' => ['vems_vehicle_id' => 'AMB-1']], 'VEMSVehicles');
+denied(fn() => VemsMirrorGuard::assertSave((object)['id' => null, 'column_fields' => []], 'VEMSVehicles'));
+$permit->setValue(null, ['VEMSVehicles', null]);
+denied(fn() => VemsMirrorGuard::assertSave((object)['id' => null, 'column_fields' => []], 'VEMSPersonnel'));
+$permit->setValue(null, ['VEMSVehicles', null]);
+denied(fn() => VemsMirrorGuard::assertSave((object)['id' => '123', 'column_fields' => ['vems_operational_status' => 'Out of Service']], 'VEMSVehicles'));
+$permit->setValue(null, null);
+// Unmirrored modules keep creating normally.
+VemsMirrorGuard::assertSave((object)['id' => null, 'column_fields' => ['accountname' => 'Ordinary']], 'Accounts');
+// Deletes: denied for every mirrored module, including through the vtlib event; other modules unaffected.
+foreach (array_keys(VemsMirrorGuard::registry()) as $module) {
+    denied(fn() => VemsMirrorGuard::beforeDelete((object)['id' => '123'], $module));
+    $deleteEvent = new class((object)['id' => '123'], $module) { public $focus; private $module; public function __construct($focus, $module) { $this->focus = $focus; $this->module = $module; } public function getModuleName() { return $this->module; } };
+    denied(fn() => $handler->handleEvent('vtiger.entity.beforedelete', $deleteEvent));
+    $checks++;
+}
+VemsMirrorGuard::beforeDelete((object)['id' => '55'], 'Accounts');
+// The worker cannot be used to delete either (the operation only accepts create and update).
+denied(fn() => VemsMirrorGuard::write('VEMSVehicles', ['id' => '37x1'], 'delete', str_repeat('k', 40), (object)['id' => 2, 'user_name' => 'worker']));
+$adb->calls = [];
+$handler->handleEvent('vtiger.entity.afterdelete', $event((object)['id' => '123', 'column_fields' => []]));
+if ($adb->calls) throw new RuntimeException('Handler acted on an unregistered delete event');
+echo "Mirror guard: $checks fields, event registration/ordering, core patch removal, Import view override, lock release, create/change/clear denial, blank-create denial, delete denial and authentication checks passed\n";

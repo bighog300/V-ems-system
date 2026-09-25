@@ -5,7 +5,7 @@ import { main as guard } from './vtiger-audit.mjs';
 import { parseEnvText } from './development-bootstrap.mjs';
 import { createVtigerWebserviceClient } from '../../services/orchestration/src/adapters/vtiger/client.mjs';
 const phase=process.argv[2];
-if (!['describe','seed','snapshot','denied-write','outage-update','recovery','relationships','replay','roles','ws-matrix'].includes(phase)) throw new Error('Unsupported audit phase');
+if (!['describe','seed','snapshot','denied-write','outage-update','recovery','relationships','replay','roles','ws-matrix','guard-create-delete'].includes(phase)) throw new Error('Unsupported audit phase');
 await guard('inspect');
 const root=resolve(process.env.LOCALAPPDATA,'VEMS-Audit/issue-147');
 const stateFile=resolve(root,'test-state.json');
@@ -25,6 +25,35 @@ function sql(query){
  const r=spawnSync('docker.exe',['exec','vems-audit-147-api-1','node','--input-type=module','-e',source],{encoding:'utf8'});if(r.status)throw new Error('Read-only audit evidence query failed');return JSON.parse(r.stdout);
 }
 try {
+ if(phase==='guard-create-delete'){
+  // Worker create still works; ordinary creates and every delete are denied. Uses a disposable synthetic vehicle.
+  const vehicleId='AMB-'+String(Date.now()).slice(-9);
+  const count=async()=>(await vtiger.query('SELECT id FROM VEMSVehicles;')).length;
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const before=await count();
+  await api('POST','/api/vehicles',{vehicle_id:vehicleId,callsign:'Guard test unit',vehicle_type:'ALS Ambulance',home_station:'Synthetic Audit Station',operational_status:'Available',service_status:'Serviceable'},'guard-'+vehicleId);
+  await wait(15000);
+  const created=(await vtiger.query("SELECT id,vems_callsign FROM VEMSVehicles WHERE vems_vehicle_id='"+vehicleId+"';"))[0];
+  const afterWorkerCreate=await count();
+  const attempt=async(element)=>{try{const r=await vtiger.create(element,'VEMSVehicles');return {outcome:'CREATED',id:r.id};}catch(e){return {outcome:'DENIED',code:e.code??e.name};}};
+  const blankCreate=await attempt({assigned_user_id:'19x5'});
+  const valuedCreate=await attempt({vems_vehicle_id:'AMB-GUARD-BYPASS',vems_external_key:'vems:vehicle:AMB-GUARD-BYPASS',vems_callsign:'bypass',vems_operational_status:'Available',vems_service_status:'Serviceable',vems_vehicle_type:'ALS Ambulance',assigned_user_id:'19x5'});
+  const afterOrdinaryCreates=await count();
+  let deletes={error:'no worker-created record to target'};
+  if(created){
+   const r=spawnSync('docker.exe',['exec','-i','-e','VEMS_AUDIT_PROJECT=vems-audit-147','-e','VEMS_GUARD_TARGET='+created.id,'vems-audit-147-vtiger-1','php'],{input:readFileSync('scripts/windows/vtiger-audit-guard-delete.php'),encoding:'utf8'});
+   if(r.status) throw new Error('Guard delete probe failed');
+   try{deletes=JSON.parse(r.stdout.trim().split(String.fromCharCode(10)).pop());}catch{throw new Error('Guard delete probe returned invalid JSON; raw output suppressed');}
+  }
+  const afterDeletes=await count();
+  await api('PATCH','/api/vehicles/'+vehicleId,{callsign:'Guard test unit updated'});
+  await wait(12000);
+  const updated=(await vtiger.query("SELECT id,vems_callsign FROM VEMSVehicles WHERE vems_vehicle_id='"+vehicleId+"';"))[0];
+  record('guard-create-delete',{timestamp:new Date().toISOString(),disposableVehicle:vehicleId,counts:{before,afterWorkerCreate,afterOrdinaryCreates,afterDeletes},
+   workerCreate:{mirrored:!!created,remoteId:created?.id,callsign:created?.vems_callsign},
+   ordinaryBlankCreate:blankCreate,ordinaryValuedCreate:valuedCreate,deleteAttempts:deletes,
+   workerUpdateAfterAll:{callsign:updated?.vems_callsign,sameRemoteId:updated?.id===created?.id}});
+ }
  if(phase==='roles'){
   const r=spawnSync('docker.exe',['exec','-i','-e','VEMS_AUDIT_PROJECT=vems-audit-147','vems-audit-147-vtiger-1','php'],{input:readFileSync('scripts/windows/vtiger-audit-roles.php'),encoding:'utf8'});
   if(r.status) throw new Error('Audit role inventory failed');

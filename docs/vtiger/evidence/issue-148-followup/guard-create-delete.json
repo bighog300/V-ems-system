@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-09-25T18:00:42.768Z",
+  "disposableVehicle": "AMB-359214570",
+  "counts": {
+    "before": 11,
+    "afterWorkerCreate": 12,
+    "afterOrdinaryCreates": 12,
+    "afterDeletes": 12
+  },
+  "workerCreate": {
+    "mirrored": true,
+    "remoteId": "37x34",
+    "callsign": "Guard test unit"
+  },
+  "ordinaryBlankCreate": {
+    "outcome": "DENIED",
+    "code": "VTIGER_PERMISSION_DENIED"
+  },
+  "ordinaryValuedCreate": {
+    "outcome": "DENIED",
+    "code": "VTIGER_PERMISSION_DENIED"
+  },
+  "deleteAttempts": {
+    "integration": {
+      "outcome": "DENIED",
+      "code": "ACCESS_DENIED",
+      "message": "V-EMS mirrored fields require the authenticated mirror write operation (mirrored records cannot be deleted)"
+    },
+    "administrator": {
+      "outcome": "DENIED",
+      "code": "ACCESS_DENIED",
+      "message": "V-EMS mirrored fields require the authenticated mirror write operation (mirrored records cannot be deleted)"
+    },
+    "recordStillPresentAndNotDeleted": true
+  },
+  "workerUpdateAfterAll": {
+    "callsign": "Guard test unit updated",
+    "sameRemoteId": true
+  }
+}
