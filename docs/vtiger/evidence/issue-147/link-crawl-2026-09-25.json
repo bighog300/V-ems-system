@@ -1,0 +1,382 @@
+{
+  "label": "2026-09-25",
+  "timestamp": "2026-09-25T18:28:27.555Z",
+  "maxPagesPerRole": 250,
+  "roles": {
+    "Dispatcher": {
+      "signIn": "PASS",
+      "pagesVisited": 199,
+      "uniquePagesSeen": 199,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 196,
+        "PHP_ERROR": 2,
+        "DENIED": 1
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES",
+          "kind": "PHP_ERROR",
+          "detail": "Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        },
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS",
+          "kind": "PHP_ERROR",
+          "detail": "Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "offeredButDenied": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=RecycleBin&view=List&app=TOOLS",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Fleet Manager": {
+      "signIn": "PASS",
+      "pagesVisited": 199,
+      "uniquePagesSeen": 199,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 196,
+        "PHP_ERROR": 2,
+        "DENIED": 1
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES",
+          "kind": "PHP_ERROR",
+          "detail": "Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        },
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS",
+          "kind": "PHP_ERROR",
+          "detail": "Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "offeredButDenied": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=RecycleBin&view=List&app=TOOLS",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Stock Manager": {
+      "signIn": "PASS",
+      "pagesVisited": 199,
+      "uniquePagesSeen": 199,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 196,
+        "PHP_ERROR": 2,
+        "DENIED": 1
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES",
+          "kind": "PHP_ERROR",
+          "detail": "Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        },
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS",
+          "kind": "PHP_ERROR",
+          "detail": "Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "offeredButDenied": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=RecycleBin&view=List&app=TOOLS",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Supervisor": {
+      "signIn": "PASS",
+      "pagesVisited": 199,
+      "uniquePagesSeen": 199,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 196,
+        "PHP_ERROR": 2,
+        "DENIED": 1
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES",
+          "kind": "PHP_ERROR",
+          "detail": "Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        },
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS",
+          "kind": "PHP_ERROR",
+          "detail": "Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "offeredButDenied": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=RecycleBin&view=List&app=TOOLS",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Integration user": {
+      "signIn": "PASS",
+      "pagesVisited": 226,
+      "uniquePagesSeen": 226,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 224,
+        "PHP_ERROR": 2
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS",
+          "kind": "PHP_ERROR",
+          "detail": "Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        },
+        {
+          "url": "http://127.0.0.1:18080/index.php?module=RecycleBin&view=List&app=TOOLS",
+          "kind": "PHP_ERROR",
+          "detail": "Warning: Undefined variable $links | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null",
+          "from": "http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+        }
+      ],
+      "offeredButDenied": [],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSAssignments": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSVehicles": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSPersonnel": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSStockItems": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSVehicleStock": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSStockUsage": {
+          "edit": "FORM",
+          "create": "FORM"
+        }
+      },
+      "expectedToHaveEditControl": true
+    }
+  },
+  "defects": [
+    "Dispatcher: PHP_ERROR http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES (Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Dispatcher: PHP_ERROR http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS (Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Fleet Manager: PHP_ERROR http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES (Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Fleet Manager: PHP_ERROR http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS (Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Stock Manager: PHP_ERROR http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES (Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Stock Manager: PHP_ERROR http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS (Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Supervisor: PHP_ERROR http://127.0.0.1:18080/index.php?module=SMSNotifier&view=List&app=SALES (Deprecated: str_replace(): Passing null to parameter #3 ($subject) of type array|string is deprecated | Deprecated: stripos(): Passing null to parameter #1 ($haystack) of type string is deprecated) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Supervisor: PHP_ERROR http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS (Warning: Undefined variable $basicLinks | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Integration user: PHP_ERROR http://127.0.0.1:18080/index.php?module=EmailTemplates&view=List&app=TOOLS (Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List",
+    "Integration user: PHP_ERROR http://127.0.0.1:18080/index.php?module=RecycleBin&view=List&app=TOOLS (Warning: Undefined variable $links | Warning: Undefined array key \"CUSTOM_VIEWS\" | Warning: Attempt to read property \"value\" on null) from http://127.0.0.1:18080/index.php?module=HelpDesk&view=List"
+  ],
+  "offeredButDeniedTotal": 4,
+  "result": "FAIL",
+  "summary": {
+    "Dispatcher": {
+      "pagesVisited": 199,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 2,
+      "offeredButDenied": 1
+    },
+    "Fleet Manager": {
+      "pagesVisited": 199,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 2,
+      "offeredButDenied": 1
+    },
+    "Stock Manager": {
+      "pagesVisited": 199,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 2,
+      "offeredButDenied": 1
+    },
+    "Supervisor": {
+      "pagesVisited": 199,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 2,
+      "offeredButDenied": 1
+    },
+    "Integration user": {
+      "pagesVisited": 226,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 2,
+      "offeredButDenied": 0
+    }
+  }
+}
