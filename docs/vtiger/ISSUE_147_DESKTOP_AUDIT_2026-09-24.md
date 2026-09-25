@@ -731,3 +731,68 @@ canonical V-EMS counts were unchanged (12 and 12). Details and screenshots:
 | Automatic recovery after dead-lettering | FAIL | Earlier finding, unchanged |
 
 #147 stays **open**: two NOT RUN items and the dead-letter recovery FAIL remain.
+
+## Dead-link crawl and per-role edit forms (25 September 2026)
+
+Closes the two remaining NOT RUN gate items that could be done without a browser. `node scripts/windows/vtiger-link-crawl.mjs`
+signs in through Vtiger's real web login as each of the five accounts (`audit.env` is read inside the process, nothing
+secret is printed) and follows every read-only link reachable from the dashboard and the eight modules with plain GET
+requests, then opens each module's Edit and Create form (GET only, nothing saved). Result:
+[link-crawl-2026-09-25.json](evidence/issue-147/link-crawl-2026-09-25.json).
+
+**Safety.** Only same-origin `index.php` pages with a `view=` parameter are followed. Anything with `action=`, and the
+Logout, Delete, Export, Import, Print, Popup, mass-action, Users and Settings areas, is never requested (unit tested).
+The eight modules are followed three levels deep; every other app in the menu is checked only for its list page.
+
+**Coverage.** The queue was empty at the end for every role (nothing left unvisited): 199 pages for each of the four
+manager roles and 226 for the Integration user, about 1,000 in all.
+
+### Dead links
+
+| Defect class | Count |
+| --- | --- |
+| HTTP error, missing record, empty page or lost session | **0** across all five roles |
+| PHP errors in the eight audited modules or the dashboard | **0** |
+| PHP errors on stock Vtiger pages outside the audited modules | **4 pages** (below) |
+| Links offered to a role but answered "Permission denied" | **1** for each of the four manager roles (Recycle Bin), 0 for the Integration user |
+
+The four pages, each reached from the menu:
+
+| Page | Roles | Error |
+| --- | --- | --- |
+| SMS Notifier list | four managers | PHP 8 deprecations (`str_replace()` and `stripos()` given null) |
+| Email Templates list | all five | `Undefined array key "CUSTOM_VIEWS"`, `Attempt to read property "value" on null` (managers also `Undefined variable $basicLinks`) |
+| Recycle Bin list | Integration user only | `Undefined variable $links`, `Undefined array key "CUSTOM_VIEWS"` |
+
+These are stock Vtiger modules that the audit roles are shown because the manager profiles were built with global
+view-all (a #147 audit shortcut); they are not V-EMS modules and none was touched by the earlier fixes. They are
+recorded as **FAIL findings for #151** (menu and role scoping): the roles should not be offered them, and the Recycle
+Bin link is a menu entry that leads to a denial page for the four managers.
+
+### Edit and Create forms (GET only), per role and module
+
+| Role | Edit form, 8 modules | Create form, 8 modules |
+| --- | --- | --- |
+| Dispatcher, Fleet Manager, Stock Manager, Supervisor | **Denied on all 8** (no form offered) | **Denied on all 8** |
+| Integration user | **Form rendered on all 8** | **Form rendered on all 8** |
+
+This matches the design: only the Integration service account is given a form, and the mirror guard refuses every save it
+could make. The forms were **not submitted** on any module other than VEMSVehicles (browser tests, earlier); saves on
+every module are covered by the guard's unit tests (131 checks across every mirror-owned field of all eight modules)
+and, live, by the webservice matrix and the create/delete phase.
+
+### Gate status update
+
+| Gate item | Status | Basis |
+| --- | --- | --- |
+| Exhaustive dead-link crawl | **PASS** for the eight modules and the dashboard (0 dead links); **FAIL** findings outside them | Crawl above |
+| Edit form opened on every module for every role | **PASS** at HTTP level (managers denied 16/16, Integration user form 16/16) | Crawl above; no saves attempted beyond VEMSVehicles |
+| PHP errors rendered on any page | **FAIL** for 4 stock pages (unchanged for the eight audited modules, which are clean) | Crawl above |
+| Broken or dead navigation link | **FAIL**: Recycle Bin entry leads to a denial page for the four managers | Crawl above |
+| Automatic recovery after dead-lettering | FAIL | Earlier finding, unchanged |
+
+Limits: the crawl follows plain links and list-row URLs only; JavaScript-only actions, pop-ups and the Settings and
+Users areas are out of scope, and other apps are checked one level deep. It is HTTP-level, so it proves what the server
+returns, not how a page looks.
+
+#147 stays **open** for the FAIL findings above and the dead-letter recovery.
