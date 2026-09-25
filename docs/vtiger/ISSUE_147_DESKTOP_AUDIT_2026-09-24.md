@@ -590,3 +590,71 @@ value) and the unchanged detail page after the save have screenshots.
 `node --test scripts/windows/vtiger-audit.test.mjs`: 20 passed. `vtiger-audit.ps1 -Action Validate`: exit 0,
 "Non-mutating adapter validation passed." #147 is **not** closed: related-list navigation, list columns,
 reference typing and PHP warnings still FAIL, and the per-module edit-form matrix was not run.
+
+## Final real-browser run after the fixes (25 September 2026, evening)
+
+Run on `main` at `981dd00`, after the list-column and warning fixes (#163), native references (#164) and related
+lists (#165). The audit stack was already running and was not stopped; `vems-dev-*` stayed exited and all 13 named
+volumes are retained. Each account was signed in by a human typing the password in the browser pane, and
+identity was confirmed from the page's `_USERMETA.userlabel`. Row-level results:
+[ui-final-results-2026-09-25.md](evidence/issue-147/ui-final-results-2026-09-25.md) (also `.csv`). Screenshots:
+[screenshots/final-2026-09-25/](evidence/issue-147/screenshots/final-2026-09-25/) (34 full-resolution crops of the pane).
+
+**What was checked.** The Dispatcher followed the whole relationship chain by real clicks with a screenshot at
+every hop: incident -> Assignments tab -> assignment -> vehicle -> Vehicle Stock tab -> stock line -> stock item,
+and assignment -> Assignment Crew tab -> crew record -> person, plus a List view for each of the seven VEMS modules.
+Fleet Manager, Stock Manager and Supervisor each re-checked representative pages; Fleet Manager re-captured the five
+Import denials removed earlier. The Integration user repeated the edit-form write test with a real screenshot at
+every step. The automated gate (`vtiger-ui-check`) passed again at the end
+([ui-check-final-run-2026-09-25.json](evidence/issue-147/ui-check-final-run-2026-09-25.json)).
+
+**Synthetic write test (Integration user, VEMSVehicles AMB-147).** In the real edit form Operational Status was
+changed from `Available` to `Out of Service` and Save was clicked. Vtiger returned the #148 denial
+(`V-EMS mirrored fields require the authenticated mirror write operation`, shown as a raw JSON page), and the record
+was unchanged on reload.
+
+| State | Canonical V-EMS | Vtiger mirror (37x4) |
+| --- | --- | --- |
+| Before, 16:44:23Z ([ui-write-before-final.json](evidence/issue-147/ui-write-before-final.json)) | Available | Available |
+| After, 16:45:11Z ([ui-write-after-final.json](evidence/issue-147/ui-write-after-final.json)) | Available | Available |
+
+### The four FAIL findings, re-checked in a real browser
+
+| Finding | Before | Now |
+| --- | --- | --- |
+| Blank list columns | Blank rows, no headers on all 7 VEMS lists | PASS: headers and populated cells on all 7 (screenshots `dispatcher_12` to `18`) |
+| Plain-text reference fields | `17x7`, `37x4` as text | PASS: Incident, Vehicle, Assignment, Personnel and Stock Item references are blue links (`dispatcher_04`, `07`, `10`) |
+| No related lists | Chain could not be followed | PASS: chain followed by real clicks (`dispatcher_01` to `11`) |
+| PHP warnings rendered | `DETAILVIEWBASIC` on every Detail page, three warnings on HelpDesk | PASS: none on any page visited, including the read-only roles (`supervisor_02`) |
+
+### Acceptance-gate status
+
+| Gate item | Status | Basis |
+| --- | --- | --- |
+| Five-role sign-in | PASS | Each account signed in and identity confirmed |
+| Import denied, 5 roles x 8 modules | PASS | 40 screenshots in the repo (earlier set plus this run's replacements) |
+| Relationship chain followed by clicking | PASS for Dispatcher (12 screenshots); other roles by the automated gate (12/12 hops) and spot checks, not clicked through | Screenshots + gate JSON |
+| Integration user UI write blocked; mirror equals canonical | PASS | Form, denied result and unchanged record screenshots plus before/after state |
+| Four FAIL findings fixed | PASS | Table above |
+| Managers offered no edit control | PASS | No Edit button in the Dispatcher and Fleet Manager pages; gate checks all 32 role/module pairs |
+| Edit form opened for every module for every role | NOT RUN | Only VEMSVehicles for the Integration user |
+| UI create attempt by the Integration user | NOT RUN | The VEMSVehicles page shows an "Add Record" button for this role; a create through it was not attempted, so it is not known whether the #148 guard refuses it |
+| Exhaustive dead-link crawl | NOT RUN | No dead link seen in the menu or visited pages |
+| Automatic recovery after dead-lettering | FAIL | Earlier finding, unchanged and unrelated to this run |
+
+### Notes and remaining findings (not fixed here)
+
+- Two screenshots (`stock-manager_01`, `supervisor_01`) were removed because they also showed the desktop; both pages
+  were checked in the browser and are recorded in the results table as page checks without an image.
+- The five Fleet Manager Import screenshots removed by the credentials incident (see the earlier section) are
+  re-captured in this run.
+- UX: related tabs render as two-letter badges (`As`, `Ve`) with a tooltip; the left menu shows initials (two `AS`
+  icons for Assignments and Assignment Crew); related-list panels show only External Key and Assigned To;
+  Operational Status is a free-text box; the denied save shows a raw JSON page; the header logo image is broken.
+- The first attempt at this run was blocked because a credentials file was open on screen and overlapped the capture
+  area. The capture script now refuses to run while a window with a credentials-like title exists.
+- Earlier screenshots were captured at 80% of the display because of 125% scaling; this run captures the full
+  1920x1080 screen and crops to the pane.
+
+#147 is **not** closed by this run. Three items above remain NOT RUN, and two of them (per-module edit forms and a UI
+create attempt) bear directly on the write-authority question.
