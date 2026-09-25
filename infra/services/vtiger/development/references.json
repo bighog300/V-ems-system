@@ -1,0 +1,6 @@
+{
+  "VEMSAssignments": { "incident_ref": "HelpDesk", "vehicle_ref": "VEMSVehicles" },
+  "VEMSAssignmentCrew": { "assignment_ref": "VEMSAssignments", "personnel_ref": "VEMSPersonnel" },
+  "VEMSVehicleStock": { "vehicle_ref": "VEMSVehicles", "stock_item_ref": "VEMSStockItems" },
+  "VEMSStockUsage": { "stock_item_ref": "VEMSStockItems" }
+}

@@ -114,6 +114,40 @@ function vemsEnsureDetailActionsTemplate(string $module): void
     chmod($target, 0644);
 }
 
+// Turn a text "<wsid>x<crmid>" field (e.g. 37x4) into a native Vtiger reference (uitype 10, INT(19), linked to a
+// target module) so it renders as a link. Vtiger's webservice keeps accepting and returning the same
+// "37x4" strings for reference fields (verified, docs/vtiger/evidence/issue-150/reference-spike.json), so the
+// worker contract is unchanged; only storage changes from the whole string to the numeric record ID.
+// Idempotent and fail-safe: nothing is altered unless every existing value is convertible and points at the
+// declared target module, so a re-run after a partial failure converges and bad data aborts untouched.
+function vemsEnsureReferenceField($adb, string $moduleName, string $fieldName, string $relatedName): void
+{
+    $module = Vtiger_Module::getInstance($moduleName);
+    $related = Vtiger_Module::getInstance($relatedName);
+    $field = $module ? Vtiger_Field::getInstance($fieldName, $module) : null;
+    if (!$module || !$related || !$field) { throw new RuntimeException("Reference $moduleName.$fieldName or target $relatedName is missing"); }
+    $linked = $adb->num_rows($adb->pquery('SELECT 1 FROM vtiger_fieldmodulerel WHERE fieldid=? AND relmodule=?', [$field->id, $relatedName])) > 0;
+    if ((int)$field->uitype === 10 && $linked) { return; }
+    $table = str_replace('`', '', $field->table);
+    $column = str_replace('`', '', $field->column);
+    $info = $adb->pquery('SELECT DATA_TYPE FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?', [$table, $column]);
+    if (!$adb->num_rows($info)) { throw new RuntimeException("Column for $moduleName.$fieldName not found"); }
+    if (strtolower($adb->query_result($info, 0, 'data_type')) !== 'int') {
+        $wsResult = $adb->pquery('SELECT id FROM vtiger_ws_entity WHERE name=?', [$relatedName]);
+        if (!$adb->num_rows($wsResult)) { throw new RuntimeException("Webservice entity for $relatedName not found"); }
+        $wsId = (string)$adb->query_result($wsResult, 0, 'id');
+        // Accept "<wsid>x<crmid>" or an already-numeric ID (a re-run after a partial failure). No '?' in the
+        // pattern: PearDatabase would count it as a query placeholder.
+        $bad = $adb->pquery("SELECT COUNT(*) AS n FROM `$table` WHERE `$column` IS NOT NULL AND `$column` <> '' AND (`$column` NOT REGEXP '^[0-9]+x[0-9]+$|^[0-9]+$' OR (`$column` LIKE '%x%' AND SUBSTRING_INDEX(`$column`, 'x', 1) <> ?))", [$wsId]);
+        if ((int)$adb->query_result($bad, 0, 'n') > 0) { throw new RuntimeException("Unconvertible or mis-targeted values in $moduleName.$fieldName; nothing was changed"); }
+        $adb->pquery("UPDATE `$table` SET `$column`=NULL WHERE `$column`=''", []);
+        $adb->pquery("UPDATE `$table` SET `$column`=SUBSTRING_INDEX(`$column`, 'x', -1) WHERE `$column` IS NOT NULL", []);
+        $adb->pquery("ALTER TABLE `$table` MODIFY `$column` INT(19) NULL", []);
+    }
+    $adb->pquery('UPDATE vtiger_field SET uitype=10 WHERE fieldid=?', [$field->id]);
+    if (!$linked) { $field->setRelatedModules([$relatedName]); }
+}
+
 // HelpDesk's summary template tests {if $DOCUMENT_WIDGET_MODEL} (and the comments/updates twins) on variables
 // it only assigns when the user's role is offered that widget, so read-only roles see "Undefined array key" and
 // "property value on null" warnings on every ticket. Initialise them first. Marker-guarded and idempotent.
@@ -226,6 +260,11 @@ try {
         vemsEnsureDetailActionsTemplate($moduleName);
     }
     vemsEnsureHelpDeskSummaryGuard();
+    // After every module exists (assignments reference vehicles, which are provisioned later in the loop).
+    $references = json_decode(file_get_contents('/opt/vems/references.json'), true, 512, JSON_THROW_ON_ERROR);
+    foreach ($references as $referencingModule => $referenceFields) {
+        foreach ($referenceFields as $referenceField => $targetModule) { vemsEnsureReferenceField($adb, $referencingModule, $referenceField, $targetModule); }
+    }
     require_once '/opt/vems/install-mirror-guard.php';
     vemsInstallMirrorGuard($adb);
     echo "Vtiger development identity, fields and mirror guard ready; credentials preserved.\n";

@@ -1,0 +1,10 @@
+{
+  "date": "2026-09-25",
+  "what": "The real vemsEnsureReferenceField() function (extracted from provision-development.php) run against a scratch text column on the audit stack, then the scratch module was removed (0 leftovers, 10 real vehicles intact).",
+  "cases": [
+    { "case": "seeded 37x4, empty, 17x7 with target VEMSVehicles (17 is the HelpDesk entity id)", "result": "aborted: Unconvertible or mis-targeted values ... nothing was changed", "column_after": "still varchar, values unchanged, uitype 1" },
+    { "case": "wrong value removed, run again", "result": "converted", "column_after": "int, values [4, null], uitype 10, linked in fieldmodulerel" },
+    { "case": "run a second time", "result": "no-op", "column_after": "unchanged" },
+    { "case": "simulated partial failure: numeric id in a varchar column, uitype 1, link row missing", "result": "converged", "column_after": "int, [4, null], uitype 10, linked" }
+  ]
+}

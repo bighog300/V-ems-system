@@ -1,0 +1,48 @@
+{
+  "date": "2026-09-25",
+  "stack": "vems-audit-147 (isolated; scratch module VEMSSpike, removed afterwards)",
+  "question": "Does a native Vtiger reference field (uitype 10, INT(19), fieldmodulerel to VEMSVehicles) keep the existing webservice remote-ID contract?",
+  "webservice_as_integration_user": {
+    "create_with_ref_37x4": {
+      "id": "43x20",
+      "spike_ref": "37x4"
+    },
+    "retrieve": {
+      "spike_ref": "37x4"
+    },
+    "query_select": [
+      {
+        "id": "43x20",
+        "spike_ref": "37x4"
+      }
+    ],
+    "query_where_spike_ref_eq_37x4": "1 row",
+    "update_round_trip": {
+      "spike_ref": "37x4"
+    },
+    "create_with_nonexistent_ref_37x99999": {
+      "accepted": true,
+      "stored_spike_ref": null,
+      "note": "silently dropped to null, no error"
+    },
+    "describe_type": "reference, referencemodules [VEMSVehicles]"
+  },
+  "ui_as_integration_user": {
+    "detail_page_php_warnings": 0,
+    "detail_renders_link_to_vehicle_record": true,
+    "list_renders_link_to_vehicle_record": true,
+    "target_vehicle_detail_related_tabs": [
+      "Summary",
+      "Details",
+      "Spike"
+    ],
+    "related_list_shows_source_record": true
+  },
+  "conclusion": "Remote IDs such as 37x4 are accepted and returned unchanged, so the worker, mirror guard and relationship comparisons need no change. Reference fields render as links and a related list works once setRelatedList is registered. Risk noted: a reference to a record that does not exist is silently stored as null. Null, empty and omitted references are accepted without error, which matches what the mapper sends. Limitation: updating an existing reference to an empty string does not clear it (the mapper never does this).",
+  "null_and_empty_handling": {
+    "create_with_null": "accepted, stored empty",
+    "create_with_empty_string": "accepted, stored null",
+    "create_with_field_omitted": "accepted, stored null",
+    "update_existing_ref_to_empty_string": "accepted but the reference is NOT cleared (still 37x4)"
+  }
+}
