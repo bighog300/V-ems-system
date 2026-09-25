@@ -162,6 +162,40 @@ function vemsEnsureRelatedList($adb, string $sourceName, string $targetName): vo
     $target->setRelatedList($source, VEMS_MODULE_LABELS[$sourceName] ?? $sourceName, [], 'get_dependents_list');
 }
 
+// This Vtiger instance exists for V-EMS, so its app menu offers the V-EMS modules only. Vtiger's Menu Editor
+// (vtiger_app2tab.visible) is the supported way to hide stock modules; it is global, so it applies to every account.
+// It hides modules from the menu; it does not block a direct URL, and per-profile scoping is not an option because
+// stock getPermittedModuleNames() returns no modules for a profile with neither global view nor global edit
+// (an operator-precedence bug in include/utils/UserInfoUtil.php), which breaks reference links and webservice type
+// lists. Vtiger's Basic view also hard-codes MARKETING as the default app and indexes into it, so an app with no
+// visible module gives a PHP warning on the dashboard; the V-EMS modules are therefore also listed under MARKETING
+// (modules may appear in several apps: Contacts and Accounts already do). Idempotent; reconciled on every run.
+function vemsEnsureEmsMenu($adb, array $moduleNames): void
+{
+    $tabIds = [];
+    foreach ($moduleNames as $moduleName) {
+        $tab = $adb->pquery('SELECT tabid FROM vtiger_tab WHERE name=?', [$moduleName]);
+        if (!$adb->num_rows($tab)) { throw new RuntimeException("Module $moduleName missing from the menu setup"); }
+        $tabIds[] = (int)$adb->query_result($tab, 0, 'tabid');
+    }
+    $marks = implode(',', array_fill(0, count($tabIds), '?'));
+    $apps = ['MARKETING', 'SALES', 'INVENTORY', 'SUPPORT', 'PROJECT', 'TOOLS'];
+    $appMarks = implode(',', array_fill(0, count($apps), '?'));
+    $adb->pquery("UPDATE vtiger_app2tab SET visible=0 WHERE appname IN ($appMarks) AND tabid NOT IN ($marks)", array_merge($apps, $tabIds));
+    foreach (['SUPPORT', 'MARKETING'] as $app) {
+        $next = $adb->pquery('SELECT COALESCE(MAX(sequence), 0) AS s FROM vtiger_app2tab WHERE appname=?', [$app]);
+        $sequence = (int)$adb->query_result($next, 0, 's');
+        foreach ($tabIds as $tabId) {
+            $row = $adb->pquery('SELECT 1 FROM vtiger_app2tab WHERE appname=? AND tabid=?', [$app, $tabId]);
+            if ($adb->num_rows($row)) {
+                $adb->pquery('UPDATE vtiger_app2tab SET visible=1 WHERE appname=? AND tabid=?', [$app, $tabId]);
+            } else {
+                $adb->pquery('INSERT INTO vtiger_app2tab (tabid, appname, sequence, visible) VALUES (?,?,?,1)', [$tabId, $app, ++$sequence]);
+            }
+        }
+    }
+}
+
 // HelpDesk's summary template tests {if $DOCUMENT_WIDGET_MODEL} (and the comments/updates twins) on variables
 // it only assigns when the user's role is offered that widget, so read-only roles see "Undefined array key" and
 // "property value on null" warnings on every ticket. Initialise them first. Marker-guarded and idempotent.
@@ -274,6 +308,7 @@ try {
         vemsEnsureDetailActionsTemplate($moduleName);
     }
     vemsEnsureHelpDeskSummaryGuard();
+    vemsEnsureEmsMenu($adb, array_keys($schemas));
     // After every module exists (assignments reference vehicles, which are provisioned later in the loop).
     $references = json_decode(file_get_contents('/opt/vems/references.json'), true, 512, JSON_THROW_ON_ERROR);
     foreach ($references as $referencingModule => $referenceFields) {

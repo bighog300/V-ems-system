@@ -1,0 +1,276 @@
+{
+  "label": "2026-09-25-after-menu-scoping",
+  "timestamp": "2026-09-25T18:59:23.306Z",
+  "maxPagesPerRole": 250,
+  "roles": {
+    "Dispatcher": {
+      "signIn": "PASS",
+      "pagesVisited": 173,
+      "uniquePagesSeen": 173,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 173
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [],
+      "offeredButDenied": [],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Fleet Manager": {
+      "signIn": "PASS",
+      "pagesVisited": 173,
+      "uniquePagesSeen": 173,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 173
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [],
+      "offeredButDenied": [],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Stock Manager": {
+      "signIn": "PASS",
+      "pagesVisited": 173,
+      "uniquePagesSeen": 173,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 173
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [],
+      "offeredButDenied": [],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Supervisor": {
+      "signIn": "PASS",
+      "pagesVisited": 173,
+      "uniquePagesSeen": 173,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 173
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [],
+      "offeredButDenied": [],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignments": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicles": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSPersonnel": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockItems": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSVehicleStock": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        },
+        "VEMSStockUsage": {
+          "edit": "DENIED",
+          "create": "DENIED"
+        }
+      },
+      "expectedToHaveEditControl": false
+    },
+    "Integration user": {
+      "signIn": "PASS",
+      "pagesVisited": 200,
+      "uniquePagesSeen": 200,
+      "notVisitedDueToCap": 0,
+      "byKind": {
+        "OK": 200
+      },
+      "defectsInAuditedModules": [],
+      "defectsInOtherApps": [],
+      "offeredButDenied": [],
+      "editAndCreateForms": {
+        "HelpDesk": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSAssignments": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSVehicles": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSPersonnel": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSAssignmentCrew": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSStockItems": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSVehicleStock": {
+          "edit": "FORM",
+          "create": "FORM"
+        },
+        "VEMSStockUsage": {
+          "edit": "FORM",
+          "create": "FORM"
+        }
+      },
+      "expectedToHaveEditControl": true
+    }
+  },
+  "defects": [],
+  "result": "PASS",
+  "summary": {
+    "Dispatcher": {
+      "pagesVisited": 173,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 0,
+      "offeredButDenied": 0
+    },
+    "Fleet Manager": {
+      "pagesVisited": 173,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 0,
+      "offeredButDenied": 0
+    },
+    "Stock Manager": {
+      "pagesVisited": 173,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 0,
+      "offeredButDenied": 0
+    },
+    "Supervisor": {
+      "pagesVisited": 173,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 0,
+      "offeredButDenied": 0
+    },
+    "Integration user": {
+      "pagesVisited": 200,
+      "defectsInAuditedModules": 0,
+      "defectsInOtherApps": 0,
+      "offeredButDenied": 0
+    }
+  }
+}
