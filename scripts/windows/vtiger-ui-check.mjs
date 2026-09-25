@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { main as guard } from './vtiger-audit.mjs';
 import { BASE, ACCOUNTS, loadAuditEnv, signIn } from './vtiger-session.mjs';
-import { MODULES, analyzeList, analyzeDetail, analyzeRelated, recordLinks, isImportDenied } from './vtiger-ui-check-lib.mjs';
+import { MODULES, menuModules, analyzeList, analyzeDetail, analyzeRelated, recordLinks, isImportDenied } from './vtiger-ui-check-lib.mjs';
 
 const label = process.argv[2] || 'run';
 await guard('inspect');
@@ -29,6 +29,18 @@ const report = { label, timestamp: new Date().toISOString(), roles: {}, failures
 for (const [role, prefix, expectsEdit] of ACCOUNTS) {
   const s = await signIn(env, prefix);
   if (!s) { report.roles[role] = { signIn: 'FAIL' }; report.failures.push(`${role}: sign-in failed`); continue; }
+  // The app menu offers the V-EMS modules only (hidden globally, see provision-development.php). The four manager
+  // roles are asserted; the Integration user holds the full Administrator profile, so Vtiger also lists Reports for it
+  // (its own profile is a separate change) - its menu is recorded, not asserted.
+  {
+    const menu = menuModules((await s.request(`${BASE}?module=Home&view=DashBoard`)).html);
+    const extra = menu.filter((m) => !MODULES.includes(m)), missing = MODULES.filter((m) => !menu.includes(m));
+    if (!expectsEdit) {
+      if (extra.length) report.failures.push(`${role}: menu offers modules outside the V-EMS set: ${extra.join(', ')}`);
+      if (missing.length) report.failures.push(`${role}: menu is missing V-EMS modules: ${missing.join(', ')}`);
+    }
+    report.menus = { ...(report.menus || {}), [role]: menu };
+  }
   const results = {};
   for (const module of MODULES) {
     const list = analyzeList((await s.request(`${BASE}?module=${module}&view=List`)).html);

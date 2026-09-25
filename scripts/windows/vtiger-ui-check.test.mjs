@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { analyzeList, analyzeDetail, analyzeRelated, recordLinks, isImportDenied, phpWarnings, MODULES } from './vtiger-ui-check-lib.mjs';
+import { analyzeList, analyzeDetail, analyzeRelated, recordLinks, isImportDenied, phpWarnings, menuModules, isPermissionDeniedPage, MODULES } from './vtiger-ui-check-lib.mjs';
 
 const listHtml = (headers, cells) => `
 <tr class="listViewContentHeader"><th></th>${headers.map((h) => `<th><a href="#" class="listViewContentHeaderValues">&nbsp;${h}&nbsp;</a></th>`).join('')}</tr>
@@ -121,4 +121,32 @@ test('the provisioner adds one read-only related list per declared reference, on
   assert.match(fn, /SELECT 1 FROM vtiger_relatedlists WHERE tabid=\? AND related_tabid=\? AND name=\?/, 'checks for an existing relation first');
   assert.match(fn, /setRelatedList\(\$source, [^,]+, \[\], 'get_dependents_list'\)/, 'no actions, so no Add or Select button');
   assert.match(source, /vemsEnsureReferenceField\(\$adb, \$referencingModule, \$referenceField, \$targetModule\);\s+vemsEnsureRelatedList\(\$adb, \$referencingModule, \$targetModule\);/, 'one relation per declared reference, after the reference exists');
+});
+
+test('menu modules are the de-duplicated list links on a page', () => {
+  const html = '<a href="index.php?module=VEMSVehicles&view=List&app=SUPPORT">a</a><a href="index.php?module=VEMSVehicles&amp;view=List">b</a>'
+    + '<a href="index.php?module=Leads&view=List">c</a><a href="index.php?module=Home&view=DashBoard">d</a>';
+  assert.deepEqual(menuModules(html), ['Leads', 'VEMSVehicles']);
+});
+
+test('the permission-denied page is recognised only when it is the whole page', () => {
+  assert.equal(isPermissionDeniedPage('<div>Permission denied</div><a>Go back</a>'), true);
+  assert.equal(isPermissionDeniedPage('<p>' + 'lorem ipsum '.repeat(60) + 'Permission denied</p>'), false);
+  assert.equal(isPermissionDeniedPage('<div>Leads</div>'), false);
+});
+
+test('the provisioner hides stock modules from the app menu and keeps the default app populated', () => {
+  const source = readFileSync(new URL('../../infra/services/vtiger/development/provision-development.php', import.meta.url), 'utf8');
+  const fn = source.match(/function vemsEnsureEmsMenu[\s\S]*?\n\}\r?\n/)[0];
+  assert.match(fn, /UPDATE vtiger_app2tab SET visible=0 WHERE appname IN \(\$appMarks\) AND tabid NOT IN \(\$marks\)/, 'hides everything that is not a V-EMS module');
+  assert.match(fn, /\$apps = \['MARKETING', 'SALES', 'INVENTORY', 'SUPPORT', 'PROJECT', 'TOOLS'\];/, 'only the six standard apps; ANALYTICS and SETTINGS are left alone');
+  assert.match(fn, /foreach \(\['SUPPORT', 'MARKETING'\] as \$app\)/, 'V-EMS modules are visible in SUPPORT and in the hard-coded default app MARKETING');
+  assert.match(fn, /UPDATE vtiger_app2tab SET visible=1/, 'a re-run re-shows a V-EMS module an administrator hid');
+  assert.match(source, /vemsEnsureEmsMenu\(\$adb, array_keys\(\$schemas\)\);/, 'called with the V-EMS module list');
+  assert.ok(!/DELETE FROM vtiger_app2tab/.test(fn), 'nothing is deleted, only flagged');
+});
+
+test('menu scoping relies on the app menu, not on profile permissions', () => {
+  const roles = readFileSync(new URL('../../infra/services/vtiger/development/provision-audit-roles.php', import.meta.url), 'utf8');
+  assert.match(roles, /'viewall', 'on'/, 'profiles keep global view: per-profile scoping breaks reference links (stock getPermittedModuleNames bug)');
 });

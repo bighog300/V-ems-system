@@ -55,3 +55,13 @@ export function analyzeRelated(html, sourceModule) {
 export function isImportDenied(html) {
   return /Permission denied/i.test(text(html)) && !/type="file"/i.test(html);
 }
+
+// Modules the app menu links to (list-page links on the dashboard), sorted and de-duplicated.
+export function menuModules(html) {
+  return [...new Set([...html.matchAll(/href=["']index\.php\?module=(\w+)&(?:amp;)?view=List/g)].map((m) => m[1]))].sort();
+}
+
+// The bare "Permission denied" page (not merely the words inside a larger page).
+export function isPermissionDeniedPage(html) {
+  return /Permission denied/i.test(text(html)) && text(html).length < 400;
+}
