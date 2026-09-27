@@ -3,14 +3,18 @@ import assert from "node:assert/strict";
 import {
   ApiError,
   closeIncident,
+  createAssignment,
   createIncident,
   createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
   createIncidentEncounter,
+  listPersonnel,
+  listVehicles,
   loadCrewJobListData,
   loadDispatcherBoardData,
-  loadIncidentOperationalData
+  loadIncidentOperationalData,
+  updateAssignmentAction
 } from "../src/api.mjs";
 
 test("createIncident submits a stable idempotency key and authenticated payload", async () => {
@@ -57,6 +61,47 @@ test("loadDispatcherBoardData uses GET /api/incidents list endpoint", async () =
   assert.deepEqual(calls, ["http://127.0.0.1:8080/api/incidents"]);
   assert.equal(result.items.length, 1);
   assert.equal(result.items[0].incident_id, "INC-000123");
+});
+
+test("listVehicles and listPersonnel read the fleet/personnel master lists", async () => {
+  const calls = [];
+  const fetchImpl = async (url) => {
+    calls.push(url);
+    if (url.endsWith("/api/vehicles")) return { ok: true, status: 200, async json() { return { vehicles: [{ vehicle_id: "AMB-001" }] }; } };
+    return { ok: true, status: 200, async json() { return { personnel: [{ staff_id: "STAFF-001" }] }; } };
+  };
+  const vehicles = await listVehicles({ apiBaseUrl: "http://example.test", fetchImpl });
+  const personnel = await listPersonnel({ apiBaseUrl: "http://example.test", fetchImpl });
+  assert.deepEqual(vehicles, [{ vehicle_id: "AMB-001" }]);
+  assert.deepEqual(personnel, [{ staff_id: "STAFF-001" }]);
+  assert.deepEqual(calls, ["http://example.test/api/vehicles", "http://example.test/api/personnel"]);
+});
+
+test("createAssignment posts to the incident assignments endpoint with an idempotency key", async () => {
+  const calls = [];
+  const payload = { vehicle_id: "AMB-001", crew_ids: ["STAFF-001"], reason: "Nearest available unit" };
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 201, async json() { return { assignment_id: "ASN-000001" }; } };
+  };
+  const result = await createAssignment({ apiBaseUrl: "http://example.test", incidentId: "INC-000123", payload, idempotencyKey: "assign-1", fetchImpl });
+  assert.equal(result.assignment_id, "ASN-000001");
+  assert.equal(calls[0].url, "http://example.test/api/incidents/INC-000123/assignments");
+  assert.equal(calls[0].options.headers["idempotency-key"], "assign-1");
+  assert.deepEqual(JSON.parse(calls[0].options.body), payload);
+});
+
+test("updateAssignmentAction patches the assignment with the given action", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 200, async json() { return { assignment_id: "ASN-000001", status: "Reassigned" }; } };
+  };
+  const result = await updateAssignmentAction({ apiBaseUrl: "http://example.test", assignmentId: "ASN-000001", action: "reassign_assignment", fetchImpl });
+  assert.equal(result.status, "Reassigned");
+  assert.equal(calls[0].url, "http://example.test/api/assignments/ASN-000001");
+  assert.equal(calls[0].options.method, "PATCH");
+  assert.deepEqual(JSON.parse(calls[0].options.body), { action: "reassign_assignment" });
 });
 
 test("loadCrewJobListData uses GET /api/incidents list endpoint", async () => {

@@ -88,6 +88,24 @@ export async function createIncident({ apiBaseUrl, payload, idempotencyKey, fetc
   });
 }
 
+export async function listVehicles({ apiBaseUrl, fetchImpl = fetch, ...config }) {
+  return (await getJson(fetchImpl, `${apiBaseUrl}/api/vehicles`, config)).data?.vehicles ?? [];
+}
+
+export async function listPersonnel({ apiBaseUrl, fetchImpl = fetch, ...config }) {
+  return (await getJson(fetchImpl, `${apiBaseUrl}/api/personnel`, config)).data?.personnel ?? [];
+}
+
+export async function createAssignment({ apiBaseUrl, incidentId, payload, idempotencyKey, fetchImpl = fetch, ...config }) {
+  return postJson(fetchImpl, `${apiBaseUrl}/api/incidents/${incidentId}/assignments`, payload, config, {
+    headers: { "idempotency-key": idempotencyKey }
+  });
+}
+
+export async function updateAssignmentAction({ apiBaseUrl, assignmentId, action, fetchImpl = fetch, ...config }) {
+  return patchJson(fetchImpl, `${apiBaseUrl}/api/assignments/${assignmentId}`, { action }, config);
+}
+
 export async function loadCrewJobListData({ apiBaseUrl, fetchImpl = fetch, ...config }) {
   const boardList = await getJson(fetchImpl, `${apiBaseUrl}/api/incidents`, config);
   return {

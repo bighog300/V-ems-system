@@ -169,6 +169,7 @@ function renderIncidentDetailPanel(item) {
       <div class="side-panel-actions">
         <button type="button" data-quick-action="load-incident" data-incident-id="${escapeHtml(item.incidentId)}">Review Summary</button>
         <button type="button" data-quick-action="load-crew-incident" data-incident-id="${escapeHtml(item.incidentId)}">Open Assignment / Crew View</button>
+        <button type="button" data-quick-action="assign-unit" data-incident-id="${escapeHtml(item.incidentId)}">${item.assignment ? "Reassign Unit" : "Assign Unit"}</button>
         <a href="?incidentId=${encodeURIComponent(item.incidentId)}">Open direct link</a>
       </div>
       <p class="hint">Escalation: ${item.isBlockedOrEscalated ? "Flagged for supervisor review" : "No escalation flags"}.</p>
@@ -200,6 +201,7 @@ export function buildDispatcherBoardItems(boardData, { now = Date.now() } = {}) 
       status,
       locationSummary: asText(incidentSummary.location_summary),
       assignmentSummary,
+      assignment: incidentSummary.assignment_summary ?? null,
       closureReady: incidentSummary.closure_ready,
       priorityClassName: priorityClass(incidentSummary.priority),
       createdAt,

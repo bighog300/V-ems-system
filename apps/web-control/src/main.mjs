@@ -3,14 +3,18 @@ import { renderPatientCasesPanel } from './crew.mjs';
 import {
   ApiError,
   closeIncident,
+  createAssignment,
   createIncident,
   createEncounterHandover,
   createEncounterIntervention,
   createEncounterObservation,
   createIncidentEncounter,
+  listPersonnel,
+  listVehicles,
   loadCrewJobListData,
   loadDispatcherBoardData,
-  loadIncidentOperationalData
+  loadIncidentOperationalData,
+  updateAssignmentAction
 } from "./api.mjs";
 import { runCloseIncidentAction, runCrewFormAction } from "./workflow-actions.mjs";
 import { buildDispatcherBoardItems, filterAndSortDispatcherItems, renderDispatcherBoardHtml } from "./board.mjs";
@@ -28,6 +32,7 @@ import {
 import { applyProductionUiMode, readSessionFromDom } from "./session.mjs";
 import { handleAppError, startPolling } from "./runtime.mjs";
 import { buildCallIntakePayload, localDateTimeValue } from "./call-intake.mjs";
+import { buildAssignmentPayload, eligiblePersonnel, eligibleVehicles, renderAssignmentPickerHtml, terminalActionForReassignment } from "./assignment-picker.mjs";
 
 function readConfig() {
   return readSessionFromDom();
@@ -132,9 +137,97 @@ function bindDispatcherBoardActions() {
       }
       if (action === "load-crew-incident") {
         void renderCrewIncidentDetail();
+        return;
+      }
+      if (action === "assign-unit") {
+        assignmentPickerIncidentId = incidentId;
+        void renderAssignmentPicker();
       }
     });
   });
+}
+
+let assignmentPickerIncidentId = "";
+let assignRetry = null;
+
+async function renderAssignmentPicker() {
+  const output = document.querySelector("#assignmentPickerOutput");
+  const status = document.querySelector("#status");
+  if (!assignmentPickerIncidentId) {
+    output.innerHTML = "";
+    return;
+  }
+  const config = readConfig();
+  if (!config.apiBaseUrl) {
+    status.textContent = "API Base URL is required.";
+    return;
+  }
+  try {
+    const [vehicles, personnel] = await Promise.all([
+      listVehicles(config),
+      listPersonnel(config)
+    ]);
+    const item = filterAndSortDispatcherItems(
+      buildDispatcherBoardItems((await loadDispatcherBoardData(config)).items),
+      {}
+    ).find((candidate) => candidate.incidentId === assignmentPickerIncidentId);
+    output.innerHTML = renderAssignmentPickerHtml({
+      vehicles: eligibleVehicles(vehicles),
+      personnel: eligiblePersonnel(personnel),
+      currentAssignment: item?.assignment ?? null
+    });
+    document.querySelector("#assignmentPickerForm")?.addEventListener("submit", onAssignmentPickerSubmit);
+  } catch (error) {
+    output.innerHTML = "";
+    handleAppError(error, { statusEl: status, outputEl: output, fallbackPrefix: "Assignment picker failed." });
+  }
+}
+
+async function onAssignmentPickerSubmit(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const feedback = document.querySelector("#assignmentPickerFeedback");
+  const submitButton = document.querySelector("#assignmentPickerSubmit");
+  if (submitButton.disabled) return;
+  const { payload, errors } = buildAssignmentPayload(new FormData(form));
+  if (errors.length) {
+    feedback.textContent = errors.join(" ");
+    feedback.className = "error-note";
+    return;
+  }
+  const config = readConfig();
+  const isReassign = form.dataset.reassign === "true";
+  const fingerprint = JSON.stringify({ incidentId: assignmentPickerIncidentId, payload });
+  if (assignRetry?.fingerprint !== fingerprint) {
+    assignRetry = { fingerprint, key: crypto.randomUUID() };
+  }
+  submitButton.disabled = true;
+  feedback.textContent = isReassign ? "Reassigning unit..." : "Assigning unit...";
+  feedback.className = "hint";
+  try {
+    if (isReassign) {
+      const currentAssignmentId = form.dataset.currentAssignmentId;
+      const currentAssignmentStatus = form.dataset.currentAssignmentStatus;
+      const terminalAction = terminalActionForReassignment(currentAssignmentStatus);
+      await updateAssignmentAction({ ...config, assignmentId: currentAssignmentId, action: terminalAction });
+    }
+    const assignment = await createAssignment({
+      ...config,
+      incidentId: assignmentPickerIncidentId,
+      payload,
+      idempotencyKey: assignRetry.key
+    });
+    assignRetry = null;
+    feedback.textContent = `${assignment.assignment_id} ${isReassign ? "reassigned" : "assigned"} to ${assignmentPickerIncidentId}.`;
+    feedback.className = "success-note";
+    await renderDispatcherBoard();
+    await renderAssignmentPicker();
+  } catch (error) {
+    feedback.textContent = formatApiError(error);
+    feedback.className = "error-note";
+  } finally {
+    submitButton.disabled = false;
+  }
 }
 
 function buildChangedIncidentIds(items) {
